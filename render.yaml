@@ -5,6 +5,8 @@ services:
     plan: free
     region: oregon
     buildCommand: "npm install && npm run build --workspace=@kd/shared && npm run build --workspace=@kd/server"
+    # Runs automatically before starting the new version to apply DB changes
+    preDeployCommand: "npm --workspace=@kd/server exec -- tsx db/scripts/migrate.ts && npm --workspace=@kd/server exec -- tsx db/scripts/create-mongo-indexes.ts"
     startCommand: "npm run start --workspace=@kd/server"
     envVars:
       - key: NODE_ENV
@@ -12,25 +14,51 @@ services:
       - key: PORT
         value: 10000
       # The following must be securely added via the Render Dashboard manually
+      - key: CORS_ORIGIN
+        sync: false
       - key: POSTGRES_URL
         sync: false
       - key: MONGO_URL
         sync: false
       - key: REDIS_URL
         sync: false
-      - key: JWT_SECRET
-        sync: false
+      
+      # Auth0
       - key: AUTH0_DOMAIN
+        sync: false
+      - key: AUTH0_AUDIENCE
         sync: false
       - key: AUTH0_CLIENT_ID
         sync: false
       - key: AUTH0_CLIENT_SECRET
         sync: false
-      - key: FRONTEND_URL
-        sync: false
+        
+      # Payments
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET
         sync: false
       - key: RAZORPAY_WEBHOOK_SECRET
         sync: false
+        
+      # Storage (Cloudflare R2)
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: CDN_BASE_URL
+        sync: false
+        
+      # Emails
+      - key: RESEND_API_KEY
+        sync: false
+        
+      # Push Notifications (Firebase)
+      # You need to upload firebase-service-account.json as a "Secret File" in Render 
+      # and mount it to the path specified here.
+      - key: FCM_SERVICE_ACCOUNT_PATH
+        value: /etc/secrets/firebase-service-account.json
