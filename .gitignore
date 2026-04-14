@@ -1,0 +1,114 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+.expo/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Coverage
+coverage/
+
+# Docker
+docker-compose.override.yml
+.terraform/
+*.tfstate*
+
+# AI / Agent Local Data
+memory/
+tickets/
+
+# Mobile / Expo Builds
+mobile/.expo/
+mobile/node_modules/
+mobile/web-build/
+mobile/dist/
+mobile/ios/
+mobile/android/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Databases & Caches
+*.sqlite
+*.sqlite3
+*.db
+redis-data/
+mongo-data/
+pg-data/
+
+# AI System Artifacts
+agents/
+blueprints/
+memory/
+tickets/
+.gemini/
+
+# IDE & Editor
+.vscode/
+.idea/
+.fleet/
+*.swp
+*.swo
+
+# Generic Build Outputs (Monorepo)
+dist/
+build/
+out/
+coverage/
+.next/
+.turbo/
+.cache/
+
+# Misc
+.env*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript & Linting
+*.tsbuildinfo
+.eslintcache
+
+# Testing
+.nyc_output/
+playwright-report/
+test-results/
+cypress/videos/
+cypress/screenshots/
+
+# React Native & Expo additions
+.expo-shared/
+eas-build-*.tar.gz
+*.keystore
+
+# Node generic
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Secrets
+server/firebase-service-account.json

@@ -1,0 +1,2 @@
+# Repositories
+Data access layer. Each repository encapsulates database queries for a specific domain.

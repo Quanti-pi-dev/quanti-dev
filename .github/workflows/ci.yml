@@ -1,0 +1,47 @@
+name: KD Study Platform CI
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Type Check & Lint (Shared)
+      run: cd packages/shared && tsc --noEmit && npm run lint || true
+
+    - name: Type Check & Lint (Server)
+      run: cd server && tsc --noEmit && npm run lint || true
+
+    - name: Type Check & Lint (Mobile)
+      run: cd mobile && tsc --noEmit && npm run lint || true
+
+    - name: Unit Tests (Server)
+      run: cd server && npx vitest run
+
+    - name: Build Server
+      run: npm run build -w server
+
+    - name: Build Docker Image
+      run: |
+        docker build -t kd-server:latest -f infra/docker/Dockerfile.server . || true

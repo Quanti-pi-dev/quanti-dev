@@ -1,0 +1,2 @@
+# Routes
+Fastify route definitions. Each file registers routes under a specific prefix.

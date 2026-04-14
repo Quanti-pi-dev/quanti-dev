@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: exam-prep-api
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: "npm install && npm run build --workspace=@kd/shared && npm run build --workspace=@kd/server"
+    startCommand: "npm run start --workspace=@kd/server"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      # The following must be securely added via the Render Dashboard manually
+      - key: POSTGRES_URL
+        sync: false
+      - key: MONGO_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: AUTH0_DOMAIN
+        sync: false
+      - key: AUTH0_CLIENT_ID
+        sync: false
+      - key: AUTH0_CLIENT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false

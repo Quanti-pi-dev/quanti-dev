@@ -1,0 +1,24 @@
+# ─── Dev Dockerfile for API Server ───────────────────────────
+# Uses tsx for hot-reload during development
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy workspace root
+COPY package.json package-lock.json ./
+
+# Copy workspace packages
+COPY packages/ ./packages/
+COPY server/package.json ./server/
+
+# Install all dependencies
+RUN npm ci --workspace=@kd/shared --workspace=@kd/server
+
+# Copy server source
+COPY server/ ./server/
+
+# Expose API port
+EXPOSE 3000
+
+# Start with hot-reload
+CMD ["npx", "tsx", "watch", "server/src/index.ts"]

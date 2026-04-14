@@ -1,0 +1,2 @@
+# Controllers
+Route handlers for each service domain. Each controller delegates to its service layer.
