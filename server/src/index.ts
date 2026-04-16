@@ -227,6 +227,7 @@ async function start() {
     server.log.info(`Server listening on http://${config.host}:${config.port}`);
     startCronJobs();
   } catch (err) {
+    console.error('FATAL STARTUP ERROR:', err);
     server.log.error(err);
     process.exit(1);
   }
