@@ -14,7 +14,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useTheme } from '../../src/theme';
+
 import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Header } from '../../src/components/layout/Header';
@@ -45,7 +45,7 @@ type CardAnswer = boolean | 'skipped' | undefined;
 // ─── Screen ───────────────────────────────────────────────────
 
 export default function FlashcardStudyScreen() {
-  const { theme } = useTheme();
+
   const router = useRouter();
   const { id, decks, title, examId, subjectId, level, topicSlug, tournamentId } =
     useLocalSearchParams<{

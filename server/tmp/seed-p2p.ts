@@ -16,22 +16,22 @@ async function seed() {
     // 1. Seed Users
     console.log('👤 Seeding users...');
     
-    const aliceAuth0Id = 'auth0|alice-' + Date.now();
-    const bobAuth0Id = 'auth0|bob-' + Date.now();
+    const aliceFirebaseUid = 'firebase_alice-' + Date.now();
+    const bobFirebaseUid = 'firebase_bob-' + Date.now();
 
     const aliceRes = await pgClient.query(`
-      INSERT INTO users (auth0_id, email, display_name, role)
+      INSERT INTO users (firebase_uid, email, display_name, role)
       VALUES ($1, 'alice@example.com', 'Alice Test', 'student')
       ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
       RETURNING id
-    `, [aliceAuth0Id]);
+    `, [aliceFirebaseUid]);
 
     const bobRes = await pgClient.query(`
-      INSERT INTO users (auth0_id, email, display_name, role)
+      INSERT INTO users (firebase_uid, email, display_name, role)
       VALUES ($1, 'bob@example.com', 'Bob Test', 'student')
       ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
       RETURNING id
-    `, [bobAuth0Id]);
+    `, [bobFirebaseUid]);
 
     const alicePgId = aliceRes.rows[0].id;
     const bobPgId = bobRes.rows[0].id;

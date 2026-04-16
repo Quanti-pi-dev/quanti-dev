@@ -43,16 +43,16 @@ export function useSubscriptionGate(): SubscriptionGate {
 
   const features = subscription?.plan?.features;
   const maxDecks: number =
-    typeof features?.max_decks === 'number' ? features.max_decks : 0;
+    typeof features?.max_decks === 'number' ? features.max_decks : -1;
   const maxExamsPerDay: number =
-    typeof features?.max_exams_per_day === 'number' ? features.max_exams_per_day : 3;
+    typeof features?.max_exams_per_day === 'number' ? features.max_exams_per_day : -1;
   const maxSubjectsPerExam: number =
-    typeof features?.max_subjects_per_exam === 'number' ? features.max_subjects_per_exam : 2;
+    typeof features?.max_subjects_per_exam === 'number' ? features.max_subjects_per_exam : 3;
   // max_level: 1=Beginner only (index 0), 2=+Rookie (index 0-1), -1=all
   const maxLevelIndex: number =
     typeof features?.max_level === 'number'
       ? features.max_level === -1 ? 5 : features.max_level - 1
-      : 0; // free: Beginner only
+      : 1; // free: Beginner + Rookie (same as Basic)
 
   const canUseFeature = useCallback(
     (key: keyof PlanFeatures): boolean => hasFeature(key),

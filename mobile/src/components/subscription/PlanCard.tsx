@@ -2,10 +2,13 @@
 // Full plan card with price, features, badge, and animated CTA.
 // Popular plan gets a gradient border wrapper.
 
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { useTheme } from '../../theme';
+import { spacing, radius } from '../../theme/tokens';
+import { Typography } from '../ui/Typography';
 import { PlanBadge } from './PlanBadge';
 import { PlanFeatureRow } from './PlanFeatureRow';
 import { formatPrice, formatCycle } from '../../services/subscription.service';
@@ -36,6 +39,7 @@ const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 // ─── Component ────────────────────────────────────────────────
 
 export function PlanCard({ plan, isPopular, isCurrentPlan, onSelect }: PlanCardProps) {
+  const { theme } = useTheme();
   const scale = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const features = plan.features as unknown as Record<string, unknown>;
@@ -49,39 +53,44 @@ export function PlanCard({ plan, isPopular, isCurrentPlan, onSelect }: PlanCardP
     onSelect(plan);
   }
 
+  const cardBorderStyle = isCurrentPlan
+    ? { borderWidth: 2, borderColor: theme.success }
+    : isPopular
+    ? { borderWidth: 0 } // gradient wrapper provides border
+    : { borderWidth: 1, borderColor: theme.border };
+
   const card = (
     <AnimatedTouchable
-      style={animStyle}
+      style={[
+        animStyle,
+        {
+          borderRadius: radius['2xl'],
+          padding: spacing.xl,
+          backgroundColor: theme.card,
+          ...cardBorderStyle,
+        },
+      ]}
       onPress={handlePress}
       activeOpacity={1}
-      className={`rounded-3xl p-5 bg-white dark:bg-gray-900 ${
-        isCurrentPlan
-          ? 'border-2 border-correct'
-          : isPopular
-          ? 'border-0'           // gradient wrapper provides border
-          : 'border border-gray-200 dark:border-gray-700'
-      }`}
     >
       {/* ── Header row ── */}
-      <View className="flex-row items-start justify-between mb-1">
-        <View className="flex-1">
-          <Text className="font-heading text-xl text-gray-900 dark:text-white">
-            {plan.displayName}
-          </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: spacing.xs }}>
+        <View style={{ flex: 1 }}>
+          <Typography variant="h3">{plan.displayName}</Typography>
 
           {/* Price */}
-          <View className="flex-row items-end gap-1 mt-1">
-            <Text className="font-heading text-3xl text-primary">
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs, marginTop: spacing.xs }}>
+            <Typography variant="h2" color={theme.primary}>
               {formatPrice(plan.pricePaise)}
-            </Text>
-            <Text className="font-body text-gray-400 text-sm mb-1">
+            </Typography>
+            <Typography variant="bodySmall" color={theme.textTertiary} style={{ marginBottom: spacing.xs }}>
               {formatCycle(plan.billingCycle)}
-            </Text>
+            </Typography>
           </View>
         </View>
 
         {/* Badge */}
-        <View className="ml-2 mt-1">
+        <View style={{ marginLeft: spacing.sm, marginTop: spacing.xs }}>
           {isCurrentPlan ? (
             <PlanBadge variant="active" />
           ) : isPopular ? (
@@ -94,16 +103,20 @@ export function PlanCard({ plan, isPopular, isCurrentPlan, onSelect }: PlanCardP
 
       {/* Trial note */}
       {plan.trialDays > 0 && !isCurrentPlan && (
-        <Text className="text-correct text-xs font-body-semibold mt-1 mb-3">
+        <Typography
+          variant="captionBold"
+          color={theme.success}
+          style={{ marginTop: spacing.xs, marginBottom: spacing.md }}
+        >
           {plan.trialDays}-day free trial — no charge today
-        </Text>
+        </Typography>
       )}
 
       {/* ── Divider ── */}
-      <View className="h-px bg-gray-100 dark:bg-gray-800 my-4" />
+      <View style={{ height: 1, backgroundColor: theme.divider, marginVertical: spacing.base }} />
 
       {/* ── Feature list ── */}
-      <View className="gap-2 mb-5">
+      <View style={{ gap: spacing.sm, marginBottom: spacing.xl }}>
         {FEATURE_ROWS.map((f) => (
           <PlanFeatureRow
             key={f.key}
@@ -120,40 +133,40 @@ export function PlanCard({ plan, isPopular, isCurrentPlan, onSelect }: PlanCardP
           colors={['#6366F1', '#3B82F6']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          className="rounded-2xl"
+          style={{ borderRadius: radius.lg }}
         >
           <TouchableOpacity
             onPress={handlePress}
-            className="py-3 items-center"
+            style={{ paddingVertical: spacing.md, alignItems: 'center' }}
             activeOpacity={0.85}
           >
-            <Text className="text-white font-body-semibold text-sm tracking-wide">
+            <Typography variant="label" color="#FFFFFF">
               {plan.trialDays > 0 ? 'Start Free Trial' : `Choose ${plan.displayName}`}
-            </Text>
+            </Typography>
           </TouchableOpacity>
         </LinearGradient>
       ) : (
         <TouchableOpacity
           onPress={handlePress}
           disabled={isCurrentPlan}
-          className={`py-3 rounded-2xl items-center ${
-            isCurrentPlan
-              ? 'bg-gray-100 dark:bg-gray-800'
-              : 'bg-primary/10'
-          }`}
+          style={{
+            paddingVertical: spacing.md,
+            borderRadius: radius.lg,
+            alignItems: 'center',
+            backgroundColor: isCurrentPlan ? theme.cardAlt : theme.primaryMuted,
+          }}
           activeOpacity={0.85}
         >
-          <Text
-            className={`font-body-semibold text-sm ${
-              isCurrentPlan ? 'text-gray-400' : 'text-primary'
-            }`}
+          <Typography
+            variant="label"
+            color={isCurrentPlan ? theme.textTertiary : theme.primary}
           >
             {isCurrentPlan
               ? 'Current Plan'
               : plan.trialDays > 0
-              ? `Start Free Trial`
+              ? 'Start Free Trial'
               : `Choose ${plan.displayName}`}
-          </Text>
+          </Typography>
         </TouchableOpacity>
       )}
     </AnimatedTouchable>
@@ -166,7 +179,7 @@ export function PlanCard({ plan, isPopular, isCurrentPlan, onSelect }: PlanCardP
         colors={['#6366F1', '#3B82F6', '#06B6D4']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        className="rounded-3xl p-0.5"
+        style={{ borderRadius: radius['2xl'], padding: 2 }}
       >
         {card}
       </LinearGradient>

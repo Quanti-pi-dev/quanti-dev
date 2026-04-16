@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/theme';
-import { spacing, typography, radius, shadows } from '../../src/theme/tokens';
+import { spacing, radius, shadows } from '../../src/theme/tokens';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';

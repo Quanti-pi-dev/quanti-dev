@@ -37,6 +37,8 @@ const createPlanSchema = z.object({
     offline_access: z.boolean(),
     priority_support: z.boolean(),
     advanced_analytics: z.boolean(),
+    deep_insights: z.boolean(),
+    mastery_radar: z.boolean(),
   }),
   trialDays: z.number().int().min(0).default(0),
   isActive: z.boolean().default(true),

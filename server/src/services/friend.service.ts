@@ -14,8 +14,8 @@ class FriendService {
    * Send a friend request.
    * Guards: self-request, duplicate, blocked.
    */
-  async sendFriendRequest(requesterAuth0Id: string, addresseePgId: string): Promise<Friendship> {
-    const requesterId = await challengeRepository.resolveUserId(requesterAuth0Id);
+  async sendFriendRequest(requesterFirebaseUid: string, addresseePgId: string): Promise<Friendship> {
+    const requesterId = await challengeRepository.resolveUserId(requesterFirebaseUid);
     if (!requesterId) throw Object.assign(new Error('User not found'), { statusCode: 404 });
 
     if (requesterId === addresseePgId) {
@@ -52,8 +52,8 @@ class FriendService {
    * Accept a friend request.
    * Guard: only the addressee can accept; must be pending.
    */
-  async acceptFriendRequest(friendshipId: string, actingAuth0Id: string): Promise<void> {
-    const actingUserId = await challengeRepository.resolveUserId(actingAuth0Id);
+  async acceptFriendRequest(friendshipId: string, actingFirebaseUid: string): Promise<void> {
+    const actingUserId = await challengeRepository.resolveUserId(actingFirebaseUid);
     if (!actingUserId) throw Object.assign(new Error('User not found'), { statusCode: 404 });
 
     const friendship = await challengeRepository.findFriendshipById(friendshipId);
@@ -80,8 +80,8 @@ class FriendService {
    * Reject a friend request (hard delete).
    * Guard: only the addressee can reject; must be pending.
    */
-  async rejectFriendRequest(friendshipId: string, actingAuth0Id: string): Promise<void> {
-    const actingUserId = await challengeRepository.resolveUserId(actingAuth0Id);
+  async rejectFriendRequest(friendshipId: string, actingFirebaseUid: string): Promise<void> {
+    const actingUserId = await challengeRepository.resolveUserId(actingFirebaseUid);
     if (!actingUserId) throw Object.assign(new Error('User not found'), { statusCode: 404 });
 
     const friendship = await challengeRepository.findFriendshipById(friendshipId);
@@ -96,8 +96,8 @@ class FriendService {
   /**
    * Remove an accepted friend (either party).
    */
-  async removeFriend(friendshipId: string, actingAuth0Id: string): Promise<void> {
-    const actingUserId = await challengeRepository.resolveUserId(actingAuth0Id);
+  async removeFriend(friendshipId: string, actingFirebaseUid: string): Promise<void> {
+    const actingUserId = await challengeRepository.resolveUserId(actingFirebaseUid);
     if (!actingUserId) throw Object.assign(new Error('User not found'), { statusCode: 404 });
 
     const friendship = await challengeRepository.findFriendshipById(friendshipId);
@@ -116,8 +116,8 @@ class FriendService {
    * Block a user. If an existing friendship exists, it becomes blocked.
    * If no relationship exists, insert a blocked row.
    */
-  async blockUser(actingAuth0Id: string, targetPgId: string): Promise<void> {
-    const actingUserId = await challengeRepository.resolveUserId(actingAuth0Id);
+  async blockUser(actingFirebaseUid: string, targetPgId: string): Promise<void> {
+    const actingUserId = await challengeRepository.resolveUserId(actingFirebaseUid);
     if (!actingUserId) throw Object.assign(new Error('User not found'), { statusCode: 404 });
 
     if (actingUserId === targetPgId) {
@@ -134,33 +134,33 @@ class FriendService {
     }
   }
 
-  // ─── Read methods (pass-through with auth0_id resolution) ──
+  // ─── Read methods (pass-through with firebase_uid resolution) ──
 
   /** Look up a friendship by ID (used by M7 status-based dispatch) */
   async getFriendship(friendshipId: string): Promise<Friendship | null> {
     return challengeRepository.findFriendshipById(friendshipId);
   }
 
-  async listFriends(auth0Id: string): Promise<UserSummary[]> {
-    const userId = await challengeRepository.resolveUserId(auth0Id);
+  async listFriends(firebaseUid: string): Promise<UserSummary[]> {
+    const userId = await challengeRepository.resolveUserId(firebaseUid);
     if (!userId) return [];
     return challengeRepository.listFriends(userId);
   }
 
-  async listPendingReceived(auth0Id: string): Promise<Friendship[]> {
-    const userId = await challengeRepository.resolveUserId(auth0Id);
+  async listPendingReceived(firebaseUid: string): Promise<Friendship[]> {
+    const userId = await challengeRepository.resolveUserId(firebaseUid);
     if (!userId) return [];
     return challengeRepository.listPendingReceived(userId);
   }
 
-  async listPendingSent(auth0Id: string): Promise<Friendship[]> {
-    const userId = await challengeRepository.resolveUserId(auth0Id);
+  async listPendingSent(firebaseUid: string): Promise<Friendship[]> {
+    const userId = await challengeRepository.resolveUserId(firebaseUid);
     if (!userId) return [];
     return challengeRepository.listPendingSent(userId);
   }
 
-  async searchUsers(query: string, requestingAuth0Id: string): Promise<UserSummary[]> {
-    const userId = await challengeRepository.resolveUserId(requestingAuth0Id);
+  async searchUsers(query: string, requestingFirebaseUid: string): Promise<UserSummary[]> {
+    const userId = await challengeRepository.resolveUserId(requestingFirebaseUid);
     if (!userId) return [];
     return challengeRepository.searchUsers(query, userId);
   }

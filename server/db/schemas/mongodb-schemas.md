@@ -204,7 +204,7 @@ Stored in MongoDB for flexible schema and fast read access.
   "rules":            String,          // markdown rules text
   "deckId":           String | null,   // optional: restrict to a specific deck
   "examId":           String | null,   // optional: restrict to a specific exam
-  "createdBy":        String,          // Auth0 ID of the admin
+  "createdBy":        String,          // Firebase ID of the admin
   "createdAt":        ISODate,
   "updatedAt":        ISODate
 }
@@ -229,7 +229,7 @@ Individual participant entries in a tournament. One entry per (tournament, user)
 {
   "_id":              ObjectId,
   "tournamentId":     ObjectId,        // → tournaments._id
-  "userId":           String,          // Auth0 ID
+  "userId":           String,          // Firebase ID
   "score":            Number,          // best score submitted
   "answersCorrect":   Number,
   "answersTotal":     Number,
@@ -251,7 +251,7 @@ Time-series event tracking for AI recommendations and admin dashboards.
 ```jsonc
 {
   "_id":          ObjectId,
-  "user_id":      String,          // Auth0 ID
+  "user_id":      String,          // Firebase ID
   "event_name":   String,          // e.g. "study_completed", "checkout_initiated"
   "properties":   Object,          // event-specific key-value data
   "timestamp":    ISODate

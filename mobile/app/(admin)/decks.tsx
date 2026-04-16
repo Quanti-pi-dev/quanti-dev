@@ -2,7 +2,7 @@
 // List all decks with card counts, paginated. Delete with cascade warning.
 
 import { useState, useCallback } from 'react';
-import { View, ScrollView, Alert, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, ScrollView, Alert, TouchableOpacity, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
 import { spacing, radius } from '../../src/theme/tokens';

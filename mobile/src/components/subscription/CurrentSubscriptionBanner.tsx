@@ -1,10 +1,13 @@
 // ─── CurrentSubscriptionBanner ────────────────────────────────
 // Shows active plan info at the top of the subscription screen.
 
-import { View, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useTheme } from '../../theme';
+import { spacing, radius } from '../../theme/tokens';
+import { Typography } from '../ui/Typography';
 import { cancelSubscription, reactivateSubscription } from '../../services/subscription.service';
 import { useSubscription } from '../../contexts/SubscriptionContext';
 import type { SubscriptionSummary } from '@kd/shared';
@@ -14,6 +17,7 @@ interface CurrentSubscriptionBannerProps {
 }
 
 export function CurrentSubscriptionBanner({ subscription }: CurrentSubscriptionBannerProps) {
+  const { theme } = useTheme();
   const { refreshSubscription } = useSubscription();
   const [loading, setLoading] = useState(false);
 
@@ -62,59 +66,106 @@ export function CurrentSubscriptionBanner({ subscription }: CurrentSubscriptionB
   }
 
   return (
-    <View className="bg-primary/8 dark:bg-primary/10 border border-primary/20 rounded-3xl p-5 gap-3">
+    <View
+      style={{
+        backgroundColor: theme.primaryMuted,
+        borderWidth: 1,
+        borderColor: theme.primary + '33',
+        borderRadius: radius['2xl'],
+        padding: spacing.xl,
+        gap: spacing.md,
+      }}
+    >
       {/* Plan name row */}
-      <View className="flex-row items-center justify-between">
-        <View className="flex-row items-center gap-2">
-          <View className="bg-primary/10 w-9 h-9 rounded-2xl items-center justify-center">
-            <Ionicons name="shield-checkmark" size={18} color="#2563EB" />
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+          <View
+            style={{
+              backgroundColor: theme.primaryMuted,
+              width: 36,
+              height: 36,
+              borderRadius: radius.lg,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="shield-checkmark" size={18} color={theme.primary} />
           </View>
           <View>
-            <Text className="font-body-semibold text-sm text-gray-500 dark:text-gray-400">
-              Active Plan
-            </Text>
-            <Text className="font-heading text-base text-gray-900 dark:text-white">
-              {subscription.plan?.displayName ?? 'Pro'}
-            </Text>
+            <Typography variant="caption" color={theme.textTertiary}>Active Plan</Typography>
+            <Typography variant="h4">{subscription.plan?.displayName ?? 'Pro'}</Typography>
           </View>
         </View>
 
         {isCanceling ? (
-          <View className="bg-red-100 dark:bg-red-900/20 px-2.5 py-1 rounded-full">
-            <Text className="text-red-500 text-xs font-body-semibold">Cancels {expiryDate}</Text>
+          <View
+            style={{
+              backgroundColor: theme.errorMuted,
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.xs,
+              borderRadius: radius.full,
+            }}
+          >
+            <Typography variant="captionBold" color={theme.error}>Cancels {expiryDate}</Typography>
           </View>
         ) : (
-          <View className="bg-correct/10 px-2.5 py-1 rounded-full">
-            <Text className="text-correct text-xs font-body-semibold">{daysLeft}d left</Text>
+          <View
+            style={{
+              backgroundColor: theme.successMuted,
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.xs,
+              borderRadius: radius.full,
+            }}
+          >
+            <Typography variant="captionBold" color={theme.success}>{daysLeft}d left</Typography>
           </View>
         )}
       </View>
 
       {/* Progress bar — days remaining */}
       <View>
-        <View className="h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+        <View
+          style={{
+            height: 6,
+            backgroundColor: theme.border,
+            borderRadius: radius.full,
+            overflow: 'hidden',
+          }}
+        >
           <View
-            className="h-full bg-primary rounded-full"
-            style={{ width: `${Math.min(100, (daysLeft / 30) * 100)}%` }}
+            style={{
+              height: '100%',
+              backgroundColor: theme.primary,
+              borderRadius: radius.full,
+              width: `${Math.min(100, (daysLeft / 30) * 100)}%`,
+            }}
           />
         </View>
-        <Text className="text-xs text-gray-400 font-body mt-1">
+        <Typography variant="caption" color={theme.textTertiary} style={{ marginTop: spacing.xs }}>
           Renews {expiryDate}
-        </Text>
+        </Typography>
       </View>
 
       {/* Cancel / reactivate */}
       {loading ? (
-        <ActivityIndicator size="small" color="#2563EB" />
+        <ActivityIndicator size="small" color={theme.primary} />
       ) : isCanceling ? (
-        <TouchableOpacity onPress={handleReactivate} className="flex-row items-center gap-1" activeOpacity={0.7}>
-          <Ionicons name="refresh-circle-outline" size={15} color="#2563EB" />
-          <Text className="text-primary text-xs font-body-semibold">Reactivate subscription</Text>
+        <TouchableOpacity
+          onPress={handleReactivate}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="refresh-circle-outline" size={15} color={theme.primary} />
+          <Typography variant="captionBold" color={theme.primary}>Reactivate subscription</Typography>
         </TouchableOpacity>
       ) : (
-        <TouchableOpacity onPress={handleCancel} className="flex-row items-center gap-1" activeOpacity={0.7}>
-          <Ionicons name="close-circle-outline" size={15} color="#9CA3AF" />
-          <Text className="text-gray-400 text-xs font-body">Cancel at period end</Text>
+        <TouchableOpacity
+          onPress={handleCancel}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="close-circle-outline" size={15} color={theme.textTertiary} />
+          <Typography variant="caption" color={theme.textTertiary}>Cancel at period end</Typography>
         </TouchableOpacity>
       )}
     </View>

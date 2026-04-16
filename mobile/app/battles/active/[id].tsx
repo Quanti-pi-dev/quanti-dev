@@ -6,9 +6,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { View, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeIn, FadeInDown, useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useTheme } from '../../../src/theme';
-import { spacing, typography, radius, shadows } from '../../../src/theme/tokens';
+import { spacing, radius, shadows } from '../../../src/theme/tokens';
 import { ScreenWrapper } from '../../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../../src/components/ui/Typography';
 import { useAuth } from '../../../src/contexts/AuthContext';
@@ -57,7 +57,7 @@ export default function ActiveChallengeScreen() {
   }, [sse.gameOver, id, router]);
 
   const currentCard = cards[currentIndex];
-  const allCardsAnswered = currentIndex >= cards.length && cards.length > 0;
+
 
   const handleAnswer = useCallback(
     (optionId: string) => {
@@ -65,7 +65,7 @@ export default function ActiveChallengeScreen() {
       setSelectedOption(optionId);
       setShowResult(true);
 
-      const isCorrect = optionId === currentCard.correctAnswerId;
+
       submitAnswer.mutate({ cardId: currentCard.id, selectedAnswerId: optionId });
 
       // Auto-advance after 600ms; cycle back to first card when deck is exhausted

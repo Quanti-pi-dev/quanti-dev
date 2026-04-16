@@ -5,6 +5,7 @@
 import { getRedisClient } from '../lib/database.js';
 import { getPostgresPool } from '../lib/database.js';
 import type { ProgressRecord, StudyStreak, StudySession, ProgressSummary, DailyActivity, LevelProgress, SubjectLevelSummary, ExamProgress, LevelAnswerResult } from '@kd/shared';
+import type { AdvancedInsights, ChronotypeData, Chronotype, HourlyAccuracy, SpeedAccuracyPoint, SubjectStrength } from '@kd/shared';
 import { SUBJECT_LEVELS, LEVEL_UNLOCK_THRESHOLD } from '@kd/shared';
 
 class ProgressRepository {
@@ -240,7 +241,7 @@ class ProgressRepository {
     const sessionResult = await this.pg.query(
       `SELECT COUNT(DISTINCT deck_id) as decks,
               COALESCE(SUM(correct_answers)::float / NULLIF(SUM(correct_answers + incorrect_answers), 0) * 100, 0) as accuracy
-       FROM study_sessions WHERE user_id = (SELECT id FROM users WHERE auth0_id = $1)`,
+       FROM study_sessions WHERE user_id = (SELECT id FROM users WHERE firebase_uid = $1)`,
       [userId],
     );
 
@@ -263,7 +264,7 @@ class ProgressRepository {
       `INSERT INTO study_sessions
          (user_id, deck_id, cards_studied, correct_answers, incorrect_answers, avg_response_time_ms, started_at, ended_at)
        VALUES
-         ((SELECT id FROM users WHERE auth0_id = $1), $2, $3, $4, $5, $6, $7, $8)`,
+         ((SELECT id FROM users WHERE firebase_uid = $1), $2, $3, $4, $5, $6, $7, $8)`,
       [
         session.userId,
         session.deckId,
@@ -284,7 +285,7 @@ class ProgressRepository {
       `SELECT id, deck_id, cards_studied, correct_answers, incorrect_answers,
               avg_response_time_ms, started_at, ended_at, created_at
        FROM study_sessions
-       WHERE user_id = (SELECT id FROM users WHERE auth0_id = $1)
+       WHERE user_id = (SELECT id FROM users WHERE firebase_uid = $1)
        ORDER BY started_at DESC
        LIMIT $2 OFFSET $3`,
       [userId, pageSize, offset],
@@ -292,7 +293,7 @@ class ProgressRepository {
 
     const countResult = await this.pg.query(
       `SELECT COUNT(*) as total FROM study_sessions
-       WHERE user_id = (SELECT id FROM users WHERE auth0_id = $1)`,
+       WHERE user_id = (SELECT id FROM users WHERE firebase_uid = $1)`,
       [userId],
     );
 
@@ -498,6 +499,159 @@ class ProgressRepository {
       highestUnlockedLevel: SUBJECT_LEVELS[subjectMaxLevel.get(subjectId) ?? 0]!,
     } satisfies ExamProgress));
   }
+
+  // ─── Advanced Insights (student growth analytics) ──────────
+
+  /**
+   * Aggregates three analytics dimensions for the student dashboard:
+   * 1. Chronotype — hourly accuracy distribution from study_sessions
+   * 2. Speed vs Accuracy — last 50 sessions as scatter data
+   * 3. Subject Strengths — per-subject strength scores from Redis level data
+   */
+  async getAdvancedInsights(userId: string): Promise<AdvancedInsights> {
+    const [chronotype, speedAccuracy, subjectStrengths] = await Promise.all([
+      this.getChronotypeData(userId),
+      this.getSpeedAccuracyData(userId),
+      this.getSubjectStrengths(userId),
+    ]);
+    return { chronotype, speedAccuracy, subjectStrengths };
+  }
+
+  /** Hourly accuracy from study_sessions — which hours produce the best results? */
+  private async getChronotypeData(userId: string): Promise<ChronotypeData> {
+    const result = await this.pg.query(
+      `SELECT EXTRACT(HOUR FROM started_at)::int AS hour,
+              AVG(correct_answers::float / NULLIF(cards_studied, 0)) * 100 AS accuracy,
+              COUNT(*)::int AS session_count
+       FROM study_sessions
+       WHERE user_id = (SELECT id FROM users WHERE firebase_uid = $1)
+         AND cards_studied > 0
+       GROUP BY hour
+       ORDER BY hour`,
+      [userId],
+    );
+
+    const hourlyAccuracy: HourlyAccuracy[] = result.rows.map((r: { hour: number; accuracy: string; session_count: number }) => ({
+      hour: r.hour,
+      accuracy: Math.round(parseFloat(r.accuracy ?? '0')),
+      sessionCount: r.session_count,
+    }));
+
+    // Find peak hour (highest accuracy with at least 2 sessions for significance)
+    const qualified = hourlyAccuracy.filter(h => h.sessionCount >= 2);
+    const peak = qualified.length > 0
+      ? qualified.reduce((best, h) => h.accuracy > best.accuracy ? h : best, qualified[0]!)
+      : hourlyAccuracy.length > 0
+        ? hourlyAccuracy.reduce((best, h) => h.accuracy > best.accuracy ? h : best, hourlyAccuracy[0]!)
+        : { hour: 12, accuracy: 0 };
+
+    // Classify chronotype
+    let chronotype: Chronotype;
+    if (peak.hour >= 5 && peak.hour < 12) {
+      chronotype = 'early_bird';
+    } else if (peak.hour >= 12 && peak.hour < 18) {
+      chronotype = 'day_scholar';
+    } else {
+      chronotype = 'night_owl';
+    }
+
+    return {
+      hourlyAccuracy,
+      peakHour: peak.hour,
+      peakAccuracy: peak.accuracy,
+      chronotype,
+    };
+  }
+
+  /** Last 50 sessions — speed (avg response time) and accuracy per session. */
+  private async getSpeedAccuracyData(userId: string): Promise<SpeedAccuracyPoint[]> {
+    const result = await this.pg.query(
+      `SELECT id, avg_response_time_ms, correct_answers, cards_studied, started_at
+       FROM study_sessions
+       WHERE user_id = (SELECT id FROM users WHERE firebase_uid = $1)
+         AND cards_studied > 0
+       ORDER BY started_at DESC
+       LIMIT 50`,
+      [userId],
+    );
+
+    return result.rows.map((r: { id: string; avg_response_time_ms: number; correct_answers: number; cards_studied: number; started_at: Date }) => ({
+      sessionId: r.id,
+      avgResponseMs: r.avg_response_time_ms,
+      accuracy: Math.round((r.correct_answers / Math.max(r.cards_studied, 1)) * 100),
+      cardsStudied: r.cards_studied,
+      date: r.started_at.toISOString(),
+    }));
+  }
+
+  /** Per-subject strength from Redis level progress, enriched with PG names. */
+  private async getSubjectStrengths(userId: string): Promise<SubjectStrength[]> {
+    const trackedMembers = await this.redis.smembers(`level_progress_keys:${userId}`);
+    if (trackedMembers.length === 0) return [];
+
+    // Parse members and pipeline HGETALL
+    type ParsedKey = { examId: string; subjectId: string; topicSlug: string; level: string };
+    const parsed: ParsedKey[] = [];
+    for (const m of trackedMembers) {
+      const seg = m.split(':');
+      if (seg.length !== 4) continue;
+      parsed.push({ examId: seg[0]!, subjectId: seg[1]!, topicSlug: seg[2]!, level: seg[3]! });
+    }
+    if (parsed.length === 0) return [];
+
+    const pipeline = this.redis.pipeline();
+    for (const p of parsed) {
+      pipeline.hgetall(`level_progress:${userId}:${p.examId}:${p.subjectId}:${p.topicSlug}:${p.level}`);
+    }
+    const pipelineResults = await pipeline.exec();
+
+    // Aggregate correct/total per subject
+    const subjectAgg = new Map<string, { correct: number; total: number }>();
+    for (let i = 0; i < parsed.length; i++) {
+      const p = parsed[i]!;
+      const [err, rawData] = pipelineResults?.[i] ?? [null, {}];
+      const data = (!err && rawData ? rawData : {}) as Record<string, string>;
+      const correct = parseInt(data['correct'] ?? '0', 10);
+      const total = parseInt(data['total'] ?? '0', 10);
+
+      const existing = subjectAgg.get(p.subjectId) ?? { correct: 0, total: 0 };
+      existing.correct += correct;
+      existing.total += total;
+      subjectAgg.set(p.subjectId, existing);
+    }
+
+    if (subjectAgg.size === 0) return [];
+
+    // Enrich with names from PostgreSQL
+    const subjectIds = [...subjectAgg.keys()];
+    const nameResult = await this.pg.query(
+      `SELECT id, name FROM subjects WHERE id = ANY($1)`,
+      [subjectIds],
+    );
+    const nameMap = new Map<string, string>(
+      nameResult.rows.map((r: { id: string; name: string }) => [r.id, r.name]),
+    );
+
+    // Normalize strength scores 0–100
+    const entries = [...subjectAgg.entries()].map(([subjectId, agg]) => ({
+      subjectId,
+      subjectName: nameMap.get(subjectId) ?? subjectId,
+      rawScore: agg.total > 0 ? (agg.correct / agg.total) * 100 : 0,
+      totalCorrect: agg.correct,
+      totalAnswers: agg.total,
+    }));
+
+    const maxScore = Math.max(...entries.map(e => e.rawScore), 1);
+
+    return entries.map(e => ({
+      subjectId: e.subjectId,
+      subjectName: e.subjectName,
+      strengthScore: Math.round((e.rawScore / maxScore) * 100),
+      totalCorrect: e.totalCorrect,
+      totalAnswers: e.totalAnswers,
+    }));
+  }
 }
 
 export const progressRepository = new ProgressRepository();
+

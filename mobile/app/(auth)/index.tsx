@@ -11,7 +11,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/theme';
-import { spacing, typography, radius } from '../../src/theme/tokens';
+import { spacing } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';
 import { Button } from '../../src/components/ui/Button';
@@ -20,10 +20,13 @@ import { Divider } from '../../src/components/ui/Divider';
 import { SocialLoginButton } from '../../src/components/ui/SocialLoginButton';
 import type { SocialProvider } from '../../src/components/ui/SocialLoginButton';
 import { useBiometricAuth } from '../../src/hooks/useBiometricAuth';
-import * as SecureStore from 'expo-secure-store';
+import { auth } from '../../src/lib/firebase';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const LOGO_SOURCE = require('../../assets/adaptive-icon.png');
 
 export default function LoginScreen() {
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const { login, loginWithPassword, refreshUser } = useAuth();
   const router = useRouter();
 
@@ -38,30 +41,22 @@ export default function LoginScreen() {
   const { isAvailable: biometricAvailable, biometricType, authenticate: biometricAuthenticate } = useBiometricAuth();
   const [hasStoredSession, setHasStoredSession] = useState(false);
 
+  // Firebase persists auth state via AsyncStorage — check if a session exists
   useEffect(() => {
-    SecureStore.getItemAsync('refresh_token').then(token => {
-      setHasStoredSession(!!token);
-    }).catch(() => {});
+    setHasStoredSession(auth.currentUser !== null);
   }, []);
 
   const handleBiometricLogin = async () => {
     const success = await biometricAuthenticate();
     if (!success) return;
-    const refreshToken = await SecureStore.getItemAsync('refresh_token');
-    if (!refreshToken) {
+    // Firebase sessions are persisted via AsyncStorage. After biometric
+    // unlock, the user is already signed in — just refresh the profile.
+    if (!auth.currentUser) {
       setError('No saved session found. Please sign in with your password.');
       return;
     }
     setIsLoading(true);
     try {
-      const { api } = await import('../../src/services/api');
-      const { data } = await api.post('/auth/refresh', { refreshToken });
-      const newAccess = data?.data?.accessToken;
-      const newRefresh = data?.data?.refreshToken;
-      if (!newAccess || !newRefresh) throw new Error('Session expired.');
-      await SecureStore.setItemAsync('access_token', newAccess);
-      await SecureStore.setItemAsync('refresh_token', newRefresh);
-      // Refresh the auth context so it picks up the new session
       await refreshUser();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Biometric sign-in failed.');
@@ -117,7 +112,7 @@ export default function LoginScreen() {
             }}
           >
             <Image
-              source={require('../../assets/adaptive-icon.png')}
+              source={LOGO_SOURCE}
               style={{ width: '100%', height: '100%', borderRadius: 28 }}
               resizeMode="cover"
             />
@@ -223,18 +218,15 @@ export default function LoginScreen() {
           variant="full"
         />
 
-        {/* Secondary social providers — icon row */}
+        {/* Secondary social provider — icon */}
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.md, marginTop: spacing.sm }}>
-          {(['github', 'microsoft', 'facebook', 'linkedin'] as SocialProvider[]).map((provider) => (
-            <SocialLoginButton
-              key={provider}
-              provider={provider}
-              onPress={handleSocialLogin}
-              loading={socialLoading === provider}
-              disabled={socialLoading !== null && socialLoading !== provider}
-              variant="icon"
-            />
-          ))}
+          <SocialLoginButton
+            provider="twitter"
+            onPress={handleSocialLogin}
+            loading={socialLoading === 'twitter'}
+            disabled={socialLoading !== null && socialLoading !== 'twitter'}
+            variant="icon"
+          />
         </View>
 
         {/* Sign up link */}

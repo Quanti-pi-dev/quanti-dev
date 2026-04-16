@@ -128,7 +128,7 @@ export interface Friendship {
 
 export interface UserSummary {
   id: string;          // PostgreSQL UUID
-  auth0Id: string;     // Auth0 sub claim
+  firebaseUid: string;     // Firebase UID
   displayName: string;
   avatarUrl: string | null;
   enrollmentId: string; // Unique human-readable ID (e.g. QP-8F2A9C)

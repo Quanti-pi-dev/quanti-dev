@@ -9,13 +9,13 @@ import * as Haptics from 'expo-haptics';
 import { api } from '../../src/services/api';
 import { useTheme } from '../../src/theme';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { spacing, radius, typography } from '../../src/theme/tokens';
+import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';
 import { Button } from '../../src/components/ui/Button';
 import { Skeleton } from '../../src/components/ui/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from 'react-native-reanimated';
+
 
 interface Exam { id: string; title: string; category: string; }
 

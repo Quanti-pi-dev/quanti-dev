@@ -17,7 +17,9 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ../../server/db/migrations:/docker-entrypoint-initdb.d:ro
+      # NOTE: Do NOT mount migrations here. The migration runner (migrate.ts)
+      # handles schema changes and tracks them in schema_migrations.
+      # Mounting into /docker-entrypoint-initdb.d causes a double-apply crash.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kd_user} -d ${POSTGRES_DB:-kd_study}"]
       interval: 5s
@@ -49,7 +51,7 @@ services:
     image: redis:7-alpine
     container_name: kd-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy volatile-lru
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:

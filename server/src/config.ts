@@ -26,12 +26,10 @@ export const config = {
     url: process.env['REDIS_URL'] ?? 'redis://localhost:6379',
   },
 
-  auth0: {
-    domain: process.env['AUTH0_DOMAIN'] ?? 'your-tenant.auth0.com',
-    audience: process.env['AUTH0_AUDIENCE'] ?? 'https://api.studyplatform.com',
-    clientId: process.env['AUTH0_CLIENT_ID'] ?? '',
-    clientSecret: process.env['AUTH0_CLIENT_SECRET'] ?? '',
-    callbackUrl: process.env['AUTH0_CALLBACK_URL'] ?? 'http://localhost:3000/api/v1/auth/callback',
+  firebase: {
+    // Path to the Firebase service account JSON file (shared with FCM)
+    serviceAccountPath: process.env['FIREBASE_SERVICE_ACCOUNT_PATH'] ?? process.env['FCM_SERVICE_ACCOUNT_PATH'] ?? '',
+    projectId: process.env['FIREBASE_PROJECT_ID'] ?? '',
   },
 
   sentry: {
@@ -82,9 +80,7 @@ export type Config = typeof config;
 // In production, throws to prevent silent misconfiguration.
 
 const REQUIRED_PRODUCTION_VARS = [
-  'AUTH0_DOMAIN',
-  'AUTH0_CLIENT_ID',
-  'AUTH0_CLIENT_SECRET',
+  'FIREBASE_SERVICE_ACCOUNT_PATH',
   'RAZORPAY_KEY_ID',
   'RAZORPAY_KEY_SECRET',
   'RAZORPAY_WEBHOOK_SECRET',

@@ -20,7 +20,7 @@ export async function sendSubscriptionReminders(log: FastifyBaseLogger): Promise
     try {
       const [planResult, userResult] = await Promise.allSettled([
         planRepository.findById(sub.planId),
-        userRepository.findByAuth0Id(sub.userId),
+        userRepository.findByFirebaseUid(sub.userId),
       ]);
 
       const plan = planResult.status === 'fulfilled' ? planResult.value : null;
@@ -66,7 +66,7 @@ export async function sendSubscriptionReminders(log: FastifyBaseLogger): Promise
 
       const [planResult, userResult] = await Promise.allSettled([
         planRepository.findById(sub.planId),
-        userRepository.findByAuth0Id(sub.userId),
+        userRepository.findByFirebaseUid(sub.userId),
       ]);
 
       const plan = planResult.status === 'fulfilled' ? planResult.value : null;

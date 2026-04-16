@@ -10,13 +10,12 @@ import Animated, {
   withSpring,
   withTiming,
   withDelay,
-  runOnJS,
   FadeIn,
   FadeOut,
   SlideInDown,
 } from 'react-native-reanimated';
 import { useTheme } from '../theme';
-import { spacing, radius } from '../theme/tokens';
+import { spacing } from '../theme/tokens';
 import { Typography } from './ui/Typography';
 import * as Haptics from 'expo-haptics';
 

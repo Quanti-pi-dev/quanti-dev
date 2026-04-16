@@ -12,7 +12,7 @@
 ## Key Naming Convention
 
 All keys follow the pattern `{domain}:{identifier}[:sub-identifier]`.
-User identifiers are **Auth0 IDs** (e.g. `auth0|abc123`) unless noted otherwise.
+User identifiers are **Firebase IDs** (e.g. `firebase_abc123`) unless noted otherwise.
 
 ---
 
@@ -57,7 +57,7 @@ and increments — eliminating the TOCTOU race between read and write.
 ### `leaderboard:global` — Sorted Set
 > **Owner**: `gamification.repository.ts`
 
-Global all-time leaderboard. Members are Auth0 IDs, scores are lifetime earned coins.
+Global all-time leaderboard. Members are Firebase IDs, scores are lifetime earned coins.
 
 | Operation | Command |
 |---|---|
@@ -384,7 +384,7 @@ Published when a user earns coins. Consumed by SSE connections to update
 leaderboard positions in real time.
 
 ```jsonc
-{ "userId": "auth0|...", "newScore": 1250, "delta": 5, "leaderboard": "global", "timestamp": "..." }
+{ "userId": "firebase_...", "newScore": 1250, "delta": 5, "leaderboard": "global", "timestamp": "..." }
 ```
 
 ---
@@ -394,7 +394,7 @@ leaderboard positions in real time.
 Published when a badge is earned.
 
 ```jsonc
-{ "userId": "auth0|...", "badgeId": "uuid", "timestamp": "..." }
+{ "userId": "firebase_...", "badgeId": "uuid", "timestamp": "..." }
 ```
 
 ---
@@ -417,6 +417,38 @@ Published on challenge acceptance and completion.
 { "challengeId": "uuid", "event": "accepted" }
 { "challengeId": "uuid", "event": "completed", "winnerId": "uuid" }
 ```
+
+---
+
+## 13. Distributed Cron Locks
+
+### `cron:lock:{jobName}` — String
+> **Owner**: `lib/cron-lock.ts` (`withCronLock()`)
+
+Distributed mutex preventing the same cron job from running concurrently across
+multiple server instances (e.g. during Render's zero-downtime rolling deploys
+where old and new containers overlap).
+
+Acquired via `SET key timestamp NX EX ttl` (atomic set-if-not-exists with TTL).
+The value is the epoch timestamp of acquisition (for debugging). If `SET NX`
+returns `null`, the calling instance silently skips the job.
+
+**Self-healing**: No explicit `DEL` is performed — the lock auto-expires via TTL.
+If a job crashes mid-execution, the lock releases itself after the TTL, so no
+manual intervention is required.
+
+| Job Name | Interval | Lock TTL | Purpose |
+|---|---|---|---|
+| `expire-subscriptions` | 15 min | 120s | Expire overdue subscriptions |
+| `retry-payments` | 6 hrs | 300s | Retry failed payments |
+| `send-reminders` | 24 hrs | 600s | Push study reminders |
+| `weekly-leaderboard-reset` | 7 days | 60s | Reset weekly leaderboard |
+| `expire-pending-challenges` | 5 min | 60s | Expire unanswered P2P challenges |
+| `finalize-abandoned-challenges` | 30s | 25s | Finalize timed-out live games |
+| `complete-tournaments` | 5 min | 120s | Complete ended tournaments |
+
+- **TTL**: Per-job (see table above), always slightly longer than max expected runtime
+- **Value**: `Date.now()` string (epoch ms)
 
 ---
 
@@ -456,4 +488,5 @@ Published on challenge acceptance and completion.
 | `trial_pass_used:*` | 90 days | Trial cooldown |
 | `active_challenge:*` | duration + 60s | Live game state |
 | `challenge_invites:*` | 25 hours | Pending invite set |
-| `lock:checkout:*` | 30 seconds | Distributed mutex |
+| `cron:lock:*` | 25s–600s (per job) | Distributed cron mutex |
+| `lock:checkout:*` | 30 seconds | Distributed checkout mutex |

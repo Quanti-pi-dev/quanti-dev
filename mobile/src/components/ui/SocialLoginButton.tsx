@@ -5,7 +5,7 @@
 //   - 'icon': Compact 48×48 circular icon-only button
 // Dumb component — calls onPress(provider) and manages its own loading state.
 
-import { TouchableOpacity, View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { TouchableOpacity, Text, ActivityIndicator } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -13,7 +13,7 @@ import { spacing, typography, radius } from '../../theme/tokens';
 
 // ─── Types ───────────────────────────────────────────────────
 
-export type SocialProvider = 'google' | 'github' | 'microsoft' | 'facebook' | 'linkedin';
+export type SocialProvider = 'google' | 'twitter';
 
 interface SocialLoginButtonProps {
   provider: SocialProvider;
@@ -36,33 +36,12 @@ const PROVIDER_CONFIG: Record<
     text: '#3C4043',
     border: '#DADCE0',
   },
-  github: {
-    label: 'Continue with GitHub',
-    icon: 'logo-github',
-    bg: '#24292F',
+  twitter: {
+    label: 'Continue with Twitter',
+    icon: 'logo-twitter',
+    bg: '#1DA1F2',
     text: '#FFFFFF',
-    border: '#24292F',
-  },
-  microsoft: {
-    label: 'Continue with Microsoft',
-    icon: 'logo-windows',
-    bg: '#FFFFFF',
-    text: '#3C4043',
-    border: '#8C8C8C',
-  },
-  facebook: {
-    label: 'Continue with Facebook',
-    icon: 'logo-facebook',
-    bg: '#1877F2',
-    text: '#FFFFFF',
-    border: '#1877F2',
-  },
-  linkedin: {
-    label: 'Continue with LinkedIn',
-    icon: 'logo-linkedin',
-    bg: '#0A66C2',
-    text: '#FFFFFF',
-    border: '#0A66C2',
+    border: '#1DA1F2',
   },
 };
 

@@ -8,6 +8,7 @@
     "moduleResolution": "bundler",
     "module": "esnext",
     "target": "esnext",
+    "skipLibCheck": true,
     "lib": [
       "dom",
       "esnext"
@@ -19,11 +20,7 @@
       "@kd/shared": [
         "../packages/shared/src/index.ts"
       ]
-    },
-    "types": [
-      "react-native",
-      "expo"
-    ]
+    }
   },
   "include": [
     "**/*.ts",

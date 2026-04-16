@@ -7,7 +7,7 @@
 // Subject → [Topics CRUD] → [6 Levels] → Flashcard Editor
 
 import { useState } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, Modal } from 'react-native';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../src/theme';
@@ -54,7 +54,7 @@ function toSlug(text: string): string {
 // ─── Level row (fetches card count for topic+level) ───────────
 
 function LevelRow({
-  subjectId, level, topicSlug, subjectName, topicName, onPress,
+  subjectId, level, topicSlug, subjectName: _subjectName, topicName: _topicName, onPress,
 }: {
   subjectId: string; level: SubjectLevel; topicSlug: string;
   subjectName: string; topicName: string; onPress: () => void;

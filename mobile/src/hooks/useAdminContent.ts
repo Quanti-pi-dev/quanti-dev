@@ -277,7 +277,7 @@ export function useUpdateLevelCard() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
-      subjectId, level, topicSlug, cardId, updates,
+      subjectId, level, topicSlug: _topicSlug, cardId, updates,
     }: {
       subjectId: string; level: string; topicSlug: string; cardId: string;
       updates: Partial<{ question: string; options: { id: string; text: string }[]; correctAnswerId: string; explanation: string | null }>;

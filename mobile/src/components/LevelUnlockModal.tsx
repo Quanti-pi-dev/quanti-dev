@@ -7,9 +7,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withSequence,
   withTiming,
-  runOnJS,
 } from 'react-native-reanimated';
 import { useEffect } from 'react';
 import { useTheme } from '@/theme';

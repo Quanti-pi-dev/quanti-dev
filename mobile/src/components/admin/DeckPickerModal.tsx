@@ -2,7 +2,7 @@
 // Searchable picker for selecting a deck by name instead of
 // manually entering a MongoDB ObjectId.
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   FlatList,

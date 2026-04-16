@@ -1,9 +1,12 @@
 // ─── PricingToggle ─────────────────────────────────────────────
-// Animated weekly/monthly billing cycle toggle (NativeWind).
+// Animated weekly/monthly billing cycle toggle.
 
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { useTheme } from '../../theme';
+import { spacing, radius } from '../../theme/tokens';
+import { Typography } from '../ui/Typography';
 import type { BillingCycle } from '@kd/shared';
 import { useConfig } from '../../contexts/ConfigContext';
 
@@ -13,6 +16,7 @@ interface PricingToggleProps {
 }
 
 export function PricingToggle({ value, onChange }: PricingToggleProps) {
+  const { theme } = useTheme();
   const isMonthly = value === 'monthly';
   const translateX = useSharedValue(isMonthly ? 1 : 0);
 
@@ -31,18 +35,44 @@ export function PricingToggle({ value, onChange }: PricingToggleProps) {
   const saveBadgeText = useConfig('save_badge_text', 'Save ~28% monthly');
 
   return (
-    <View className="items-center gap-2">
+    <View style={{ alignItems: 'center', gap: spacing.sm }}>
       {/* Save badge */}
-      <View className="bg-correct/10 px-3 py-1 rounded-full">
-        <Text className="text-correct font-body-semibold text-xs">{saveBadgeText}</Text>
+      <View
+        style={{
+          backgroundColor: theme.successMuted,
+          paddingHorizontal: spacing.md,
+          paddingVertical: spacing.xs,
+          borderRadius: radius.full,
+        }}
+      >
+        <Typography variant="captionBold" color={theme.success}>{saveBadgeText}</Typography>
       </View>
 
       {/* Toggle track */}
-      <View className="flex-row rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 relative overflow-hidden">
+      <View
+        style={{
+          flexDirection: 'row',
+          borderRadius: radius.lg,
+          borderWidth: 1,
+          borderColor: theme.border,
+          backgroundColor: theme.cardAlt,
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
         {/* Animated pill */}
         <Animated.View
-          style={[pillStyle, { width: PILL_W, position: 'absolute', top: 0, bottom: 0 }]}
-          className="bg-primary rounded-2xl"
+          style={[
+            pillStyle,
+            {
+              width: PILL_W,
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              backgroundColor: theme.primary,
+              borderRadius: radius.lg,
+            },
+          ]}
         />
 
         {(['weekly', 'monthly'] as BillingCycle[]).map((cycle) => (
@@ -50,16 +80,20 @@ export function PricingToggle({ value, onChange }: PricingToggleProps) {
             key={cycle}
             onPress={() => select(cycle)}
             activeOpacity={0.8}
-            style={{ width: PILL_W }}
-            className="py-2.5 items-center justify-center z-10"
+            style={{
+              width: PILL_W,
+              paddingVertical: spacing.md,
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10,
+            }}
           >
-            <Text
-              className={`text-sm font-body-semibold ${
-                value === cycle ? 'text-white' : 'text-gray-500 dark:text-gray-400'
-              }`}
+            <Typography
+              variant="label"
+              color={value === cycle ? '#FFFFFF' : theme.textTertiary}
             >
               {cycle === 'weekly' ? 'Weekly' : 'Monthly'}
-            </Text>
+            </Typography>
           </TouchableOpacity>
         ))}
       </View>

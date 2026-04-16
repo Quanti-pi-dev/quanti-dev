@@ -5,7 +5,7 @@
 import { View, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
-import { radius, spacing, typography } from '../theme/tokens';
+import { radius, spacing } from '../theme/tokens';
 import { Typography } from './ui/Typography';
 
 interface CoinDisplayProps {

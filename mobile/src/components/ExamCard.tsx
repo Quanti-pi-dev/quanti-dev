@@ -11,7 +11,6 @@ import { useTheme } from '../theme';
 import { radius, spacing, typography, shadows } from '../theme/tokens';
 import { useScalePress } from '../theme/animations';
 import { ProgressBar } from './ui/ProgressBar';
-import { Badge } from './ui/Badge';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 

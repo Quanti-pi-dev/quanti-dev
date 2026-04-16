@@ -2,7 +2,7 @@
 // Custom bottom tab bar with animated indicator and board theme.
 
 
-import { View, Text, TouchableOpacity, Platform, ViewStyle } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import Animated, {
   useSharedValue,
@@ -89,7 +89,7 @@ function TabItem({ route, isFocused, tabConfig, theme, navigation }: TabItemProp
 
 // ─── Component ───────────────────────────────────────────────
 
-export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+export function TabBar({ state, descriptors: _descriptors, navigation }: BottomTabBarProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
 

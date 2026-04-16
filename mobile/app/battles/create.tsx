@@ -2,13 +2,13 @@
 // 3-step flow: Content → Stakes → Review
 // Uses swipeable Animated.View, no page navigation.
 
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { View, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInRight, FadeOutLeft } from 'react-native-reanimated';
+import Animated, { FadeInRight } from 'react-native-reanimated';
 import { useTheme } from '../../src/theme';
-import { spacing, typography, radius, shadows } from '../../src/theme/tokens';
+import { spacing, radius, shadows } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';
 import { CoinDisplay } from '../../src/components/CoinDisplay';

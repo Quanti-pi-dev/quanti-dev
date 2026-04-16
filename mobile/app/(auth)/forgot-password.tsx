@@ -1,12 +1,13 @@
 // ─── Forgot Password ─────────────────────────────────────────
-// Sends Auth0 password-reset email. User clicks the link in their inbox.
+// Sends Firebase password-reset email. User clicks the link in their inbox.
 
 import { useState } from 'react';
 import { View, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
-import { api } from '../../src/services/api';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '../../src/lib/firebase';
 import { spacing } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Header } from '../../src/components/layout/Header';
@@ -28,7 +29,7 @@ export default function ForgotPasswordScreen() {
     setError('');
     setIsLoading(true);
     try {
-      await api.post('/auth/forgot-password', { email });
+      await sendPasswordResetEmail(auth, email);
       setSent(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not send reset email. Please try again.');

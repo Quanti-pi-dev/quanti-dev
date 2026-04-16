@@ -8,7 +8,7 @@
 // Idempotent: skips decks whose cardCount > 0.
 // Performance: chunked insertMany (500 cards/chunk).
 
-import { MongoClient, ObjectId, type Db, type Collection, type Document } from 'mongodb';
+import { ObjectId, type Db, type Collection, type Document } from 'mongodb';
 import { SUBJECTS, LEVELS } from '../data/taxonomy.js';
 import type { SubjectName } from '../data/taxonomy.js';
 import type { QuestionDef } from '../data/types.js';

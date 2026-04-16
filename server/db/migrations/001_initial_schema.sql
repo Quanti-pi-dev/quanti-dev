@@ -45,7 +45,7 @@ CREATE TYPE challenge_status AS ENUM (
 -- ─── Users ──────────────────────────────────────────────────
 CREATE TABLE users (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    auth0_id        VARCHAR(128) NOT NULL UNIQUE,
+    firebase_uid    VARCHAR(128) NOT NULL UNIQUE,
     email           CITEXT NOT NULL UNIQUE,
     display_name    VARCHAR(100) NOT NULL,
     avatar_url      TEXT,
@@ -57,7 +57,7 @@ CREATE TABLE users (
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_users_auth0_id ON users (auth0_id);
+CREATE INDEX idx_users_firebase_uid ON users (firebase_uid);
 CREATE INDEX idx_users_email ON users (email);
 CREATE INDEX idx_users_role ON users (role);
 CREATE INDEX idx_users_created_at ON users (created_at DESC);
@@ -491,7 +491,7 @@ CREATE INDEX idx_coin_packs_active ON coin_packs (is_active, sort_order);
 -- ─── Coin Pack Purchase Ledger ──────────────────────────────
 CREATE TABLE coin_pack_purchases (
     id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id             TEXT        NOT NULL REFERENCES users(auth0_id),
+    user_id             TEXT        NOT NULL REFERENCES users(firebase_uid),
     coin_pack_id        UUID        REFERENCES coin_packs(id),
     razorpay_order_id   TEXT        NOT NULL,
     razorpay_payment_id TEXT        DEFAULT NULL,

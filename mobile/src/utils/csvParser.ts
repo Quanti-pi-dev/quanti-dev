@@ -168,7 +168,7 @@ export function parseJSON(text: string): ParseResult {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
-  } catch (e) {
+  } catch {
     return { cards: [], errors: ['Invalid JSON. Please check for syntax errors.'] };
   }
 

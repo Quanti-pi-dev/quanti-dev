@@ -32,6 +32,7 @@ import { publicConfigRoutes, adminConfigRoutes } from './routes/config.routes.js
 import { coinPackRoutes, adminCoinPackRoutes } from './routes/coinpack.routes.js';
 import { tournamentRoutes, adminTournamentRoutes } from './routes/tournament.routes.js';
 import { tournamentRepository } from './repositories/tournament.repository.js';
+import { withCronLock } from './lib/cron-lock.js';
 
 // ─── Fastify Instance ───────────────────────────────────────
 
@@ -155,27 +156,34 @@ async function registerRoutes() {
 // ─── Cron Scheduler ─────────────────────────────────────────
 
 function startCronJobs() {
-  // Expire subscriptions every 15 minutes
-  setInterval(() => expireSubscriptions(server.log).catch(err => server.log.error(err, 'expire-cron failed')), 15 * 60 * 1000);
+  const log = server.log;
 
-  // Retry failed payments every 6 hours
-  setInterval(() => retryFailedPayments(server.log).catch(err => server.log.error(err, 'retry-cron failed')), 6 * 60 * 60 * 1000);
+  // ─── Helper: wrap a cron in a distributed Redis lock ────
+  // TTL (seconds) should exceed the job's max expected runtime.
+  const locked = (name: string, ttlSec: number, job: () => Promise<void>) =>
+    withCronLock(name, ttlSec, job, log);
 
-  // Send subscription reminders every 24 hours
-  setInterval(() => sendSubscriptionReminders(server.log).catch(err => server.log.error(err, 'reminders-cron failed')), 24 * 60 * 60 * 1000);
+  // Expire subscriptions every 15 minutes (lock: 120s)
+  setInterval(() => void locked('expire-subscriptions', 120,
+    () => expireSubscriptions(log)), 15 * 60 * 1000);
+
+  // Retry failed payments every 6 hours (lock: 300s)
+  setInterval(() => void locked('retry-payments', 300,
+    () => retryFailedPayments(log)), 6 * 60 * 60 * 1000);
+
+  // Send subscription reminders every 24 hours (lock: 600s)
+  setInterval(() => void locked('send-reminders', 600,
+    () => sendSubscriptionReminders(log)), 24 * 60 * 60 * 1000);
   // Run once immediately on startup (catches overnight events)
-  void sendSubscriptionReminders(server.log).catch(err => server.log.error(err, 'reminders-cron startup failed'));
+  void locked('send-reminders', 600,
+    () => sendSubscriptionReminders(log));
 
   // Reset weekly leaderboard every Sunday at midnight UTC
-  const resetWeeklyLeaderboard = async () => {
-    try {
-      const { getRedisClient } = await import('./lib/database.js');
-      await getRedisClient().del('leaderboard:weekly');
-      server.log.info('Weekly leaderboard reset');
-    } catch (err) {
-      server.log.error(err, 'weekly-leaderboard-reset failed');
-    }
-  };
+  const resetWeeklyLeaderboard = () => locked('weekly-leaderboard-reset', 60, async () => {
+    const { getRedisClient } = await import('./lib/database.js');
+    await getRedisClient().del('leaderboard:weekly');
+    log.info('Weekly leaderboard reset');
+  });
   // Calculate ms until next Sunday midnight UTC, then repeat weekly
   const now = new Date();
   const dayOfWeek = now.getUTCDay(); // 0 = Sunday
@@ -194,14 +202,17 @@ function startCronJobs() {
     }, msUntilReset);
   }
 
-  server.log.info('Cron jobs scheduled');
+  log.info('Cron jobs scheduled');
 
   // P2P Challenge cron jobs
-  setInterval(() => expirePendingChallenges(server.log).catch(err => server.log.error(err, 'expire-challenges-cron failed')), 5 * 60 * 1000);
-  setInterval(() => finalizeAbandonedChallenges(server.log).catch(err => server.log.error(err, 'finalize-challenges-cron failed')), 30 * 1000);
+  setInterval(() => void locked('expire-pending-challenges', 60,
+    () => expirePendingChallenges(log)), 5 * 60 * 1000);
+  setInterval(() => void locked('finalize-abandoned-challenges', 25,
+    () => finalizeAbandonedChallenges(log)), 30 * 1000);
 
-  // Tournament completion cron — every 5 minutes
-  setInterval(() => completeTournaments(server.log).catch(err => server.log.error(err, 'tournament-completion-cron failed')), 5 * 60 * 1000);
+  // Tournament completion cron — every 5 minutes (lock: 120s)
+  setInterval(() => void locked('complete-tournaments', 120,
+    () => completeTournaments(log)), 5 * 60 * 1000);
 }
 
 async function start() {
@@ -222,30 +233,56 @@ async function start() {
 }
 
 // ─── Graceful Shutdown ──────────────────────────────────────
+// Includes a fail-safe timeout: if connections hang during teardown
+// the process still exits after SHUTDOWN_TIMEOUT_MS so the
+// orchestrator (Render / k8s) can restart a fresh instance.
 
-async function shutdown() {
-  server.log.info('Shutting down...');
-  await server.close();
-  await disconnectRealtime();
-  await disconnectDatabases();
-  process.exit(0);
+const SHUTDOWN_TIMEOUT_MS = 10_000;
+let isShuttingDown = false;
+
+async function shutdown(exitCode = 0) {
+  // Prevent re-entrant calls (e.g. SIGTERM during error handler)
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  server.log.info(`Shutting down (exit ${exitCode})...`);
+
+  // Fail-safe: force-kill if graceful teardown stalls
+  const failsafe = setTimeout(() => {
+    server.log.error('Graceful shutdown timed out — forcing exit');
+    process.exit(exitCode || 1);
+  }, SHUTDOWN_TIMEOUT_MS);
+  failsafe.unref(); // Don't let this timer keep the event loop alive
+
+  try {
+    await server.close();          // drain in-flight HTTP requests
+    await disconnectRealtime();    // close WebSocket sessions
+    await disconnectDatabases();   // release PG pool, Mongo, Redis
+  } catch (err) {
+    server.log.error(err, 'Error during graceful shutdown');
+  }
+
+  clearTimeout(failsafe);
+  process.exit(exitCode);
 }
 
 // ─── Last-Resort Process Error Handlers ─────────────────────
 // These catch fatal errors that escape every other layer (route
 // handlers, services, cron callbacks). Without them, the process
 // dies silently with no telemetry.
+//
+// Instead of a crude setTimeout+exit, we invoke the full graceful
+// shutdown sequence so active connections are drained, Postgres
+// transactions are released, and WebSockets cleanly disconnect.
 
 process.on('uncaughtException', (err) => {
-  server.log.fatal({ err }, 'UNCAUGHT EXCEPTION — shutting down');
-  // Give the logger time to flush, then exit non-zero so the
-  // orchestrator (PM2 / k8s / ECS) restarts us.
-  setTimeout(() => process.exit(1), 1000);
+  server.log.fatal({ err }, 'UNCAUGHT EXCEPTION — shutting down gracefully');
+  void shutdown(1);
 });
 
 process.on('unhandledRejection', (reason) => {
-  server.log.fatal({ err: reason }, 'UNHANDLED REJECTION — shutting down');
-  setTimeout(() => process.exit(1), 1000);
+  server.log.fatal({ err: reason }, 'UNHANDLED REJECTION — shutting down gracefully');
+  void shutdown(1);
 });
 
 process.on('SIGTERM', shutdown);

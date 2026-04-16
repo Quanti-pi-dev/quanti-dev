@@ -25,10 +25,12 @@ const plans = [
       max_exams_per_day: -1,
       max_subjects_per_exam: 3,
       max_level: 2,            // Beginner + Rookie only
-      ai_explanations: false,
+      ai_explanations: true,
       offline_access: false,
       priority_support: false,
-      advanced_analytics: false,
+      advanced_analytics: true,
+      deep_insights: false,
+      mastery_radar: false,
     },
   },
   {
@@ -46,10 +48,12 @@ const plans = [
       max_exams_per_day: -1,
       max_subjects_per_exam: 3,
       max_level: 2,
-      ai_explanations: false,
+      ai_explanations: true,
       offline_access: false,
       priority_support: false,
-      advanced_analytics: false,
+      advanced_analytics: true,
+      deep_insights: false,
+      mastery_radar: false,
     },
   },
 
@@ -73,6 +77,8 @@ const plans = [
       offline_access: false,
       priority_support: false,
       advanced_analytics: true,
+      deep_insights: true,
+      mastery_radar: false,
     },
   },
   {
@@ -94,6 +100,8 @@ const plans = [
       offline_access: false,
       priority_support: false,
       advanced_analytics: true,
+      deep_insights: true,
+      mastery_radar: false,
     },
   },
 
@@ -117,6 +125,8 @@ const plans = [
       offline_access: true,
       priority_support: true,
       advanced_analytics: true,
+      deep_insights: true,
+      mastery_radar: true,
     },
   },
   {
@@ -138,6 +148,8 @@ const plans = [
       offline_access: true,
       priority_support: true,
       advanced_analytics: true,
+      deep_insights: true,
+      mastery_radar: true,
     },
   },
 ];

@@ -16,7 +16,6 @@ import { useSubscription } from '../../contexts/SubscriptionContext';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../services/api';
 import { cancelSubscription, reactivateSubscription } from '../../services/subscription.service';
-import type { SubscriptionSummary } from '@kd/shared';
 
 export const SubscriptionCard = React.memo(function SubscriptionCard() {
   const { theme } = useTheme();

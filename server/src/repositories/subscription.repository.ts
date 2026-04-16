@@ -170,7 +170,9 @@ class SubscriptionRepository {
     const statusPlaceholders = statusList.map((_, i) => `$${i + 2}`).join(', ');
     const result = await this.pool.query(
       `SELECT * FROM subscriptions
-       WHERE current_period_end <= $1 AND status IN (${statusPlaceholders})`,
+       WHERE current_period_end <= $1 AND status IN (${statusPlaceholders})
+       ORDER BY current_period_end ASC
+       LIMIT 200`,
       [beforeDate, ...statusList],
     );
     return result.rows.map(rowToSubscription);
@@ -180,7 +182,9 @@ class SubscriptionRepository {
   async findForRetry(maxRetries: number): Promise<Subscription[]> {
     const result = await this.pool.query(
       `SELECT * FROM subscriptions
-       WHERE status = 'past_due' AND retry_count < $1`,
+       WHERE status = 'past_due' AND retry_count < $1
+       ORDER BY updated_at ASC
+       LIMIT 100`,
       [maxRetries],
     );
     return result.rows.map(rowToSubscription);
@@ -191,7 +195,9 @@ class SubscriptionRepository {
     const result = await this.pool.query(
       `SELECT * FROM subscriptions
        WHERE status = 'trialing'
-         AND trial_end BETWEEN NOW() AND NOW() + ($1 || ' hours')::INTERVAL`,
+         AND trial_end BETWEEN NOW() AND NOW() + ($1 || ' hours')::INTERVAL
+       ORDER BY trial_end ASC
+       LIMIT 200`,
       [withinHours],
     );
     return result.rows.map(rowToSubscription);

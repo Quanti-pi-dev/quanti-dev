@@ -7,17 +7,15 @@ import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
   FadeIn,
-  ZoomIn,
   useSharedValue,
   useAnimatedStyle,
   withSequence,
   withTiming,
-  withDelay,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/theme';
-import { spacing, radius } from '../../src/theme/tokens';
+import { spacing } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';
 import { Button } from '../../src/components/ui/Button';

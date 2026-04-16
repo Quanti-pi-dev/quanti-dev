@@ -298,7 +298,7 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
     const pg = getPostgresPool();
     const result = await pg.query(
       `SELECT COUNT(*) as count FROM study_sessions
-       WHERE user_id = (SELECT id FROM users WHERE auth0_id = $1)
+       WHERE user_id = (SELECT id FROM users WHERE firebase_uid = $1)
          AND started_at >= CURRENT_DATE`,
       [userId],
     );
@@ -406,5 +406,15 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
     }));
 
     return reply.send({ success: true, data, timestamp: new Date().toISOString() });
+  });
+
+  // ─── GET /progress/advanced-insights ──────────────────────────
+  // Returns chronotype, speed-vs-accuracy scatter, and subject strength data.
+  // Available to all paid tiers; the mobile app controls which sections render
+  // based on deep_insights / mastery_radar feature flags.
+  fastify.get('/advanced-insights', async (request: FastifyRequest, reply: FastifyReply) => {
+    const userId = request.user!.id;
+    const insights = await progressRepository.getAdvancedInsights(userId);
+    return reply.send({ success: true, data: insights, timestamp: new Date().toISOString() });
   });
 }

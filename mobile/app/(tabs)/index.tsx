@@ -3,7 +3,7 @@
 // Feature gates: Resume CTA (tier 1+), Exams 4+ (tier 1+)
 
 import { useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, ScrollView, TouchableOpacity } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -15,7 +15,7 @@ import Animated, {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
-import { spacing, typography, radius } from '../../src/theme/tokens';
+import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';
 import { Button } from '../../src/components/ui/Button';
@@ -28,7 +28,7 @@ import { StreakWidget } from '../../src/components/StreakWidget';
 import { CoinDisplay } from '../../src/components/CoinDisplay';
 import { StudyInsightsCard } from '../../src/components/StudyInsightsCard';
 import { LockedFeature } from '../../src/components/subscription/LockedFeature';
-import { UpgradeCTABanner } from '../../src/components/subscription/UpgradeCTABanner';
+
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useSubscriptionGate } from '../../src/hooks/useSubscriptionGate';
 import { useSubscription } from '../../src/contexts/SubscriptionContext';
@@ -77,8 +77,9 @@ function UpgradePill({ onPress }: { onPress: () => void }) {
     <TouchableOpacity
       onPress={onPress}
       style={{
-        flexDirection: 'row', alignItems: 'center', gap: 4,
-        paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999,
+        flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
+        paddingHorizontal: spacing.sm, paddingVertical: spacing.sm,
+        borderRadius: radius.full,
         backgroundColor: theme.primaryMuted, borderWidth: 1, borderColor: theme.primary + '33',
         overflow: 'hidden',
       }}
@@ -92,13 +93,13 @@ function UpgradePill({ onPress }: { onPress: () => void }) {
             position: 'absolute',
             top: 0, left: 0, right: 0, bottom: 0,
             backgroundColor: 'rgba(255,255,255,0.35)',
-            borderRadius: 999,
+            borderRadius: radius.full,
           },
         ]}
         pointerEvents="none"
       />
       <Ionicons name="rocket-outline" size={13} color={theme.primary} />
-      <Text style={{ color: theme.primary, fontSize: 12, fontFamily: typography.bodySemiBold }}>Upgrade</Text>
+      <Typography variant="captionBold" color={theme.primary}>Upgrade</Typography>
     </TouchableOpacity>
   );
 }

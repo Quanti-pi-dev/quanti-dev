@@ -5,7 +5,7 @@
 import { useState, useCallback } from 'react';
 import {
   View, ScrollView, TouchableOpacity, TextInput, Alert,
-  RefreshControl, ActivityIndicator, KeyboardAvoidingView, Platform,
+  RefreshControl, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';

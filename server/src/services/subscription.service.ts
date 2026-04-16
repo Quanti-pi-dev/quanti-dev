@@ -226,7 +226,7 @@ class SubscriptionService {
     await this.invalidateCache(userId);
 
     // Fire-and-forget notifications + analytics
-    const user = await userRepository.findByAuth0Id(userId).catch(() => null);
+    const user = await userRepository.findByFirebaseUid(userId).catch(() => null);
     if (user) {
       void Promise.allSettled([
         analyticsService.trackTrialStarted(userId, plan.slug, plan.trialDays),
@@ -375,7 +375,7 @@ class SubscriptionService {
 
     // Fire-and-forget notifications + analytics
     const plan = await planRepository.findById(sub.planId).catch(() => null);
-    const user = await userRepository.findByAuth0Id(userId).catch(() => null);
+    const user = await userRepository.findByFirebaseUid(userId).catch(() => null);
     if (plan && user) {
       void Promise.allSettled([
         analyticsService.trackPaymentSucceeded(userId, plan.slug, payment.amountPaise, razorpayPaymentId),

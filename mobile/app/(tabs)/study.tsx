@@ -5,7 +5,7 @@
 
 import { useState, useMemo } from 'react';
 import {
-  View, ScrollView, FlatList, TouchableOpacity, ActivityIndicator,
+  View, ScrollView, FlatList, TouchableOpacity,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';

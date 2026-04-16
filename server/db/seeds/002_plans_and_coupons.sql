@@ -40,7 +40,7 @@ VALUES
             "max_exams_per_day": -1,
             "max_subjects_per_exam": 3,
             "max_level": 2,
-            "ai_explanations": false,
+            "ai_explanations": true,
             "offline_access": false,
             "priority_support": false,
             "advanced_analytics": false
@@ -63,7 +63,7 @@ VALUES
             "max_exams_per_day": -1,
             "max_subjects_per_exam": 3,
             "max_level": 2,
-            "ai_explanations": false,
+            "ai_explanations": true,
             "offline_access": false,
             "priority_support": false,
             "advanced_analytics": false

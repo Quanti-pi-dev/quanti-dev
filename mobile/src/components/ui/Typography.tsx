@@ -3,7 +3,7 @@
 // body/label/caption variants use Inter (sans-serif).
 
 
-import { Text, TextStyle, StyleSheet } from 'react-native';
+import { Text, TextStyle } from 'react-native';
 import { useTheme } from '../../theme';
 import { typography } from '../../theme/tokens';
 

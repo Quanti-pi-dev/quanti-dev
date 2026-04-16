@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchProgressSummary, recordCompletion as recordCompletionFn, fetchStudyStreak } from '../services/api-contracts';
+import { fetchProgressSummary, recordCompletion as recordCompletionFn, fetchStudyStreak, fetchAdvancedInsights } from '../services/api-contracts';
 
 // ─── Query Keys ─────────────────────────────────────────────
 
@@ -8,6 +8,7 @@ export const progressKeys = {
   summary: () => [...progressKeys.all, 'summary'] as const,
   streak: () => [...progressKeys.all, 'streak'] as const,
   history: (page: number) => [...progressKeys.all, 'history', page] as const,
+  advancedInsights: () => [...progressKeys.all, 'advancedInsights'] as const,
 };
 
 // ─── Hooks ──────────────────────────────────────────────────
@@ -41,3 +42,14 @@ export function useRecordCompletion() {
     },
   });
 }
+
+/** Advanced analytics: chronotype, speed-vs-accuracy, subject strengths. */
+export function useAdvancedInsights(enabled = true) {
+  return useQuery({
+    queryKey: progressKeys.advancedInsights(),
+    queryFn: fetchAdvancedInsights,
+    staleTime: 120_000, // 2 min — analytics data changes infrequently
+    enabled,
+  });
+}
+

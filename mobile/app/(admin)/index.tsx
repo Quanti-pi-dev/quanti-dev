@@ -9,7 +9,6 @@ import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Header } from '../../src/components/layout/Header';
 import { Typography } from '../../src/components/ui/Typography';
 import { Card } from '../../src/components/ui/Card';
-import { Button } from '../../src/components/ui/Button';
 import { StatCard } from '../../src/components/StatCard';
 import { Skeleton } from '../../src/components/ui/Skeleton';
 import { Icon } from '../../src/components/ui/Icon';

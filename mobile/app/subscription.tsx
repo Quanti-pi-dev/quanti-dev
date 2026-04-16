@@ -16,7 +16,7 @@ import * as Haptics from 'expo-haptics';
 import RazorpayCheckout from 'react-native-razorpay';
 
 import { useTheme } from '../src/theme';
-import { spacing, radius, typography as typo } from '../src/theme/tokens';
+import { spacing, radius } from '../src/theme/tokens';
 import { Typography } from '../src/components/ui/Typography';
 import { PricingToggle } from '../src/components/subscription/PricingToggle';
 import { PlanCard } from '../src/components/subscription/PlanCard';
@@ -27,7 +27,6 @@ import {
   fetchPlans,
   initiateCheckout,
   verifyPayment,
-  formatPrice,
 } from '../src/services/subscription.service';
 import { useConfig } from '../src/contexts/ConfigContext';
 import type { Plan, CouponValidationResult } from '@kd/shared';

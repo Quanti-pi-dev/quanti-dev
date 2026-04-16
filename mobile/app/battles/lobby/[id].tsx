@@ -8,7 +8,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn, useSharedValue, useAnimatedStyle, withRepeat, withTiming } from 'react-native-reanimated';
 import { useTheme } from '../../../src/theme';
-import { spacing, typography, radius, shadows } from '../../../src/theme/tokens';
+import { spacing, radius } from '../../../src/theme/tokens';
 import { ScreenWrapper } from '../../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../../src/components/ui/Typography';
 import { useChallengeDetailPolling, useCancelChallenge } from '../../../src/hooks/useChallenge';

@@ -4,10 +4,8 @@
 
 
 import {
-  View,
   TouchableOpacity,
   ViewStyle,
-  StyleSheet,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -43,7 +41,7 @@ export function Card({
   style,
   children,
 }: CardProps) {
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const scale = useSharedValue(1);
 
   const animStyle = useAnimatedStyle(() => ({

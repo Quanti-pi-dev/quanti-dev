@@ -8,10 +8,13 @@ import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/theme';
-import { spacing, radius } from '../../src/theme/tokens';
+import { spacing } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';
 import { Button } from '../../src/components/ui/Button';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const LOGO_SOURCE = require('../../assets/adaptive-icon.png');
 
 export default function OnboardingWelcomeScreen() {
   const { theme } = useTheme();
@@ -54,7 +57,7 @@ export default function OnboardingWelcomeScreen() {
           }}
         >
           <Image
-            source={require('../../assets/adaptive-icon.png')}
+            source={LOGO_SOURCE}
             style={{ width: '100%', height: '100%', borderRadius: 28 }}
             resizeMode="cover"
           />

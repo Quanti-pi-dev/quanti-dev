@@ -28,7 +28,6 @@ export interface PushPayload {
 
 type NotificationEvent =
   | { type: 'welcome'; userId: string; email: string; displayName: string }
-  | { type: 'password_reset'; email: string; resetUrl: string }
   | { type: 'study_reminder'; userId: string; email: string; streakDays: number }
   | { type: 'badge_earned'; userId: string; email: string; badgeName: string }
   | { type: 'streak_milestone'; userId: string; email: string; streakDays: number }
@@ -57,12 +56,6 @@ const emailTemplates: Record<string, (data: Record<string, string>) => EmailPayl
     to: data['email']!,
     subject: 'Welcome to Study Platform! 🎓',
     body: `Hi ${data['name']},\n\nWelcome to Study Platform! Start your learning journey today.\n\nHappy studying!`,
-  }),
-
-  password_reset: (data) => ({
-    to: data['email']!,
-    subject: 'Reset Your Password',
-    body: `Click the link below to reset your password:\n\n${data['resetUrl']}\n\nThis link expires in 1 hour.`,
   }),
 
   study_reminder: (data) => ({
@@ -124,6 +117,27 @@ const emailTemplates: Record<string, (data: Record<string, string>) => EmailPayl
 // ─── Notification Service ───────────────────────────────────
 
 class NotificationService {
+  // Cached FCM auth client — lazily initialized once, reused across all push calls.
+  private _googleAuth: InstanceType<typeof import('google-auth-library').GoogleAuth> | null = null;
+  private _fcmProjectId: string | null = null;
+
+  private async getFcmAuth() {
+    if (this._googleAuth && this._fcmProjectId) {
+      return { auth: this._googleAuth, projectId: this._fcmProjectId };
+    }
+
+    const { GoogleAuth } = await import('google-auth-library');
+    this._googleAuth = new GoogleAuth({
+      keyFilename: config.fcm.serviceAccountPath,
+      scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
+    });
+
+    // Read project ID from the service account file
+    const sa = await import(config.fcm.serviceAccountPath, { assert: { type: 'json' } });
+    this._fcmProjectId = sa.default?.project_id ?? sa.project_id ?? null;
+
+    return { auth: this._googleAuth, projectId: this._fcmProjectId };
+  }
   // ─── Process event → dispatch notification ────────────
   async handleEvent(event: NotificationEvent): Promise<void> {
     switch (event.type) {
@@ -132,15 +146,6 @@ class NotificationService {
           emailTemplates['welcome']!({
             email: event.email,
             name: event.displayName,
-          }),
-        );
-        break;
-
-      case 'password_reset':
-        await this.sendEmail(
-          emailTemplates['password_reset']!({
-            email: event.email,
-            resetUrl: event.resetUrl,
           }),
         );
         break;
@@ -307,26 +312,18 @@ class NotificationService {
         return;
       }
 
-      // Get an OAuth2 access token using the service account
-      const { GoogleAuth } = await import('google-auth-library');
-      const auth = new GoogleAuth({
-        keyFilename: config.fcm.serviceAccountPath,
-        scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
-      });
-      const client = await auth.getClient();
+      // Get cached FCM auth client and project ID
+      const { auth: fcmAuth, projectId } = await this.getFcmAuth();
+      if (!projectId) {
+        log.error('FCM service account missing project_id');
+        return;
+      }
+
+      const client = await fcmAuth.getClient();
       const accessToken = (await client.getAccessToken()).token;
 
       if (!accessToken) {
         log.error('failed to obtain FCM access token');
-        return;
-      }
-
-      // Read the project ID from the service account file
-      const sa = await import(config.fcm.serviceAccountPath, { assert: { type: 'json' } });
-      const projectId = sa.default?.project_id ?? sa.project_id;
-
-      if (!projectId) {
-        log.error('FCM service account missing project_id');
         return;
       }
 

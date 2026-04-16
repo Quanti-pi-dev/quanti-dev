@@ -1,13 +1,17 @@
 // ─── SubscriptionStatusCard ───────────────────────────────────
 // Profile screen: shows current plan + days left, or upgrade CTA.
 
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '../../theme';
+import { spacing, radius } from '../../theme/tokens';
+import { Typography } from '../ui/Typography';
 import { useSubscriptionGate } from '../../hooks/useSubscriptionGate';
 import { useSubscription } from '../../contexts/SubscriptionContext';
 
 export function SubscriptionStatusCard() {
+  const { theme } = useTheme();
   const { isSubscribed, planTier, goToUpgrade } = useSubscriptionGate();
   const { subscription } = useSubscription();
 
@@ -25,26 +29,45 @@ export function SubscriptionStatusCard() {
       <TouchableOpacity
         onPress={goToUpgrade}
         activeOpacity={0.85}
-        className="border border-dashed border-primary/40 rounded-3xl p-5 gap-3"
+        style={{
+          borderWidth: 1,
+          borderStyle: 'dashed',
+          borderColor: theme.primary + '66',
+          borderRadius: radius['2xl'],
+          padding: spacing.xl,
+          gap: spacing.md,
+        }}
       >
-        <View className="flex-row items-center gap-3">
-          <View className="bg-primary/10 w-10 h-10 rounded-2xl items-center justify-center">
-            <Ionicons name="rocket-outline" size={20} color="#2563EB" />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+          <View
+            style={{
+              backgroundColor: theme.primaryMuted,
+              width: 40,
+              height: 40,
+              borderRadius: radius.lg,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="rocket-outline" size={20} color={theme.primary} />
           </View>
-          <View className="flex-1">
-            <Text className="font-body-semibold text-sm text-gray-900 dark:text-white">
-              No Active Plan
-            </Text>
-            <Text className="font-body text-xs text-gray-400 mt-0.5">
-              Unlock the full Ouanti-pi experience
-            </Text>
+          <View style={{ flex: 1 }}>
+            <Typography variant="label">No Active Plan</Typography>
+            <Typography variant="caption" color={theme.textTertiary}>
+              Unlock the full Quanti-pi experience
+            </Typography>
           </View>
-          <Ionicons name="chevron-forward" size={18} color="#2563EB" />
+          <Ionicons name="chevron-forward" size={18} color={theme.primary} />
         </View>
-        <View className="bg-primary rounded-2xl py-2.5 items-center">
-          <Text className="text-white font-body-semibold text-sm">
-            View Plans
-          </Text>
+        <View
+          style={{
+            backgroundColor: theme.primary,
+            borderRadius: radius.lg,
+            paddingVertical: spacing.md,
+            alignItems: 'center',
+          }}
+        >
+          <Typography variant="label" color="#FFFFFF">View Plans</Typography>
         </View>
       </TouchableOpacity>
     );
@@ -63,40 +86,58 @@ export function SubscriptionStatusCard() {
         colors={tierGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        className="rounded-3xl p-5 gap-3"
+        style={{
+          borderRadius: radius['2xl'],
+          padding: spacing.xl,
+          gap: spacing.md,
+        }}
       >
         {/* Plan header */}
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-2">
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
             <Ionicons name="shield-checkmark" size={18} color="rgba(255,255,255,0.9)" />
-            <Text className="font-heading text-base text-white">{planName}</Text>
+            <Typography variant="h4" color="#FFFFFF">{planName}</Typography>
           </View>
-          {isCanceling ? (
-            <View className="bg-white/20 px-2.5 py-1 rounded-full">
-              <Text className="text-white text-xs font-body-semibold">Cancels {expiryDate}</Text>
-            </View>
-          ) : (
-            <View className="bg-white/20 px-2.5 py-1 rounded-full">
-              <Text className="text-white text-xs font-body-semibold">{daysLeft}d left</Text>
-            </View>
-          )}
+          <View
+            style={{
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.xs,
+              borderRadius: radius.full,
+            }}
+          >
+            <Typography variant="captionBold" color="#FFFFFF">
+              {isCanceling ? `Cancels ${expiryDate}` : `${daysLeft}d left`}
+            </Typography>
+          </View>
         </View>
 
         {/* Days remaining bar */}
-        <View className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+        <View
+          style={{
+            height: 6,
+            backgroundColor: 'rgba(255,255,255,0.2)',
+            borderRadius: radius.full,
+            overflow: 'hidden',
+          }}
+        >
           <View
-            className="h-full bg-white rounded-full"
-            style={{ width: `${Math.min(100, (daysLeft / (subscription?.plan?.billingCycle === 'monthly' ? 30 : 7)) * 100)}%` }}
+            style={{
+              height: '100%',
+              backgroundColor: '#FFFFFF',
+              borderRadius: radius.full,
+              width: `${Math.min(100, (daysLeft / (subscription?.plan?.billingCycle === 'monthly' ? 30 : 7)) * 100)}%`,
+            }}
           />
         </View>
 
         {/* Footer */}
-        <View className="flex-row items-center justify-between">
-          <Text className="text-white/70 text-xs font-body">
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography variant="caption" color="rgba(255,255,255,0.7)">
             Renews {expiryDate}
-          </Text>
-          <View className="flex-row items-center gap-1">
-            <Text className="text-white/80 text-xs font-body">Manage</Text>
+          </Typography>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+            <Typography variant="caption" color="rgba(255,255,255,0.8)">Manage</Typography>
             <Ionicons name="chevron-forward" size={13} color="rgba(255,255,255,0.8)" />
           </View>
         </View>

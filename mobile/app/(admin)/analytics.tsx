@@ -3,7 +3,7 @@
 // GET /admin/analytics — no hardcoded values.
 // Sections: Platform Overview · Coin Economy · Shop Activity · Leaderboard
 
-import { View, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, ScrollView, RefreshControl } from 'react-native';
 import { useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';

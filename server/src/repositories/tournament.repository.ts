@@ -236,7 +236,7 @@ class TournamentRepository {
     const docs = await this.col.find({
       status: 'active',
       endsAt: { $lt: new Date().toISOString() },
-    }).toArray();
+    }).limit(50).toArray();
     return docs.map((d) => ({ ...d, _id: d._id.toString() })) as unknown as Tournament[];
   }
 

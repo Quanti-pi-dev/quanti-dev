@@ -1,10 +1,10 @@
 services:
   - type: web
-    name: exam-prep-api
+    name: quanti-pi-api
     env: node
     plan: free
     region: oregon
-    buildCommand: "npm install && npm run build --workspace=@kd/shared && npm run build --workspace=@kd/server"
+    buildCommand: "npm ci && npm run build --workspace=@kd/shared && npm run build --workspace=@kd/server"
     # Runs automatically before starting the new version to apply DB changes
     preDeployCommand: "npm --workspace=@kd/server exec -- tsx db/scripts/migrate.ts && npm --workspace=@kd/server exec -- tsx db/scripts/create-mongo-indexes.ts"
     startCommand: "npm run start --workspace=@kd/server"
@@ -23,14 +23,10 @@ services:
       - key: REDIS_URL
         sync: false
       
-      # Auth0
-      - key: AUTH0_DOMAIN
-        sync: false
-      - key: AUTH0_AUDIENCE
-        sync: false
-      - key: AUTH0_CLIENT_ID
-        sync: false
-      - key: AUTH0_CLIENT_SECRET
+      # Firebase
+      - key: FIREBASE_SERVICE_ACCOUNT_PATH
+        value: /etc/secrets/firebase-service-account.json
+      - key: FIREBASE_PROJECT_ID
         sync: false
         
       # Payments

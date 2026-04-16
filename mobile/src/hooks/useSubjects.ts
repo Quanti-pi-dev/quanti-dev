@@ -9,7 +9,7 @@ import {
   fetchExamProgress,
 } from '../services/api-contracts';
 import { api } from '../services/api';
-import type { Subject, SubjectLevelSummary, ExamProgress, LevelAnswerResult } from '@kd/shared';
+import type { LevelAnswerResult } from '@kd/shared';
 import type { SubjectLevel } from '@kd/shared';
 import { gamificationKeys } from './useGamification';
 

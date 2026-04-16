@@ -49,10 +49,12 @@ const DEFAULT_FEATURES: PlanFeatures = {
   max_exams_per_day: -1,
   max_subjects_per_exam: -1,
   max_level: -1,
-  ai_explanations: false,
+  ai_explanations: true,
   offline_access: false,
   priority_support: false,
   advanced_analytics: false,
+  deep_insights: false,
+  mastery_radar: false,
 };
 
 const DEFAULT_VALUES: PlanFormValues = {
@@ -308,6 +310,16 @@ export default function PlansScreen() {
                       <Typography variant="caption" color={theme.textSecondary}>Analytics</Typography>
                     </View>
                   )}
+                  {plan.features.deep_insights && (
+                    <View style={{ paddingHorizontal: spacing.xs, paddingVertical: 1, borderRadius: radius.sm, backgroundColor: theme.cardAlt }}>
+                      <Typography variant="caption" color={theme.textSecondary}>Deep</Typography>
+                    </View>
+                  )}
+                  {plan.features.mastery_radar && (
+                    <View style={{ paddingHorizontal: spacing.xs, paddingVertical: 1, borderRadius: radius.sm, backgroundColor: theme.cardAlt }}>
+                      <Typography variant="caption" color={theme.textSecondary}>Radar</Typography>
+                    </View>
+                  )}
                   <View style={{ paddingHorizontal: spacing.xs, paddingVertical: 1, borderRadius: radius.sm, backgroundColor: theme.cardAlt }}>
                     <Typography variant="caption" color={theme.textSecondary}>
                       Lvl {plan.features.max_level === -1 ? '∞' : plan.features.max_level}
@@ -496,6 +508,8 @@ export default function PlansScreen() {
                     { key: 'offline_access' as const, label: 'Offline Access' },
                     { key: 'priority_support' as const, label: 'Priority Support' },
                     { key: 'advanced_analytics' as const, label: 'Advanced Analytics' },
+                    { key: 'deep_insights' as const, label: 'Deep Insights (Pro+)' },
+                    { key: 'mastery_radar' as const, label: 'Mastery Radar (Master)' },
                   ]).map(({ key, label }) => (
                     <View key={key} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                       <Typography variant="body">{label}</Typography>

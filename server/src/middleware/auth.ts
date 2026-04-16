@@ -1,20 +1,18 @@
 // ─── JWT Authentication Middleware ───────────────────────────
-// Validates Auth0 JWTs using JWKS (JSON Web Key Sets).
+// Validates Firebase ID tokens using the Firebase Admin SDK.
 // Attaches decoded user context to request for downstream handlers.
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import fp from 'fastify-plugin';
-import jwt from 'jsonwebtoken';
-import jwksRsa from 'jwks-rsa';
 import crypto from 'crypto';
-import { config } from '../config.js';
+import { getFirebaseAdmin } from '../lib/firebase-admin.js';
 import { getRedisClient } from '../lib/database.js';
 import type { UserRole } from '@kd/shared';
 
 // ─── User Context (attached to request) ─────────────────────
 
 export interface RequestUser {
-  id: string;        // Auth0 sub claim
+  id: string;        // Firebase UID
   email: string;
   role: UserRole;
 }
@@ -26,53 +24,17 @@ declare module 'fastify' {
   }
 }
 
-// ─── JWKS Client ────────────────────────────────────────────
-
-const jwksClient = jwksRsa({
-  jwksUri: `https://${config.auth0.domain}/.well-known/jwks.json`,
-  cache: true,
-  cacheMaxAge: 600000,   // 10 minutes
-  rateLimit: true,
-  jwksRequestsPerMinute: 10,
-});
-
-function getSigningKey(kid: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    jwksClient.getSigningKey(kid, (err, key) => {
-      if (err) return reject(err);
-      if (!key) return reject(new Error('No signing key found'));
-      const signingKey = key.getPublicKey();
-      resolve(signingKey);
-    });
-  });
-}
-
 // ─── Token Verification ────────────────────────────────────
 
 async function verifyToken(token: string): Promise<RequestUser> {
-  // Decode header to get kid
-  const decoded = jwt.decode(token, { complete: true });
-  if (!decoded || typeof decoded === 'string') {
-    throw new Error('Invalid token format');
-  }
-
-  const kid = decoded.header.kid;
-  if (!kid) {
-    throw new Error('Token missing kid header');
-  }
-
-  const signingKey = await getSigningKey(kid);
-
-  const payload = jwt.verify(token, signingKey, {
-    audience: config.auth0.audience,
-    issuer: `https://${config.auth0.domain}/`,
-    algorithms: ['RS256'],
-  }) as jwt.JwtPayload;
+  const admin = getFirebaseAdmin();
+  const decoded = await admin.auth().verifyIdToken(token);
 
   return {
-    id: payload.sub ?? '',
-    email: (payload.email as string) ?? '',
-    role: ((payload['https://studyplatform.com/role'] as string) ?? 'student') as UserRole,
+    id: decoded.uid,
+    email: decoded.email ?? '',
+    // Firebase custom claims: set via admin.auth().setCustomUserClaims()
+    role: ((decoded['role'] as string) ?? 'student') as UserRole,
   };
 }
 
@@ -90,11 +52,7 @@ async function authPluginInner(fastify: FastifyInstance): Promise<void> {
     // (/me, /logout) are intentionally NOT listed here so that JWT parsing runs
     // and populates request.user before their route-level requireAuth() guard.
     const PUBLIC_AUTH_PATHS = [
-      '/api/v1/auth/login',
-      '/api/v1/auth/register',
-      '/api/v1/auth/callback',
-      '/api/v1/auth/refresh',
-      '/api/v1/auth/forgot-password',
+      '/api/v1/auth/sync',
     ];
 
     // Strip query string for clean path comparison
@@ -131,14 +89,16 @@ async function authPluginInner(fastify: FastifyInstance): Promise<void> {
           timestamp: new Date().toISOString(),
         });
       }
-    } catch {
-      // Redis unavailable — skip blocklist check rather than blocking all requests
+    } catch (err) {
+      // Redis unavailable — skip blocklist check rather than blocking all requests.
+      // Log at warn level so this is visible in monitoring dashboards.
+      request.log.warn({ err }, 'Token blocklist check skipped — Redis unavailable');
     }
 
     try {
       request.user = await verifyToken(token);
     } catch (err) {
-      request.log.warn({ err }, 'JWT verification failed');
+      request.log.warn({ err }, 'Firebase ID token verification failed');
       return reply.status(401).send({
         success: false,
         error: { code: 'INVALID_TOKEN', message: 'Token verification failed' },

@@ -14,7 +14,7 @@
 ```sql
 CREATE TABLE users (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    auth0_id        VARCHAR(128) NOT NULL UNIQUE,
+    firebase_uid        VARCHAR(128) NOT NULL UNIQUE,
     email           CITEXT NOT NULL UNIQUE,
     display_name    VARCHAR(100) NOT NULL,
     avatar_url      TEXT,
@@ -31,7 +31,7 @@ CREATE TABLE users (
 - `enrollment_id` — Unique, human-readable identifier (e.g. `QP-8F2A9C`). Generated during onboarding. Used for friend search disambiguation.
 
 **Indexes:**
-- `idx_users_auth0_id` — `(auth0_id)` — primary auth lookup
+- `idx_users_firebase_uid` — `(firebase_uid)` — primary auth lookup
 - `idx_users_email` — `(email)` — email-based search (admin)
 - `idx_users_role` — `(role)` — role-based filtering
 - `idx_users_created_at` — `(created_at DESC)` — admin user list
@@ -527,7 +527,7 @@ CREATE TABLE coin_packs (
 ```sql
 CREATE TABLE coin_pack_purchases (
     id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id             TEXT        NOT NULL REFERENCES users(auth0_id),
+    user_id             TEXT        NOT NULL REFERENCES users(firebase_uid),
     coin_pack_id        UUID        REFERENCES coin_packs(id),  -- nullable for custom purchases
     razorpay_order_id   TEXT        NOT NULL,
     razorpay_payment_id TEXT        DEFAULT NULL,

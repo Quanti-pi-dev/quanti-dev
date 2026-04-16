@@ -7,3 +7,4 @@ export * from './types/progress.js';
 export * from './types/gamification.js';
 export * from './types/api.js';
 export * from './types/subscription.js';
+export * from './types/analytics.js';

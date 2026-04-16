@@ -31,10 +31,10 @@ export async function expirePendingChallenges(logger: FastifyBaseLogger): Promis
       await challengeRepository.updateStatus(challenge.id, 'expired');
 
       // Refund creator
-      const creatorAuth0Id = await resolveAuth0Id(challenge.creatorId);
-      if (creatorAuth0Id) {
-        await gamificationRepository.creditCoins(creatorAuth0Id, challenge.betAmount);
-        await recordCoinTx(creatorAuth0Id, challenge.betAmount, 'challenge_refund_expired', challenge.id);
+      const creatorFirebaseUid = await resolveFirebaseUid(challenge.creatorId);
+      if (creatorFirebaseUid) {
+        await gamificationRepository.creditCoins(creatorFirebaseUid, challenge.betAmount);
+        await recordCoinTx(creatorFirebaseUid, challenge.betAmount, 'challenge_refund_expired', challenge.id);
         refunded++;
       }
 
@@ -75,21 +75,21 @@ export async function finalizeAbandonedChallenges(logger: FastifyBaseLogger): Pr
 
 // ─── Helpers (duplicated to avoid circular import with challenge.service) ──
 
-async function resolveAuth0Id(pgUserId: string): Promise<string | null> {
+async function resolveFirebaseUid(pgUserId: string): Promise<string | null> {
   const pg = getPostgresPool();
-  const result = await pg.query(`SELECT auth0_id FROM users WHERE id = $1`, [pgUserId]);
-  return (result.rows[0]?.auth0_id as string) ?? null;
+  const result = await pg.query(`SELECT firebase_uid FROM users WHERE id = $1`, [pgUserId]);
+  return (result.rows[0]?.firebase_uid as string) ?? null;
 }
 
-async function recordCoinTx(auth0Id: string, amount: number, reason: string, referenceId: string | null): Promise<void> {
+async function recordCoinTx(firebaseUid: string, amount: number, reason: string, referenceId: string | null): Promise<void> {
   try {
     const pg = getPostgresPool();
     await pg.query(
       `INSERT INTO coin_transactions (user_id, amount, reason, reference_id)
-       VALUES ((SELECT id FROM users WHERE auth0_id = $1), $2, $3, $4)`,
-      [auth0Id, amount, reason, referenceId],
+       VALUES ((SELECT id FROM users WHERE firebase_uid = $1), $2, $3, $4)`,
+      [firebaseUid, amount, reason, referenceId],
     );
   } catch (err) {
-    log.error({ auth0Id, reason, err }, 'failed to record coin transaction in cron');
+    log.error({ firebaseUid, reason, err }, 'failed to record coin transaction in cron');
   }
 }

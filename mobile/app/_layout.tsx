@@ -25,7 +25,7 @@ import { ThemeProvider } from '../src/theme';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { SubscriptionProvider } from '../src/contexts/SubscriptionContext';
 import { ConfigProvider } from '../src/contexts/ConfigContext';
-import { darkTheme, typography } from '../src/theme/tokens';
+import { darkTheme, spacing, radius, typography } from '../src/theme/tokens';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -55,24 +55,24 @@ class ErrorBoundary extends Component<{ children: ReactNode }, EBState> {
   render() {
     if (this.state.hasError) {
       return (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: darkTheme.background, gap: 16 }}>
-          <Text style={{ color: darkTheme.text, fontSize: 20, fontWeight: '700' }}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing['2xl'], backgroundColor: darkTheme.background, gap: spacing.base }}>
+          <Text style={{ color: darkTheme.text, fontSize: 20, fontFamily: typography.heading, fontWeight: '700' }}>
             Something went wrong
           </Text>
-          <Text style={{ color: darkTheme.textSecondary, textAlign: 'center', fontSize: 14 }}>
+          <Text style={{ color: darkTheme.textSecondary, textAlign: 'center', fontSize: 14, fontFamily: typography.body }}>
             {this.state.error?.message ?? 'An unexpected error occurred.'}
           </Text>
           <TouchableOpacity
             onPress={this.handleReset}
             style={{
               backgroundColor: darkTheme.primary,
-              paddingHorizontal: 24,
-              paddingVertical: 12,
-              borderRadius: 12,
-              marginTop: 8,
+              paddingHorizontal: spacing.xl,
+              paddingVertical: spacing.md,
+              borderRadius: radius.md,
+              marginTop: spacing.sm,
             }}
           >
-            <Text style={{ color: darkTheme.buttonPrimaryText, fontWeight: '600', fontSize: 16 }}>Try Again</Text>
+            <Text style={{ color: darkTheme.buttonPrimaryText, fontFamily: typography.bodySemiBold, fontSize: 16 }}>Try Again</Text>
           </TouchableOpacity>
         </View>
       );

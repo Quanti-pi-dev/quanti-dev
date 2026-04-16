@@ -11,7 +11,6 @@ import {
   TouchableOpacity,
   Alert,
   Animated,
-  Keyboard,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { File as ExpoFile } from 'expo-file-system';
@@ -58,7 +57,8 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [progress, setProgress] = useState<UploadProgress | null>(null);
-  const [batchErrors, setBatchErrors] = useState<string[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_batchErrors, setBatchErrors] = useState<string[]>([]);
 
   // Animated progress bar width
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -111,7 +111,7 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
       // Parse based on chosen format
       const parsed = format === 'csv' ? parseCSV(content) : parseJSON(content);
       setResult(parsed);
-    } catch (err) {
+    } catch {
       Alert.alert('File Error', 'Could not read the selected file. Please try again.');
     }
   }, [format]);

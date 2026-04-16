@@ -4,7 +4,7 @@ export type UserRole = 'student' | 'admin';
 
 export interface User {
   id: string;
-  auth0Id: string;
+  firebaseUid: string;
   email: string;
   displayName: string;
   avatarUrl: string | null;
@@ -35,15 +35,9 @@ export interface UserPreferences {
 }
 
 export interface JwtPayload {
-  sub: string; // Auth0 user ID
+  sub: string; // Firebase UID
   email: string;
   role: UserRole;
   iat: number;
   exp: number;
-}
-
-export interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: number;
 }

@@ -13,7 +13,6 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withDelay,
-  withSequence,
   Easing,
 } from 'react-native-reanimated';
 import { useEffect } from 'react';
@@ -81,7 +80,7 @@ function ConfettiParticle({ particle, screenHeight }: { particle: Particle; scre
 }
 
 export function ConfettiBurst() {
-  const { width, height } = useWindowDimensions();
+  const { height } = useWindowDimensions();
 
   const particles = useMemo<Particle[]>(() => {
     return Array.from({ length: PARTICLE_COUNT }, (_, i) => ({

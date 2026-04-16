@@ -3,7 +3,7 @@
 // manual grants, and user search.
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { Plan, Subscription, SubscriptionStatus, UserProfile } from '@kd/shared';
+import type { Plan, SubscriptionStatus, UserProfile } from '@kd/shared';
 import {
   adminFetchPlans,
   adminCreatePlan,

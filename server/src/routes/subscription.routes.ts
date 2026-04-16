@@ -79,7 +79,7 @@ export async function subscriptionRoutes(fastify: FastifyInstance): Promise<void
     }
 
     // Fetch user profile for checkout prefill
-    const userProfile = await userRepository.findByAuth0Id(request.user!.id);
+    const userProfile = await userRepository.findByFirebaseUid(request.user!.id);
 
     return reply.send({
       success: true,

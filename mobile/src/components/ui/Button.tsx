@@ -8,10 +8,7 @@ import {
   Text,
   TouchableOpacity,
   ActivityIndicator,
-  StyleSheet,
   ViewStyle,
-  TextStyle,
-  View,
 } from 'react-native';
 import Animated, {
   useSharedValue,

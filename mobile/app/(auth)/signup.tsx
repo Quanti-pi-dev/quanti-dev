@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/theme';
-import { spacing, typography, radius } from '../../src/theme/tokens';
+import { spacing } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Header } from '../../src/components/layout/Header';
 import { Typography } from '../../src/components/ui/Typography';
@@ -193,18 +193,15 @@ export default function SignupScreen() {
           variant="full"
         />
 
-        {/* Secondary social providers — icon row */}
+        {/* Secondary social provider — icon */}
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.md, marginTop: spacing.sm }}>
-          {(['github', 'microsoft', 'facebook', 'linkedin'] as SocialProvider[]).map((provider) => (
-            <SocialLoginButton
-              key={provider}
-              provider={provider}
-              onPress={handleSocialLogin}
-              loading={socialLoading === provider}
-              disabled={socialLoading !== null && socialLoading !== provider}
-              variant="icon"
-            />
-          ))}
+          <SocialLoginButton
+            provider="twitter"
+            onPress={handleSocialLogin}
+            loading={socialLoading === 'twitter'}
+            disabled={socialLoading !== null && socialLoading !== 'twitter'}
+            variant="icon"
+          />
         </View>
 
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xs, marginTop: spacing.xl }}>

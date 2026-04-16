@@ -5,7 +5,6 @@
 import { useMemo } from 'react';
 import { View, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import { spacing, radius } from '../theme/tokens';
 import { Typography } from './ui/Typography';

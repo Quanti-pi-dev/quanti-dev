@@ -1,11 +1,11 @@
 // ─── Progress / Analytics Screen ─────────────────────────────
-// Updated for reward system:
+// Updated for advanced analytics:
+// • All paid tiers now see charts, heatmap, topic distribution
+// • Pro+ sees Chronotype + Speed vs Accuracy
+// • Master sees Subject Mastery Radar + AI Study Recommendations
 // • 4-stat grid (Cards · Accuracy · Streak · Coins)
 // • Coin Activity card — today earned / lifetime / daily cap bar
-// • Level Progress section — auto-detected from Redis, shows highest
-//   reached level per subject with a 6-step progress bar
-// • Heatmap computed from real session history (not EMPTY_HEATMAP)
-// • Topic distribution computed from level progress data
+// • Level Progress section — auto-detected from Redis
 // • Badge field mapping fixed to use correct UserBadge shape
 
 import { useMemo } from 'react';
@@ -14,7 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
-import { spacing, radius, typography } from '../../src/theme/tokens';
+import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';
 import { Card } from '../../src/components/ui/Card';
@@ -25,8 +25,11 @@ import { StudyInsightsCard } from '../../src/components/StudyInsightsCard';
 import { LockedFeature } from '../../src/components/subscription/LockedFeature';
 import { UpgradeCTABanner } from '../../src/components/subscription/UpgradeCTABanner';
 import { useSubscriptionGate } from '../../src/hooks/useSubscriptionGate';
-import { useProgressSummary, useStudyStreak } from '../../src/hooks/useProgress';
+import { useProgressSummary, useStudyStreak, useAdvancedInsights } from '../../src/hooks/useProgress';
 import { useCoinBalance, useCoinsToday, useUserBadges, useLevelProgressSummary } from '../../src/hooks/useGamification';
+import { ChronotypeCard } from '../../src/components/analytics/ChronotypeCard';
+import { SpeedAccuracyChart } from '../../src/components/analytics/SpeedAccuracyChart';
+import { SubjectRadarChart } from '../../src/components/analytics/SubjectRadarChart';
 import { api } from '../../src/services/api';
 import type { UserBadge } from '@kd/shared';
 
@@ -138,6 +141,8 @@ export default function ProgressScreen() {
   const { theme } = useTheme();
   const { canUseFeature } = useSubscriptionGate();
   const hasAdvancedAnalytics = canUseFeature('advanced_analytics');
+  const hasDeepInsights = canUseFeature('deep_insights');
+  const hasMasteryRadar = canUseFeature('mastery_radar');
   const router = useRouter();
 
   const { width: SCREEN_WIDTH } = useWindowDimensions();
@@ -150,6 +155,7 @@ export default function ProgressScreen() {
   const { data: coinData } = useCoinBalance();
   const { data: coinsTodayData } = useCoinsToday();
   const { data: levelSummary = [] } = useLevelProgressSummary();
+  const { data: advancedData } = useAdvancedInsights(hasAdvancedAnalytics);
 
   const { data: weeklyData } = useQuery({
     queryKey: ['progress-weekly'],
@@ -173,7 +179,7 @@ export default function ProgressScreen() {
   const freezes = streakData?.streakFreezes ?? 0;
   const isPersonalBestStreak = streak > 0 && streak >= longestStreak;
 
-  // Accuracy trend: last 7 unique session days (FIX P5 — memoized)
+  // Accuracy trend: last 7 unique session days (memoized)
   const accuracyChartData = useMemo(() => {
     const last7 = (weeklyData ?? []).slice(0, 7);
     return last7.map((d) => ({
@@ -239,7 +245,7 @@ export default function ProgressScreen() {
     };
   }, [levelSummary]);
 
-  // Chart extras (FIX P5 — memoized)
+  // Chart extras (memoized)
   const { totalWeekCards, bestDay, avgAccuracy } = useMemo(() => ({
     totalWeekCards: cardsChartData.reduce((s, d) => s + d.value, 0),
     bestDay: cardsChartData.length > 0
@@ -414,7 +420,7 @@ export default function ProgressScreen() {
           <Card>
             <View style={{ gap: spacing.md }}>
               <SectionHeader title="Level Progress" sub={`${levelSummary.length} subjects`} />
-              {levelSummary.map((s, i) => {
+              {levelSummary.map((s, _i) => {
                 const levelFraction = (s.levelIndex + 1) / SUBJECT_LEVELS.length;
                 const color = LEVEL_COLORS[s.levelIndex] ?? theme.primary;
                 return (
@@ -440,98 +446,141 @@ export default function ProgressScreen() {
           </Card>
         )}
 
+        {/* ── Upgrade CTA for non-subscribers ── */}
         {!hasAdvancedAnalytics && (
           <UpgradeCTABanner
             icon="analytics-outline"
             title="Unlock Detailed Analytics"
-            subtitle="Charts, heatmaps & topic insights — Pro plan and above"
+            subtitle="Charts, heatmaps & deep insights — subscribe to access"
           />
         )}
 
-        {/* ── Accuracy Trend (Pro+) ── */}
-        <LockedFeature featureKey="advanced_analytics" label="Accuracy Trend — Pro feature">
-          <Card>
-            <View style={{ gap: spacing.md }}>
-              <SectionHeader title="Accuracy Trend" sub="Last 7 sessions" />
-              {accuracyChartData.length >= 2 ? (
-                <LineChart data={accuracyChartData} chartWidth={CHART_W} />
-              ) : (
-                <Typography variant="body" color={theme.textTertiary} align="center">
-                  Study more sessions to see your trend
-                </Typography>
-              )}
-              {avgAccuracy != null && (
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="caption" color={theme.textTertiary}>Avg: {avgAccuracy}%</Typography>
-                  {accuracyChartData.length > 0 && accuracyChartData[accuracyChartData.length - 1]!.value > avgAccuracy && (
-                    <View style={{
-                      flexDirection: 'row', alignItems: 'center', gap: 4,
-                      backgroundColor: '#10B98118', borderRadius: 8,
-                      paddingHorizontal: spacing.sm, paddingVertical: 2,
-                    }}>
-                      <Typography variant="caption" color="#10B981">📈 Above Average!</Typography>
-                    </View>
-                  )}
-                </View>
-              )}
-            </View>
-          </Card>
-        </LockedFeature>
+        {/* ══════════════════════════════════════════════════════════
+            ADVANCED ANALYTICS — Available to all paid tiers
+            ══════════════════════════════════════════════════════════ */}
 
-        {/* ── Cards Studied (Pro+) ── */}
-        <LockedFeature featureKey="advanced_analytics" label="Cards Studied Chart — Pro feature">
-          <Card>
-            <View style={{ gap: spacing.md }}>
-              <SectionHeader title="Cards Studied" sub="Per session" />
-              {cardsChartData.length > 0 ? (
-                <BarChart data={cardsChartData} color="#6366F1" />
-              ) : (
-                <Typography variant="body" color={theme.textTertiary} align="center">No sessions yet</Typography>
-              )}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Typography variant="caption" color={theme.textTertiary}>Total: {totalWeekCards} cards</Typography>
-                {bestDay && (
-                  <Typography variant="label" color={theme.primary}>Best: {bestDay.value} on {bestDay.label}</Typography>
+        {hasAdvancedAnalytics && (
+          <>
+            {/* ── Accuracy Trend ── */}
+            <Card>
+              <View style={{ gap: spacing.md }}>
+                <SectionHeader title="Accuracy Trend" sub="Last 7 sessions" />
+                {accuracyChartData.length >= 2 ? (
+                  <LineChart data={accuracyChartData} chartWidth={CHART_W} />
+                ) : (
+                  <Typography variant="body" color={theme.textTertiary} align="center">
+                    Study more sessions to see your trend
+                  </Typography>
+                )}
+                {avgAccuracy != null && (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="caption" color={theme.textTertiary}>Avg: {avgAccuracy}%</Typography>
+                    {accuracyChartData.length > 0 && accuracyChartData[accuracyChartData.length - 1]!.value > avgAccuracy && (
+                      <View style={{
+                        flexDirection: 'row', alignItems: 'center', gap: 4,
+                        backgroundColor: '#10B98118', borderRadius: 8,
+                        paddingHorizontal: spacing.sm, paddingVertical: 2,
+                      }}>
+                        <Typography variant="caption" color="#10B981">📈 Above Average!</Typography>
+                      </View>
+                    )}
+                  </View>
                 )}
               </View>
-            </View>
-          </Card>
-        </LockedFeature>
+            </Card>
 
-        {/* ── Topic Distribution (Pro+) — built from level progress ── */}
-        <LockedFeature featureKey="advanced_analytics" label="Topic Distribution — Pro feature">
-          <Card>
-            <View style={{ gap: spacing.md }}>
-              <SectionHeader title="Topic Distribution" sub="By correct answers" />
-              {topicBreakdownPct.length > 0 ? (
-                <View style={{ gap: spacing.sm }}>
-                  {topicBreakdownPct.map((t, i) => (
-                    <View key={i} style={{ gap: spacing.xs }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                        <Typography variant="caption" color={theme.textSecondary}>{t.name}</Typography>
-                        <Typography variant="caption" color={t.color}>{t.pct}%</Typography>
-                      </View>
-                      <ProgressBar progress={t.pct / 100} height={6} color={t.color} />
-                    </View>
-                  ))}
+            {/* ── Cards Studied ── */}
+            <Card>
+              <View style={{ gap: spacing.md }}>
+                <SectionHeader title="Cards Studied" sub="Per session" />
+                {cardsChartData.length > 0 ? (
+                  <BarChart data={cardsChartData} color="#6366F1" />
+                ) : (
+                  <Typography variant="body" color={theme.textTertiary} align="center">No sessions yet</Typography>
+                )}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Typography variant="caption" color={theme.textTertiary}>Total: {totalWeekCards} cards</Typography>
+                  {bestDay && (
+                    <Typography variant="label" color={theme.primary}>Best: {bestDay.value} on {bestDay.label}</Typography>
+                  )}
                 </View>
-              ) : (
-                <Typography variant="body" color={theme.textTertiary} align="center">
-                  Study some subjects to see distribution
-                </Typography>
-              )}
-            </View>
-          </Card>
+              </View>
+            </Card>
+
+            {/* ── Topic Distribution ── */}
+            <Card>
+              <View style={{ gap: spacing.md }}>
+                <SectionHeader title="Topic Distribution" sub="By correct answers" />
+                {topicBreakdownPct.length > 0 ? (
+                  <View style={{ gap: spacing.sm }}>
+                    {topicBreakdownPct.map((t, i) => (
+                      <View key={i} style={{ gap: spacing.xs }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Typography variant="caption" color={theme.textSecondary}>{t.name}</Typography>
+                          <Typography variant="caption" color={t.color}>{t.pct}%</Typography>
+                        </View>
+                        <ProgressBar progress={t.pct / 100} height={6} color={t.color} />
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Typography variant="body" color={theme.textTertiary} align="center">
+                    Study some subjects to see distribution
+                  </Typography>
+                )}
+              </View>
+            </Card>
+
+            {/* ── Study Activity Heatmap ── */}
+            <Card>
+              <View style={{ gap: spacing.md }}>
+                <SectionHeader title="Study Activity" sub="Last 5 weeks" />
+                <Heatmap heatmap={heatmap} />
+              </View>
+            </Card>
+          </>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════
+            DEEP INSIGHTS — Pro + Master only
+            ══════════════════════════════════════════════════════════ */}
+
+        {hasAdvancedAnalytics && !hasDeepInsights && (
+          <UpgradeCTABanner
+            icon="bulb-outline"
+            title="Unlock Deep Insights"
+            subtitle="Study chronotype & speed-accuracy matrix — Pro plan and above"
+          />
+        )}
+
+        <LockedFeature featureKey="deep_insights" label="Study Chronotype — Pro feature">
+          {advancedData?.chronotype && (
+            <ChronotypeCard data={advancedData.chronotype} />
+          )}
         </LockedFeature>
 
-        {/* ── Heatmap (Pro+) — real data from session history ── */}
-        <LockedFeature featureKey="advanced_analytics" label="Study Activity Heatmap — Pro feature">
-          <Card>
-            <View style={{ gap: spacing.md }}>
-              <SectionHeader title="Study Activity" sub="Last 5 weeks" />
-              <Heatmap heatmap={heatmap} />
-            </View>
-          </Card>
+        <LockedFeature featureKey="deep_insights" label="Speed vs. Accuracy — Pro feature">
+          {advancedData?.speedAccuracy && (
+            <SpeedAccuracyChart data={advancedData.speedAccuracy} />
+          )}
+        </LockedFeature>
+
+        {/* ══════════════════════════════════════════════════════════
+            MASTERY RADAR — Master only
+            ══════════════════════════════════════════════════════════ */}
+
+        {hasDeepInsights && !hasMasteryRadar && (
+          <UpgradeCTABanner
+            icon="diamond-outline"
+            title="Unlock Mastery Radar & AI Tips"
+            subtitle="Subject radar chart & personalized study tips — Master plan"
+          />
+        )}
+
+        <LockedFeature featureKey="mastery_radar" label="Subject Mastery Radar — Master feature">
+          {advancedData?.subjectStrengths && (
+            <SubjectRadarChart data={advancedData.subjectStrengths} />
+          )}
         </LockedFeature>
 
         {/* ── Level Mastery bars (free for all) ── */}

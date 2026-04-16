@@ -1,9 +1,9 @@
 // ─── Onboarding: Email Prompt ─────────────────────────────────
 // Collects email from social login users who don't have one.
-// Only shown when the Auth0 profile lacks an email address.
+// Only shown when the Firebase profile lacks an email address.
 
 import { useState, useEffect } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
@@ -46,7 +46,7 @@ export default function EmailPromptScreen() {
 
   const submitMutation = useMutation({
     mutationFn: async () => {
-      // 1. Update the user's email via Auth0-synced endpoint
+      // 1. Update the user's email via Firebase-synced endpoint
       await api.put('/auth/update-email', { email });
 
       // 2. Save preferences without marking onboarding as completed —

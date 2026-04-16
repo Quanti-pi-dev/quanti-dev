@@ -1,10 +1,22 @@
 // ─── Auth Context ───────────────────────────────────────────
-// Manages authentication state, login/logout, and token storage.
+// Manages authentication state using Firebase JS Web SDK.
+// Handles login/logout, social auth, and token storage.
 
-import {  createContext, useContext, useState, useEffect, useMemo, useCallback  } from 'react';
-import * as SecureStore from 'expo-secure-store';
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  updateProfile,
+  GoogleAuthProvider,
+  OAuthProvider,
+  signInWithCredential,
+  type User as FirebaseUser,
+} from 'firebase/auth';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import { auth } from '../lib/firebase';
 import { api } from '../services/api';
 import { authEmitter } from '../services/authEmitter';
 import { usePushNotifications } from '../hooks/usePushNotifications';
@@ -36,24 +48,6 @@ interface AuthContextValue {
   refreshUser: () => Promise<void>;
 }
 
-// ─── Auth0 Config ───────────────────────────────────────────
-
-const AUTH0_DOMAIN = process.env.EXPO_PUBLIC_AUTH0_DOMAIN ?? 'your-tenant.auth0.com';
-const AUTH0_CLIENT_ID = process.env.EXPO_PUBLIC_AUTH0_CLIENT_ID ?? '';
-
-// Maps our provider labels to the Auth0 connection string.
-// Passing `connection` as an extraParam skips the hosted login page
-// and redirects the user straight to the chosen identity provider.
-const PROVIDER_CONNECTION_MAP: Record<SocialProvider, string> = {
-  google:    'google-oauth2',
-  github:    'github',
-  microsoft: 'windowslive',
-  facebook:  'facebook',
-  linkedin:  'linkedin',
-};
-
-// Auth0 discovery is called inside the provider (Rules of Hooks)
-
 // ─── Context ────────────────────────────────────────────────
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -64,11 +58,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const discovery = AuthSession.useAutoDiscovery(`https://${AUTH0_DOMAIN}`);
   const { registerForPushNotifications, unregisterPushToken } = usePushNotifications();
 
-  // ─── Shared profile hydration (FIX P3) ──────────────────
-  // Single helper for the duplicated /auth/me + /users/preferences pair.
+  // ─── Shared profile hydration ──────────────────────────
+  // Fetches user profile and preferences from our backend.
   const hydrateProfile = useCallback(async () => {
     const [meRes, prefRes] = await Promise.all([
       api.get('/auth/me'),
@@ -78,146 +71,164 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setPreferences(prefRes.data?.data ?? null);
   }, []);
 
-  // Check for existing session on mount; attempt refresh before giving up
-  const checkExistingSession = useCallback(async () => {
+  // ─── Sync user to backend ─────────────────────────────
+  // Calls POST /auth/sync to lazily create/update the user in PostgreSQL.
+  const syncUserToBackend = useCallback(async (firebaseUser: FirebaseUser) => {
     try {
-      const token = await SecureStore.getItemAsync('access_token');
-      if (token) {
+      await api.post('/auth/sync', {
+        displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Student',
+        avatarUrl: firebaseUser.photoURL,
+      });
+    } catch {
+      // Non-critical — user may already exist
+    }
+  }, []);
+
+  // ─── Firebase auth state listener ─────────────────────
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
         try {
+          // Sync to backend first, then hydrate profile
+          await syncUserToBackend(firebaseUser);
           await hydrateProfile();
-          // Flush any queued offline mutations now that we're back online
+          // Flush any queued offline mutations now that we're authenticated
           flushOfflineQueue().catch(() => {});
         } catch {
-          // Access token may be expired — attempt silent refresh
-          const refreshToken = await SecureStore.getItemAsync('refresh_token').catch(() => null);
-          if (refreshToken) {
-            try {
-              const { data } = await api.post('/auth/refresh', { refreshToken });
-              const newAccess = data?.data?.accessToken;
-              const newRefresh = data?.data?.refreshToken;
-              if (!newAccess || !newRefresh) throw new Error('Invalid refresh response');
-              await SecureStore.setItemAsync('access_token', newAccess);
-              await SecureStore.setItemAsync('refresh_token', newRefresh);
-              await hydrateProfile();
-            } catch {
-              // Refresh also failed — clear everything and signal logout (FIX B1)
-              await SecureStore.deleteItemAsync('access_token');
-              await SecureStore.deleteItemAsync('refresh_token');
-              authEmitter.emit('FORCE_LOGOUT');
-            }
-          } else {
-            // No refresh token — clear access token and signal logout (FIX B1)
-            await SecureStore.deleteItemAsync('access_token');
-            authEmitter.emit('FORCE_LOGOUT');
-          }
+          // If profile fetch fails, user might not exist in PG yet
+          setUser(null);
+          setPreferences(null);
         }
+      } else {
+        setUser(null);
+        setPreferences(null);
       }
-    } catch {
-      // Unexpected error (e.g. SecureStore unavailable)
-    } finally {
       setIsLoading(false);
-    }
-  }, [hydrateProfile]);
+    });
 
-  useEffect(() => {
-    checkExistingSession();
-  }, [checkExistingSession]);
+    return unsubscribe;
+  }, [hydrateProfile, syncUserToBackend]);
 
   // Subscribe to forced logout events from the Axios interceptor
   useEffect(() => {
-    const unsub = authEmitter.on('FORCE_LOGOUT', () => {
+    const unsub = authEmitter.on('FORCE_LOGOUT', async () => {
+      try {
+        await signOut(auth);
+      } catch {
+        // Best-effort
+      }
       setUser(null);
       setPreferences(null);
     });
     return unsub;
   }, []);
 
+  // ─── Social login (Google, Twitter) ──────────────────────
   const login = useCallback(async (provider?: SocialProvider) => {
+    if (!provider) {
+      // No provider specified — open a generic Google login
+      provider = 'google';
+    }
+
     try {
-      const redirectUri = AuthSession.makeRedirectUri({ scheme: 'kd-study' });
+      if (provider === 'google') {
+        // Use expo-auth-session for Google OAuth in Expo Go
+        const redirectUri = AuthSession.makeRedirectUri({ scheme: 'kd-study', path: 'callback' });
+        const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';
 
-      // When a provider is specified, pass the connection hint so Auth0 bypasses
-      // the hosted login page and redirects directly to the chosen IdP.
-      const extraParams: Record<string, string> = provider
-        ? { connection: PROVIDER_CONNECTION_MAP[provider] }
-        : {};
-
-      const authRequest = new AuthSession.AuthRequest({
-        clientId: AUTH0_CLIENT_ID,
-        redirectUri,
-        scopes: ['openid', 'profile', 'email', 'offline_access'],
-        responseType: AuthSession.ResponseType.Code,
-        usePKCE: true,
-        extraParams,
-      });
-
-      if (!discovery) {
-        throw new Error('Auth service is not ready yet. Please try again.');
-      }
-      const result = await authRequest.promptAsync(discovery);
-
-      if (result.type === 'success' && result.params['code']) {
-        // Exchange code for tokens via our API
-        const { data } = await api.post('/auth/callback', {
-          code: result.params['code'],
+        const request = new AuthSession.AuthRequest({
+          clientId: googleClientId,
           redirectUri,
+          scopes: ['openid', 'profile', 'email'],
+          responseType: AuthSession.ResponseType.IdToken,
+          extraParams: {
+            nonce: Math.random().toString(36).substring(2),
+          },
         });
 
-        const accessToken = data?.data?.accessToken;
-        const refreshToken = data?.data?.refreshToken;
-        if (!accessToken || !refreshToken) throw new Error('Invalid auth callback response');
-        await SecureStore.setItemAsync('access_token', accessToken);
-        await SecureStore.setItemAsync('refresh_token', refreshToken);
+        const discovery = {
+          authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+          tokenEndpoint: 'https://oauth2.googleapis.com/token',
+          revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
+        };
 
-        // Fetch user profile and preferences (FIX P3)
-        await hydrateProfile();
-        // Register push notifications & flush offline queue (same as email login)
-        registerForPushNotifications().catch(() => {});
-        flushOfflineQueue().catch(() => {});
+        const result = await request.promptAsync(discovery);
+
+        if (result.type === 'success' && result.params['id_token']) {
+          const credential = GoogleAuthProvider.credential(result.params['id_token']);
+          await signInWithCredential(auth, credential);
+          registerForPushNotifications().catch(() => {});
+        }
+      } else if (provider === 'twitter') {
+        // Twitter OAuth 2.0 with PKCE via expo-auth-session.
+        // Firebase's twitter.com provider accepts OAuth access tokens
+        // via the generic OAuthProvider.credential() interface.
+        const redirectUri = AuthSession.makeRedirectUri({ scheme: 'kd-study', path: 'callback' });
+        const twitterClientId = process.env.EXPO_PUBLIC_TWITTER_CLIENT_ID ?? '';
+
+        const request = new AuthSession.AuthRequest({
+          clientId: twitterClientId,
+          redirectUri,
+          scopes: ['users.read', 'tweet.read'],
+          responseType: AuthSession.ResponseType.Code,
+          usePKCE: true,
+        });
+
+        const discovery: AuthSession.DiscoveryDocument = {
+          authorizationEndpoint: 'https://twitter.com/i/oauth2/authorize',
+          tokenEndpoint: 'https://api.twitter.com/2/oauth2/token',
+        };
+
+        const result = await request.promptAsync(discovery);
+
+        if (result.type === 'success' && result.params['code']) {
+          // Exchange authorization code for access token using PKCE
+          const tokenResult = await AuthSession.exchangeCodeAsync(
+            {
+              clientId: twitterClientId,
+              code: result.params['code'],
+              redirectUri,
+              extraParams: {
+                code_verifier: request.codeVerifier!,
+              },
+            },
+            discovery,
+          );
+
+          // Create Firebase credential with the Twitter access token
+          const twitterProvider = new OAuthProvider('twitter.com');
+          const credential = twitterProvider.credential({
+            accessToken: tokenResult.accessToken,
+          });
+          await signInWithCredential(auth, credential);
+          registerForPushNotifications().catch(() => {});
+        }
+      } else {
+        throw new Error(`Social login for ${provider as string} is not supported`);
       }
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error('Social login failed:', error);
       throw error;
     }
-  }, [discovery, hydrateProfile, registerForPushNotifications]);
+  }, [registerForPushNotifications]);
 
-  // ─── Shared token + profile hydration ──────────────────
-  const hydrateFromTokens = useCallback(async (accessToken: string, refreshToken: string) => {
-    // Persist tokens first so the axios interceptor can inject them immediately
-    await SecureStore.setItemAsync('access_token', accessToken);
-    await SecureStore.setItemAsync('refresh_token', refreshToken);
-    try {
-      await hydrateProfile();
-      // Register device for push notifications after successful login
-      registerForPushNotifications().catch(() => {});
-      // Flush any queued offline mutations now that we're online & authenticated
-      flushOfflineQueue().catch(() => {});
-    } catch (err) {
-      // If profile fetch fails, clean up tokens so the app doesn't get stuck
-      await SecureStore.deleteItemAsync('access_token').catch(() => {});
-      await SecureStore.deleteItemAsync('refresh_token').catch(() => {});
-      throw err;
-    }
-  }, [hydrateProfile, registerForPushNotifications]);
-
-  // ─── Email/Password login (ROPC) ─────────────────────
+  // ─── Email/Password login ─────────────────────────────
   const loginWithPassword = useCallback(async (email: string, password: string) => {
-    const { data } = await api.post('/auth/login', { email, password });
-    const accessToken = data?.data?.accessToken;
-    const refreshToken = data?.data?.refreshToken;
-    if (!accessToken || !refreshToken) throw new Error('Invalid login response');
-    await hydrateFromTokens(accessToken, refreshToken);
-  }, [hydrateFromTokens]);
+    await signInWithEmailAndPassword(auth, email, password);
+    registerForPushNotifications().catch(() => {});
+    flushOfflineQueue().catch(() => {});
+  }, [registerForPushNotifications]);
 
   // ─── Email/Password signup ────────────────────────────
   const signupWithPassword = useCallback(async (email: string, password: string, displayName: string) => {
-    const { data } = await api.post('/auth/register', { email, password, displayName });
-    const accessToken = data?.data?.accessToken;
-    const refreshToken = data?.data?.refreshToken;
-    if (!accessToken || !refreshToken) throw new Error('Invalid signup response');
-    await hydrateFromTokens(accessToken, refreshToken);
-  }, [hydrateFromTokens]);
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    // Set the display name on the Firebase user profile
+    await updateProfile(userCredential.user, { displayName });
+    registerForPushNotifications().catch(() => {});
+    flushOfflineQueue().catch(() => {});
+  }, [registerForPushNotifications]);
 
+  // ─── Logout ──────────────────────────────────────────
   const logout = useCallback(async () => {
     // Unregister push token before clearing session
     await unregisterPushToken();
@@ -226,8 +237,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Best-effort server logout
     }
-    await SecureStore.deleteItemAsync('access_token');
-    await SecureStore.deleteItemAsync('refresh_token');
+    await signOut(auth);
     setUser(null);
     setPreferences(null);
   }, [unregisterPushToken]);

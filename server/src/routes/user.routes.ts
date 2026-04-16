@@ -10,7 +10,7 @@ import { getRedisClient } from '../lib/database.js';
 
 // ─── Validation Schemas ─────────────────────────────────────
 // NOTE: email is intentionally excluded. User emails are managed exclusively
-// through Auth0 to prevent local identity desynchronization and spoofing.
+// through Firebase to prevent local identity desynchronization and spoofing.
 
 const updateProfileSchema = z.object({
   displayName: z.string().min(1).max(100).optional(),

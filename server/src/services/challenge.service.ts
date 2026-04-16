@@ -53,7 +53,7 @@ class ChallengeService {
   // ═══════════════════════════════════════════════════════
 
   async createChallenge(
-    creatorAuth0Id: string,
+    creatorFirebaseUid: string,
     input: {
       opponentId: string;   // PG UUID
       examId: string;
@@ -64,7 +64,7 @@ class ChallengeService {
     },
   ): Promise<Challenge> {
     // 1. Resolve creator's PG UUID
-    const creatorId = await challengeRepository.resolveUserId(creatorAuth0Id);
+    const creatorId = await challengeRepository.resolveUserId(creatorFirebaseUid);
     if (!creatorId) throw makeError('User not found', 404);
 
     // 2. Verify opponent exists and is an accepted friend
@@ -89,13 +89,13 @@ class ChallengeService {
     }
 
     // 5. Atomic coin escrow (SPEND_COINS_LUA)
-    const { success } = await gamificationRepository.spendCoins(creatorAuth0Id, input.betAmount);
+    const { success } = await gamificationRepository.spendCoins(creatorFirebaseUid, input.betAmount);
     if (!success) {
       throw makeError('Insufficient coins', 400);
     }
 
     // 6. Record escrow transaction in PG ledger
-    await this.recordCoinTx(creatorAuth0Id, -input.betAmount, 'challenge_escrow', null);
+    await this.recordCoinTx(creatorFirebaseUid, -input.betAmount, 'challenge_escrow', null);
 
     // 7. Insert challenge row
     const challenge = await challengeRepository.create({
@@ -128,8 +128,8 @@ class ChallengeService {
   // ACCEPT CHALLENGE
   // ═══════════════════════════════════════════════════════
 
-  async acceptChallenge(challengeId: string, opponentAuth0Id: string): Promise<Challenge> {
-    const opponentId = await challengeRepository.resolveUserId(opponentAuth0Id);
+  async acceptChallenge(challengeId: string, opponentFirebaseUid: string): Promise<Challenge> {
+    const opponentId = await challengeRepository.resolveUserId(opponentFirebaseUid);
     if (!opponentId) throw makeError('User not found', 404);
 
     const challenge = await challengeRepository.findById(challengeId);
@@ -145,11 +145,11 @@ class ChallengeService {
     }
 
     // Escrow opponent's coins
-    const { success } = await gamificationRepository.spendCoins(opponentAuth0Id, challenge.betAmount);
+    const { success } = await gamificationRepository.spendCoins(opponentFirebaseUid, challenge.betAmount);
     if (!success) {
       throw makeError('Insufficient coins to accept this challenge', 400);
     }
-    await this.recordCoinTx(opponentAuth0Id, -challenge.betAmount, 'challenge_escrow', challengeId);
+    await this.recordCoinTx(opponentFirebaseUid, -challenge.betAmount, 'challenge_escrow', challengeId);
 
     // Update PG status
     const now = new Date();
@@ -193,8 +193,8 @@ class ChallengeService {
   // DECLINE CHALLENGE
   // ═══════════════════════════════════════════════════════
 
-  async declineChallenge(challengeId: string, opponentAuth0Id: string): Promise<void> {
-    const opponentId = await challengeRepository.resolveUserId(opponentAuth0Id);
+  async declineChallenge(challengeId: string, opponentFirebaseUid: string): Promise<void> {
+    const opponentId = await challengeRepository.resolveUserId(opponentFirebaseUid);
     if (!opponentId) throw makeError('User not found', 404);
 
     const challenge = await challengeRepository.findById(challengeId);
@@ -209,11 +209,11 @@ class ChallengeService {
     await challengeRepository.updateStatus(challengeId, 'declined');
 
     // Refund creator via creditCoins (balance-only, no leaderboard)
-    // Need creator's auth0_id for the coin key
-    const creatorAuth0Id = await this.resolveAuth0Id(challenge.creatorId);
-    if (creatorAuth0Id) {
-      await gamificationRepository.creditCoins(creatorAuth0Id, challenge.betAmount);
-      await this.recordCoinTx(creatorAuth0Id, challenge.betAmount, 'challenge_refund_declined', challengeId);
+    // Need creator's firebase_uid for the coin key
+    const creatorFirebaseUid = await this.resolveFirebaseUid(challenge.creatorId);
+    if (creatorFirebaseUid) {
+      await gamificationRepository.creditCoins(creatorFirebaseUid, challenge.betAmount);
+      await this.recordCoinTx(creatorFirebaseUid, challenge.betAmount, 'challenge_refund_declined', challengeId);
     }
 
     // Cleanup Redis invite
@@ -232,8 +232,8 @@ class ChallengeService {
   // CANCEL CHALLENGE (creator only)
   // ═══════════════════════════════════════════════════════
 
-  async cancelChallenge(challengeId: string, creatorAuth0Id: string): Promise<void> {
-    const creatorId = await challengeRepository.resolveUserId(creatorAuth0Id);
+  async cancelChallenge(challengeId: string, creatorFirebaseUid: string): Promise<void> {
+    const creatorId = await challengeRepository.resolveUserId(creatorFirebaseUid);
     if (!creatorId) throw makeError('User not found', 404);
 
     const challenge = await challengeRepository.findById(challengeId);
@@ -248,8 +248,8 @@ class ChallengeService {
     await challengeRepository.updateStatus(challengeId, 'cancelled');
 
     // Refund creator
-    await gamificationRepository.creditCoins(creatorAuth0Id, challenge.betAmount);
-    await this.recordCoinTx(creatorAuth0Id, challenge.betAmount, 'challenge_refund_cancelled', challengeId);
+    await gamificationRepository.creditCoins(creatorFirebaseUid, challenge.betAmount);
+    await this.recordCoinTx(creatorFirebaseUid, challenge.betAmount, 'challenge_refund_cancelled', challengeId);
 
     // Cleanup Redis invite
     await this.redis.srem(`challenge_invites:${challenge.opponentId}`, challengeId);
@@ -261,7 +261,7 @@ class ChallengeService {
 
   async submitAnswer(
     challengeId: string,
-    userAuth0Id: string,
+    userFirebaseUid: string,
     isCorrect: boolean,
   ): Promise<AnswerResult> {
     const key = `active_challenge:${challengeId}`;
@@ -272,7 +272,7 @@ class ChallengeService {
     }
 
     // Determine role
-    const userId = await challengeRepository.resolveUserId(userAuth0Id);
+    const userId = await challengeRepository.resolveUserId(userFirebaseUid);
     if (!userId) throw makeError('User not found', 404);
 
     let role: 'creator' | 'opponent';
@@ -349,11 +349,11 @@ class ChallengeService {
       return;
     }
 
-    const creatorAuth0Id = await this.resolveAuth0Id(challenge.creatorId);
-    const opponentAuth0Id = await this.resolveAuth0Id(challenge.opponentId);
+    const creatorFirebaseUid = await this.resolveFirebaseUid(challenge.creatorId);
+    const opponentFirebaseUid = await this.resolveFirebaseUid(challenge.opponentId);
 
-    if (!creatorAuth0Id || !opponentAuth0Id) {
-      log.error({ challengeId }, 'could not resolve auth0 IDs during finalization');
+    if (!creatorFirebaseUid || !opponentFirebaseUid) {
+      log.error({ challengeId }, 'could not resolve Firebase UIDs during finalization');
       return;
     }
 
@@ -362,8 +362,8 @@ class ChallengeService {
     if (creatorScore > opponentScore) {
       // Creator wins — receives full pot
       winnerId = challenge.creatorId;
-      await gamificationRepository.creditCoins(creatorAuth0Id, challenge.betAmount * 2);
-      await this.recordCoinTx(creatorAuth0Id, challenge.betAmount * 2, 'challenge_won', challengeId);
+      await gamificationRepository.creditCoins(creatorFirebaseUid, challenge.betAmount * 2);
+      await this.recordCoinTx(creatorFirebaseUid, challenge.betAmount * 2, 'challenge_won', challengeId);
 
       // Push notifications
       void notificationService.handleEvent({
@@ -379,8 +379,8 @@ class ChallengeService {
     } else if (opponentScore > creatorScore) {
       // Opponent wins
       winnerId = challenge.opponentId;
-      await gamificationRepository.creditCoins(opponentAuth0Id, challenge.betAmount * 2);
-      await this.recordCoinTx(opponentAuth0Id, challenge.betAmount * 2, 'challenge_won', challengeId);
+      await gamificationRepository.creditCoins(opponentFirebaseUid, challenge.betAmount * 2);
+      await this.recordCoinTx(opponentFirebaseUid, challenge.betAmount * 2, 'challenge_won', challengeId);
 
       void notificationService.handleEvent({
         type: 'challenge_won' as never,
@@ -394,10 +394,10 @@ class ChallengeService {
 
     } else {
       // Tie — refund both
-      await gamificationRepository.creditCoins(creatorAuth0Id, challenge.betAmount);
-      await gamificationRepository.creditCoins(opponentAuth0Id, challenge.betAmount);
-      await this.recordCoinTx(creatorAuth0Id, challenge.betAmount, 'challenge_refund_tie', challengeId);
-      await this.recordCoinTx(opponentAuth0Id, challenge.betAmount, 'challenge_refund_tie', challengeId);
+      await gamificationRepository.creditCoins(creatorFirebaseUid, challenge.betAmount);
+      await gamificationRepository.creditCoins(opponentFirebaseUid, challenge.betAmount);
+      await this.recordCoinTx(creatorFirebaseUid, challenge.betAmount, 'challenge_refund_tie', challengeId);
+      await this.recordCoinTx(opponentFirebaseUid, challenge.betAmount, 'challenge_refund_tie', challengeId);
 
       void notificationService.handleEvent({
         type: 'challenge_tie' as never,
@@ -429,8 +429,8 @@ class ChallengeService {
   // GET STATE (for SSE initial frame & detail endpoint)
   // ═══════════════════════════════════════════════════════
 
-  async getChallengeDetails(challengeId: string, userAuth0Id: string): Promise<ChallengeDetail> {
-    const userId = await challengeRepository.resolveUserId(userAuth0Id);
+  async getChallengeDetails(challengeId: string, userFirebaseUid: string): Promise<ChallengeDetail> {
+    const userId = await challengeRepository.resolveUserId(userFirebaseUid);
     if (!userId) throw makeError('User not found', 404);
 
     const detail = await challengeRepository.findDetailById(challengeId);
@@ -463,7 +463,7 @@ class ChallengeService {
    * Non-critical: failures are logged but never block the main flow.
    */
   private async recordCoinTx(
-    auth0Id: string,
+    firebaseUid: string,
     amount: number,
     reason: string,
     referenceId: string | null,
@@ -471,21 +471,21 @@ class ChallengeService {
     try {
       await this.pg.query(
         `INSERT INTO coin_transactions (user_id, amount, reason, reference_id)
-         VALUES ((SELECT id FROM users WHERE auth0_id = $1), $2, $3, $4)`,
-        [auth0Id, amount, reason, referenceId],
+         VALUES ((SELECT id FROM users WHERE firebase_uid = $1), $2, $3, $4)`,
+        [firebaseUid, amount, reason, referenceId],
       );
     } catch (err) {
-      log.error({ auth0Id, reason, err }, 'failed to record coin transaction');
+      log.error({ firebaseUid, reason, err }, 'failed to record coin transaction');
     }
   }
 
-  /** Resolve PG UUID → auth0_id (for Redis coin keys). */
-  private async resolveAuth0Id(pgUserId: string): Promise<string | null> {
+  /** Resolve PG UUID → firebase_uid (for Redis coin keys). */
+  private async resolveFirebaseUid(pgUserId: string): Promise<string | null> {
     const result = await this.pg.query(
-      `SELECT auth0_id FROM users WHERE id = $1`,
+      `SELECT firebase_uid FROM users WHERE id = $1`,
       [pgUserId],
     );
-    return (result.rows[0]?.auth0_id as string) ?? null;
+    return (result.rows[0]?.firebase_uid as string) ?? null;
   }
 }
 

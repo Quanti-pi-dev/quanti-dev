@@ -9,7 +9,6 @@ import type {
   Flashcard,
   UserPreferences,
   UserProfile,
-  AuthTokens,
   ProgressSummary,
   ProgressRecord,
   CoinBalance,
@@ -24,6 +23,7 @@ import type {
   StudyStreak,
   SubjectLevelSummary,
   ExamProgress,
+  AdvancedInsights,
 } from '@kd/shared';
 
 // ─── Generic Helpers (FIX A3) ───────────────────────────────
@@ -52,18 +52,6 @@ export async function adminGet<T>(path: string, params?: Record<string, unknown>
 export async function adminPost<T>(path: string, body?: Record<string, unknown>): Promise<T> {
   const { data } = await adminApi.post<ApiResponse<T>>(path, body);
   return data?.data as T;
-}
-
-// ─── Auth ───────────────────────────────────────────────────
-
-export async function exchangeAuthCode(code: string, redirectUri: string): Promise<AuthTokens> {
-  const { data } = await api.post<ApiResponse<AuthTokens>>('/auth/callback', { code, redirectUri });
-  return data?.data as AuthTokens;
-}
-
-export async function refreshTokens(refreshToken: string): Promise<AuthTokens> {
-  const { data } = await api.post<ApiResponse<AuthTokens>>('/auth/refresh', { refreshToken });
-  return data?.data as AuthTokens;
 }
 
 export async function fetchCurrentUser(): Promise<UserProfile> {
@@ -274,6 +262,13 @@ export async function fetchLevelProgressSummary(): Promise<LevelProgressSummaryI
   const { data } = await api.get<ApiResponse<LevelProgressSummaryItem[]>>('/progress/level-progress-summary');
   return (data?.data ?? []) as LevelProgressSummaryItem[];
 }
+
+// ─── Advanced Insights ────────────────────────────────────────
+
+export async function fetchAdvancedInsights(): Promise<AdvancedInsights> {
+  return apiGet<AdvancedInsights>('/progress/advanced-insights');
+}
+
 
 // ─── Level Cards (topic-scoped) ──────────────────────────────
 

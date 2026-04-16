@@ -10,7 +10,7 @@
 // Topics are fetched dynamically from the API (GET /subjects/:id/topics).
 
 import { useState } from 'react';
-import { View, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, TouchableOpacity, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
@@ -43,7 +43,7 @@ const LEVEL_ICONS: Record<SubjectLevel, string> = {
 // ─── Single topic accordion ──────────────────────────────────
 
 function TopicAccordion({
-  examId, subjectId, subjectName, topic, router, tournamentId,
+  examId, subjectId, subjectName: _subjectName, topic, router, tournamentId,
 }: {
   examId: string; subjectId: string; subjectName: string;
   topic: { slug: string; displayName: string };

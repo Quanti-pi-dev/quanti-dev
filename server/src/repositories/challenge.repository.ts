@@ -56,7 +56,7 @@ function rowToFriendship(row: Record<string, unknown>): Friendship {
 function rowToUserSummary(row: Record<string, unknown>): UserSummary {
   return {
     id: row.id as string,
-    auth0Id: row.auth0_id as string,
+    firebaseUid: row.firebase_uid as string,
     displayName: row.display_name as string,
     avatarUrl: (row.avatar_url as string | null) ?? null,
     enrollmentId: row.enrollment_id as string,
@@ -216,7 +216,8 @@ class ChallengeRepository {
 
   async findExpiredPending(): Promise<Challenge[]> {
     const result = await this.pg.query(
-      `SELECT * FROM challenges WHERE status = 'pending' AND expires_at < NOW()`,
+      `SELECT * FROM challenges WHERE status = 'pending' AND expires_at < NOW()
+       ORDER BY expires_at ASC LIMIT 200`,
     );
     return result.rows.map(rowToChallenge);
   }
@@ -225,7 +226,8 @@ class ChallengeRepository {
     const result = await this.pg.query(
       `SELECT * FROM challenges
        WHERE status = 'accepted'
-         AND started_at + (duration_seconds * INTERVAL '1 second') + INTERVAL '30 seconds' < NOW()`,
+         AND started_at + (duration_seconds * INTERVAL '1 second') + INTERVAL '30 seconds' < NOW()
+       ORDER BY started_at ASC LIMIT 100`,
     );
     return result.rows.map(rowToChallenge);
   }
@@ -327,7 +329,7 @@ class ChallengeRepository {
 
   async listFriends(userId: string): Promise<UserSummary[]> {
     const result = await this.pg.query(
-      `SELECT u.id, u.auth0_id, u.display_name, u.avatar_url, u.enrollment_id
+      `SELECT u.id, u.firebase_uid, u.display_name, u.avatar_url, u.enrollment_id
        FROM friendships f
        JOIN users u ON (
          CASE
@@ -367,7 +369,7 @@ class ChallengeRepository {
     const isEnrollmentSearch = /^QP-[A-F0-9]+$/i.test(query.trim());
 
     const result = await this.pg.query(
-      `SELECT u.id, u.auth0_id, u.display_name, u.avatar_url, u.enrollment_id
+      `SELECT u.id, u.firebase_uid, u.display_name, u.avatar_url, u.enrollment_id
        FROM users u
        WHERE (
          ${isEnrollmentSearch
@@ -392,12 +394,12 @@ class ChallengeRepository {
     return result.rows.map(rowToUserSummary);
   }
 
-  // ─── Helper: resolve auth0_id → PG UUID ───────────────
+  // ─── Helper: resolve firebase_uid → PG UUID ───────────────
 
-  async resolveUserId(auth0Id: string): Promise<string | null> {
+  async resolveUserId(firebaseUid: string): Promise<string | null> {
     const result = await this.pg.query(
-      `SELECT id FROM users WHERE auth0_id = $1`,
-      [auth0Id],
+      `SELECT id FROM users WHERE firebase_uid = $1`,
+      [firebaseUid],
     );
     return result.rows[0]?.id ?? null;
   }

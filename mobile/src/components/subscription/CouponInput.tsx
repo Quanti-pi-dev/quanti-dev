@@ -1,10 +1,13 @@
 // ─── CouponInput ──────────────────────────────────────────────
-// Coupon code entry with validate button and feedback (NativeWind).
+// Coupon code entry with validate button and feedback.
 
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useTheme } from '../../theme';
+import { spacing, radius, typography } from '../../theme/tokens';
+import { Typography } from '../ui/Typography';
 import { validateCoupon } from '../../services/subscription.service';
 import type { CouponValidationResult } from '@kd/shared';
 
@@ -14,6 +17,7 @@ interface CouponInputProps {
 }
 
 export function CouponInput({ planId, onValidated }: CouponInputProps) {
+  const { theme } = useTheme();
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CouponValidationResult | null>(null);
@@ -50,47 +54,74 @@ export function CouponInput({ planId, onValidated }: CouponInputProps) {
 
   const isValid = result?.valid === true;
 
+  const borderColor = isValid
+    ? theme.success
+    : error
+    ? theme.error
+    : theme.border;
+
+  const backgroundColor = isValid
+    ? theme.successMuted
+    : error
+    ? theme.errorMuted
+    : theme.cardAlt;
+
   return (
-    <View className="gap-2">
+    <View style={{ gap: spacing.sm }}>
       {/* Input row */}
       <View
-        className={`flex-row items-center border rounded-2xl px-4 overflow-hidden ${
-          isValid
-            ? 'border-correct bg-correct/5'
-            : error
-            ? 'border-red-400 bg-red-50 dark:bg-red-900/10'
-            : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800'
-        }`}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          borderWidth: 1,
+          borderColor,
+          borderRadius: radius.lg,
+          paddingHorizontal: spacing.base,
+          backgroundColor,
+          overflow: 'hidden',
+        }}
       >
         <Ionicons
           name={isValid ? 'pricetag' : 'pricetag-outline'}
           size={17}
-          color={isValid ? '#10B981' : '#9CA3AF'}
+          color={isValid ? theme.success : theme.textTertiary}
         />
         <TextInput
           value={code}
           onChangeText={(t) => { setCode(t.toUpperCase()); setError(''); setResult(null); }}
           placeholder="Coupon code"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={theme.textPlaceholder}
           autoCapitalize="characters"
-          className="flex-1 py-3 px-2 text-sm font-body text-gray-800 dark:text-gray-100"
           editable={!isValid}
+          style={{
+            flex: 1,
+            paddingVertical: spacing.md,
+            paddingHorizontal: spacing.sm,
+            fontFamily: typography.body,
+            fontSize: typography.sm,
+            color: theme.text,
+          }}
         />
         {isValid ? (
-          <TouchableOpacity onPress={handleClear} className="p-1">
-            <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+          <TouchableOpacity onPress={handleClear} style={{ padding: spacing.xs }}>
+            <Ionicons name="close-circle" size={18} color={theme.textTertiary} />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
             onPress={handleApply}
             disabled={loading || !code.trim()}
-            className="bg-primary px-3 py-1.5 rounded-xl"
+            style={{
+              backgroundColor: theme.primary,
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.sm,
+              borderRadius: radius.md,
+            }}
             activeOpacity={0.85}
           >
             {loading ? (
-              <ActivityIndicator size="small" color="#fff" />
+              <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
-              <Text className="text-white text-xs font-body-semibold">Apply</Text>
+              <Typography variant="captionBold" color="#FFFFFF">Apply</Typography>
             )}
           </TouchableOpacity>
         )}
@@ -98,17 +129,17 @@ export function CouponInput({ planId, onValidated }: CouponInputProps) {
 
       {/* Feedback */}
       {isValid && (
-        <View className="flex-row items-center gap-1">
-          <Ionicons name="checkmark-circle" size={14} color="#10B981" />
-          <Text className="text-correct text-xs font-body-semibold">
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+          <Ionicons name="checkmark-circle" size={14} color={theme.success} />
+          <Typography variant="captionBold" color={theme.success}>
             Coupon applied! You save ₹{Math.round((result?.discountPaise ?? 0) / 100)}
-          </Text>
+          </Typography>
         </View>
       )}
       {!!error && (
-        <View className="flex-row items-center gap-1">
-          <Ionicons name="alert-circle-outline" size={14} color="#EF4444" />
-          <Text className="text-red-500 text-xs font-body">{error}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+          <Ionicons name="alert-circle-outline" size={14} color={theme.error} />
+          <Typography variant="caption" color={theme.error}>{error}</Typography>
         </View>
       )}
     </View>

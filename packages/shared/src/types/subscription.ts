@@ -15,6 +15,8 @@ export interface PlanFeatures {
   offline_access: boolean;
   priority_support: boolean;
   advanced_analytics: boolean;
+  deep_insights: boolean;    // Chronotype + Speed vs Accuracy (Pro+)
+  mastery_radar: boolean;    // Radar chart + AI recommendations (Master)
 }
 
 export interface Plan {

@@ -4,7 +4,7 @@
 // inside render (perf fix), consistent with the rest of the app.
 
 import { useState, useCallback } from 'react';
-import { View, FlatList, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';

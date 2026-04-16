@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
+import { auth } from '../lib/firebase';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
@@ -75,7 +75,7 @@ export function useChallengeSSE(
   const connect = useCallback(async () => {
     if (!challengeId || !myRole || gameOverRef.current) return;
 
-    const token = await SecureStore.getItemAsync('access_token');
+    const token = await auth.currentUser?.getIdToken();
     if (!token) return;
 
     const controller = new AbortController();
@@ -104,6 +104,7 @@ export function useChallengeSSE(
       const decoder = new TextDecoder();
       let buffer = '';
 
+      // eslint-disable-next-line no-constant-condition
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;

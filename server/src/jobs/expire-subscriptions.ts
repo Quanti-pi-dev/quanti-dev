@@ -24,7 +24,7 @@ export async function expireSubscriptions(log: FastifyBaseLogger): Promise<void>
     // Notify user
     const [plan, user] = await Promise.allSettled([
       planRepository.findById(sub.planId),
-      userRepository.findByAuth0Id(sub.userId),
+      userRepository.findByFirebaseUid(sub.userId),
     ]);
     const planData = plan.status === 'fulfilled' ? plan.value : null;
     const userData = user.status === 'fulfilled' ? user.value : null;
@@ -46,7 +46,7 @@ export async function expireSubscriptions(log: FastifyBaseLogger): Promise<void>
 
     const [plan, user] = await Promise.allSettled([
       planRepository.findById(sub.planId),
-      userRepository.findByAuth0Id(sub.userId),
+      userRepository.findByFirebaseUid(sub.userId),
     ]);
     const planData = plan.status === 'fulfilled' ? plan.value : null;
     const userData = user.status === 'fulfilled' ? user.value : null;

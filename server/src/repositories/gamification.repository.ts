@@ -106,7 +106,7 @@ class GamificationRepository {
        FROM badges b
        JOIN user_badges ub ON ub.badge_id = b.id
        WHERE b.id::text IN (${placeholders})
-       AND ub.user_id = (SELECT id FROM users WHERE auth0_id = $${badgeIds.length + 1})
+       AND ub.user_id = (SELECT id FROM users WHERE firebase_uid = $${badgeIds.length + 1})
        ORDER BY ub.earned_at DESC`,
       [...badgeIds, userId],
     );
@@ -136,7 +136,7 @@ class GamificationRepository {
     // Record in PostgreSQL
     await this.pg.query(
       `INSERT INTO user_badges (user_id, badge_id)
-       VALUES ((SELECT id FROM users WHERE auth0_id = $1), $2)
+       VALUES ((SELECT id FROM users WHERE firebase_uid = $1), $2)
        ON CONFLICT (user_id, badge_id) DO NOTHING`,
       [userId, badgeId],
     );
@@ -175,11 +175,11 @@ class GamificationRepository {
     if (memberIds.length > 0) {
       const placeholders = memberIds.map((_, i) => `$${i + 1}`).join(', ');
       const userResult = await this.pg.query(
-        `SELECT auth0_id, display_name, avatar_url FROM users WHERE auth0_id IN (${placeholders})`,
+        `SELECT firebase_uid, display_name, avatar_url FROM users WHERE firebase_uid IN (${placeholders})`,
         memberIds,
       );
       for (const row of userResult.rows) {
-        userMap.set(row.auth0_id as string, {
+        userMap.set(row.firebase_uid as string, {
           display_name: row.display_name as string,
           avatar_url: row.avatar_url as string | null,
         });
@@ -213,7 +213,7 @@ class GamificationRepository {
         avatarUrl = cachedUser.avatar_url;
       } else {
         const userResult = await this.pg.query(
-          `SELECT display_name, avatar_url FROM users WHERE auth0_id = $1`,
+          `SELECT display_name, avatar_url FROM users WHERE firebase_uid = $1`,
           [userId],
         );
         const user = userResult.rows[0];
@@ -288,7 +288,7 @@ class GamificationRepository {
     if (category === 'flashcard_pack' && deckId) {
       const alreadyOwned = await this.pg.query(
         `SELECT 1 FROM user_unlocked_decks
-         WHERE user_id = (SELECT id FROM users WHERE auth0_id = $1) AND deck_id = $2`,
+         WHERE user_id = (SELECT id FROM users WHERE firebase_uid = $1) AND deck_id = $2`,
         [userId, deckId],
       );
       if (alreadyOwned.rows.length > 0) {
@@ -308,7 +308,7 @@ class GamificationRepository {
       // Record purchase
       await this.pg.query(
         `INSERT INTO user_purchases (user_id, item_id, coins_spent)
-         VALUES ((SELECT id FROM users WHERE auth0_id = $1), $2, $3)`,
+         VALUES ((SELECT id FROM users WHERE firebase_uid = $1), $2, $3)`,
         [userId, itemId, price],
       );
 
@@ -322,7 +322,7 @@ class GamificationRepository {
         // Permanently unlock the deck for the user (idempotent)
         await this.pg.query(
           `INSERT INTO user_unlocked_decks (user_id, deck_id)
-           VALUES ((SELECT id FROM users WHERE auth0_id = $1), $2)
+           VALUES ((SELECT id FROM users WHERE firebase_uid = $1), $2)
            ON CONFLICT (user_id, deck_id) DO NOTHING`,
           [userId, deckId],
         );
@@ -331,7 +331,7 @@ class GamificationRepository {
         // Save active theme to user preferences
         await this.pg.query(
           `INSERT INTO user_preferences (user_id, active_theme)
-           VALUES ((SELECT id FROM users WHERE auth0_id = $1), $2)
+           VALUES ((SELECT id FROM users WHERE firebase_uid = $1), $2)
            ON CONFLICT (user_id)
            DO UPDATE SET active_theme = EXCLUDED.active_theme, updated_at = NOW()`,
           [userId, themeKey],
@@ -374,7 +374,7 @@ class GamificationRepository {
       `SELECT ct.id, ct.amount, ct.reason, ct.reference_id, ct.created_at
        FROM coin_transactions ct
        JOIN users u ON u.id = ct.user_id
-       WHERE u.auth0_id = $1
+       WHERE u.firebase_uid = $1
        ORDER BY ct.created_at DESC
        LIMIT $2 OFFSET $3`,
       [userId, pageSize, offset],
@@ -382,7 +382,7 @@ class GamificationRepository {
 
     const countResult = await this.pg.query(
       `SELECT COUNT(*) as total FROM coin_transactions ct
-       JOIN users u ON u.id = ct.user_id WHERE u.auth0_id = $1`,
+       JOIN users u ON u.id = ct.user_id WHERE u.firebase_uid = $1`,
       [userId],
     );
 
@@ -417,7 +417,7 @@ class GamificationRepository {
     const result = await this.pg.query(
       `SELECT ud.deck_id FROM user_unlocked_decks ud
        JOIN users u ON u.id = ud.user_id
-       WHERE u.auth0_id = $1
+       WHERE u.firebase_uid = $1
        ORDER BY ud.unlocked_at DESC`,
       [userId],
     );

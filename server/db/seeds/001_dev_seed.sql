@@ -4,10 +4,10 @@
 -- ============================================================
 
 -- ─── Admin User ─────────────────────────────────────────────
-INSERT INTO users (id, auth0_id, email, display_name, role, is_verified)
+INSERT INTO users (id, firebase_uid, email, display_name, role, is_verified)
 VALUES (
     'a0000000-0000-0000-0000-000000000001',
-    'auth0|admin001',
+    'firebase_admin001',
     'admin@studyplatform.dev',
     'Trinetra',
     'admin',
@@ -15,11 +15,11 @@ VALUES (
 ) ON CONFLICT (email) DO NOTHING;
 
 -- ─── Test Students ──────────────────────────────────────────
-INSERT INTO users (id, auth0_id, email, display_name, role, is_verified)
+INSERT INTO users (id, firebase_uid, email, display_name, role, is_verified)
 VALUES
-    ('b0000000-0000-0000-0000-000000000001', 'auth0|student001', 'alice@test.dev', 'Alice Chen', 'student', TRUE),
-    ('b0000000-0000-0000-0000-000000000002', 'auth0|student002', 'bob@test.dev', 'Bob Kumar', 'student', TRUE),
-    ('b0000000-0000-0000-0000-000000000003', 'auth0|student003', 'carol@test.dev', 'Carol Okafor', 'student', TRUE)
+    ('b0000000-0000-0000-0000-000000000001', 'firebase_student001', 'alice@test.dev', 'Alice Chen', 'student', TRUE),
+    ('b0000000-0000-0000-0000-000000000002', 'firebase_student002', 'bob@test.dev', 'Bob Kumar', 'student', TRUE),
+    ('b0000000-0000-0000-0000-000000000003', 'firebase_student003', 'carol@test.dev', 'Carol Okafor', 'student', TRUE)
 ON CONFLICT (email) DO NOTHING;
 
 -- ─── User Preferences ──────────────────────────────────────

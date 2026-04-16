@@ -53,7 +53,7 @@ export class RecommendationService {
         COALESCE(AVG(ss.cards_studied), 10) as avg_cards
       FROM study_sessions ss
       LEFT JOIN decks d ON ss.deck_id = d.id::text
-      WHERE ss.user_id = (SELECT id FROM users WHERE auth0_id = $1)
+      WHERE ss.user_id = (SELECT id FROM users WHERE firebase_uid = $1)
       GROUP BY ss.deck_id, d.title
       HAVING SUM(ss.correct_answers + ss.incorrect_answers) > 0
       ORDER BY accuracy ASC, last_studied ASC
@@ -125,7 +125,7 @@ export class RecommendationService {
         END as accuracy,
         COUNT(*) as total_sessions
       FROM study_sessions
-      WHERE user_id = (SELECT id FROM users WHERE auth0_id = $1)
+      WHERE user_id = (SELECT id FROM users WHERE firebase_uid = $1)
     `, [userId]);
 
     const retentionRate = Math.round((retentionResult.rows[0]?.accuracy ?? 0) * 10) / 10;
@@ -143,7 +143,7 @@ export class RecommendationService {
             ELSE 0
           END as hour_accuracy
         FROM study_sessions
-        WHERE user_id = (SELECT id FROM users WHERE auth0_id = $1)
+        WHERE user_id = (SELECT id FROM users WHERE firebase_uid = $1)
           AND started_at > NOW() - INTERVAL '30 days'
         GROUP BY EXTRACT(HOUR FROM started_at)
         HAVING COUNT(*) >= 2

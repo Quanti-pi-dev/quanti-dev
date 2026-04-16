@@ -1,8 +1,11 @@
 // ─── PlanFeatureRow ────────────────────────────────────────────
-// A single feature row inside a plan card (NativeWind).
+// A single feature row inside a plan card.
 
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../../theme';
+import { spacing } from '../../theme/tokens';
+import { Typography } from '../ui/Typography';
 
 interface PlanFeatureRowProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -11,6 +14,8 @@ interface PlanFeatureRowProps {
 }
 
 export function PlanFeatureRow({ icon, label, value }: PlanFeatureRowProps) {
+  const { theme } = useTheme();
+
   const enabled = value !== false && value !== null && value !== 0;
 
   // Render a count label if numeric
@@ -20,21 +25,19 @@ export function PlanFeatureRow({ icon, label, value }: PlanFeatureRowProps) {
       : '';
 
   return (
-    <View className="flex-row items-center gap-2">
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
       <Ionicons
         name={enabled ? icon : 'close-outline'}
         size={16}
-        color={enabled ? '#10B981' : '#9CA3AF'}
+        color={enabled ? theme.success : theme.textTertiary}
       />
-      <Text
-        className={`flex-1 text-sm font-body ${
-          enabled
-            ? 'text-gray-800 dark:text-gray-100'
-            : 'text-gray-400 dark:text-gray-600'
-        }`}
+      <Typography
+        variant="bodySmall"
+        color={enabled ? theme.text : theme.textTertiary}
+        style={{ flex: 1 }}
       >
         {label}{suffix}
-      </Text>
+      </Typography>
     </View>
   );
 }

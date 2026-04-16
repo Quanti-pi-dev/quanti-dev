@@ -32,7 +32,7 @@ export async function completeTournaments(logger: FastifyBaseLogger): Promise<vo
       const winner = leaderboard[0];
 
       // 2. Award prize to winner (if any participants and prize > 0)
-      // NOTE: winner.userId is an Auth0 ID (stored by the route via request.user!.id),
+      // NOTE: winner.userId is an Firebase UID (stored by the route via request.user!.id),
       // so we pass it directly to creditCoins — no PG resolution needed.
       if (winner && tournament.prizeCoins > 0) {
         await gamificationRepository.creditCoins(winner.userId, tournament.prizeCoins);
@@ -61,15 +61,15 @@ export async function completeTournaments(logger: FastifyBaseLogger): Promise<vo
 
 // ─── Helpers ────────────────────────────────────────────────
 
-async function recordCoinTx(auth0Id: string, amount: number, reason: string, referenceId: string | null): Promise<void> {
+async function recordCoinTx(firebaseUid: string, amount: number, reason: string, referenceId: string | null): Promise<void> {
   try {
     const pg = getPostgresPool();
     await pg.query(
       `INSERT INTO coin_transactions (user_id, amount, reason, reference_id)
-       VALUES ((SELECT id FROM users WHERE auth0_id = $1), $2, $3, $4)`,
-      [auth0Id, amount, reason, referenceId],
+       VALUES ((SELECT id FROM users WHERE firebase_uid = $1), $2, $3, $4)`,
+      [firebaseUid, amount, reason, referenceId],
     );
   } catch (err) {
-    log.error({ auth0Id, reason, err }, 'failed to record coin transaction in cron');
+    log.error({ firebaseUid, reason, err }, 'failed to record coin transaction in cron');
   }
 }
