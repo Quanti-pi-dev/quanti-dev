@@ -208,7 +208,7 @@ export class RecommendationService {
         const nameResult = await pg.query<{ id: string; name: string }>(
           `SELECT id, name FROM subjects WHERE id = ANY($1)`, [subjectIds],
         );
-        const nameMap = new Map(nameResult.rows.map(r => [r.id, r.name]));
+        const nameMap = new Map<string, string>(nameResult.rows.map((r: { id: string; name: string }) => [r.id, r.name]));
 
         for (const [subjectId, stats] of subjectStats) {
           if (stats.total < 5) continue; // Need minimum data

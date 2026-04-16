@@ -24,7 +24,7 @@ export function getPostgresPool(): pg.Pool {
     });
     // Absorb background errors from idle clients so they don't crash the process.
     // The pool automatically removes the broken client and creates a replacement.
-    pgPool.on('error', (err) => {
+    pgPool.on('error', (err: Error) => {
       console.error('[PostgreSQL] Idle client error (handled):', err.message);
     });
   }

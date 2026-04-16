@@ -4,7 +4,7 @@ services:
     env: node
     plan: free
     region: oregon
-    buildCommand: "npm ci && npm run build --workspace=@kd/shared && npm run build --workspace=@kd/server"
+    buildCommand: "npm ci --include=dev && npm run build --workspace=@kd/shared && npm run build --workspace=@kd/server"
     # Runs automatically before starting the new version to apply DB changes
     preDeployCommand: "npm --workspace=@kd/server exec -- tsx db/scripts/migrate.ts && npm --workspace=@kd/server exec -- tsx db/scripts/create-mongo-indexes.ts"
     startCommand: "npm run start --workspace=@kd/server"
