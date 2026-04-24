@@ -83,7 +83,7 @@ export async function contentRoutes(fastify: FastifyInstance): Promise<void> {
 
   // ─── GET /exams — List exams ──────────────────────────
   fastify.get('/exams', async (request: FastifyRequest, reply: FastifyReply) => {
-    const query = request.query as PaginationQuery & { category?: string; difficulty?: string };
+    const query = request.query as PaginationQuery & { category?: string };
     const result = await examRepository.findMany(query);
 
     return reply.send({

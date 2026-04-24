@@ -28,11 +28,10 @@ class ExamRepository {
     return getMongoDb().collection('exams');
   }
 
-  async findMany(query: PaginationQuery & { category?: string; difficulty?: string }) {
+  async findMany(query: PaginationQuery & { category?: string }) {
     const { page, pageSize, skip, sort } = buildPagination(query);
     const filter: Filter<Document> = { isPublished: true };
     if (query.category) filter['category'] = query.category;
-    if (query.difficulty) filter['difficulty'] = query.difficulty;
 
     const [docs, totalItems] = await Promise.all([
       this.col.find(filter).sort(sort).skip(skip).limit(pageSize).toArray(),
@@ -44,8 +43,7 @@ class ExamRepository {
       title: doc['title'] as string,
       description: doc['description'] as string,
       category: doc['category'] as string,
-      difficulty: doc['difficulty'] as Exam['difficulty'],
-      questionCount: (doc['questionIds'] as ObjectId[])?.length ?? 0,
+      questionCount: (doc['questionCount'] as number) ?? 0,
       durationMinutes: doc['durationMinutes'] as number,
       createdBy: doc['createdBy'] as string,
       createdAt: (doc['createdAt'] as Date).toISOString(),
@@ -73,8 +71,7 @@ class ExamRepository {
       title: doc['title'] as string,
       description: doc['description'] as string,
       category: doc['category'] as string,
-      difficulty: doc['difficulty'] as Exam['difficulty'],
-      questionCount: (doc['questionIds'] as ObjectId[])?.length ?? 0,
+      questionCount: (doc['questionCount'] as number) ?? 0,
       durationMinutes: doc['durationMinutes'] as number,
       createdBy: doc['createdBy'] as string,
       createdAt: (doc['createdAt'] as Date).toISOString(),

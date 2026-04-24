@@ -21,8 +21,8 @@ export interface Exam {
   title: string;
   description: string;
   category: string;
-  difficulty: 'beginner' | 'intermediate' | 'advanced';
   questionCount: number;
+  subjectCount: number;   // number of subjects mapped to this exam
   durationMinutes: number;
   createdBy: string;
   createdAt: string;

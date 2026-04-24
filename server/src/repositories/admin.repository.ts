@@ -12,7 +12,6 @@ interface CreateExamInput {
   title: string;
   description: string;
   category: string;
-  difficulty: 'beginner' | 'intermediate' | 'advanced';
   durationMinutes: number;
   createdBy: string;
 }
@@ -55,7 +54,6 @@ class AdminExamRepository {
         title: doc['title'] as string,
         description: doc['description'] as string,
         category: doc['category'] as string,
-        difficulty: doc['difficulty'] as string,
         durationMinutes: doc['durationMinutes'] as number,
         isPublished: (doc['isPublished'] as boolean) ?? false,
         createdBy: doc['createdBy'] as string,
@@ -76,7 +74,6 @@ class AdminExamRepository {
       title: doc['title'] as string,
       description: doc['description'] as string,
       category: doc['category'] as string,
-      difficulty: doc['difficulty'] as string,
       durationMinutes: doc['durationMinutes'] as number,
       isPublished: (doc['isPublished'] as boolean) ?? false,
       createdBy: doc['createdBy'] as string,

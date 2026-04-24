@@ -19,7 +19,6 @@ Represents a certification exam available on the platform.
   "title":        String,          // "GATE 2024 — Mathematics"
   "description":  String,
   "category":     String,          // "engineering", "commerce", etc.
-  "difficulty":   String,          // "beginner", "intermediate", "advanced"
   "imageUrl":     String,          // cover image CDN URL
   "isPublished":  Boolean,         // false = hidden from students
   "createdAt":    ISODate,
@@ -32,7 +31,6 @@ Represents a certification exam available on the platform.
 |---|---|---|
 | `exams_published_date` | `{ isPublished: 1, createdAt: -1 }` | |
 | `exams_category` | `{ category: 1 }` | |
-| `exams_difficulty` | `{ difficulty: 1 }` | |
 | `exams_text_search` | `{ title: 'text', description: 'text' }` | Text index |
 
 ---
