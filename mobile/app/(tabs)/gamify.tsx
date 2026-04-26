@@ -60,7 +60,7 @@ export default function GamifyScreen() {
         <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
           <CoinDisplay coins={coins?.balance ?? 0} />
           <TouchableOpacity
-            onPress={() => router.push('/coins-history' as never)}
+            onPress={() => router.push('/coins-history')}
             style={{
               width: 40, height: 40, borderRadius: radius.full,
               backgroundColor: theme.cardAlt, borderWidth: 1.5, borderColor: theme.border,

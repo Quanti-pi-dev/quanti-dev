@@ -34,10 +34,12 @@ export default function EmailPromptScreen() {
   const totalSteps = parseInt(totalStepsParam ?? '4', 10);
   const currentStep = parseInt(currentStepParam ?? '3', 10);
 
-  // Auto-skip if user already has a real email (not a placeholder from social login)
+  // Auto-skip if user already has a real email (not a placeholder from social login).
+  // FIX B3: Route through the subscription prompt, not directly to /(tabs),
+  // to preserve the full onboarding flow.
   useEffect(() => {
     if (user?.email && !user.email.includes('@placeholder.')) {
-      router.replace('/(tabs)');
+      router.replace({ pathname: '/subscription', params: { fromOnboarding: 'true' } });
     }
   }, [user, router]);
 
@@ -59,7 +61,7 @@ export default function EmailPromptScreen() {
     onSuccess: async () => {
       await refreshUser();
       // Route to subscription prompt with onboarding context
-      router.push({ pathname: '/subscription', params: { fromOnboarding: 'true' } } as never);
+      router.push({ pathname: '/subscription', params: { fromOnboarding: 'true' } });
     },
     onError: (err: unknown) => {
       setError(err instanceof Error ? err.message : 'Could not save your email. Please try again.');

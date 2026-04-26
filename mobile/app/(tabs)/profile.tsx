@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
 import { spacing } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
-import { StatCard } from '../../src/components/StatCard';
+import { StatTile } from '../../src/components/StatTile';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useCoinBalance, useUserBadges } from '../../src/hooks/useGamification';
 import { useProgressSummary, useStudyStreak } from '../../src/hooks/useProgress';
@@ -94,7 +94,7 @@ export default function ProfileScreen() {
           isAdmin={isAdmin}
           coins={coins}
           onEditPress={() => setEditModalVisible(true)}
-          onCoinsPress={() => router.push('/coins-history' as never)}
+          onCoinsPress={() => router.push('/coins-history')}
           onCartPress={() => router.push('/shop')}
         />
 
@@ -102,16 +102,16 @@ export default function ProfileScreen() {
 
         {/* Stats row */}
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-          <StatCard icon="flash-outline" label="Solved" value={solved} accent={theme.statSolved} />
-          <StatCard icon="checkmark-circle-outline" label="Accuracy" value={accuracy} accent={theme.statAccuracy} />
-          <StatCard icon="flame-outline" label="Streak" value={`${streak}d`} accent={theme.statStreak} />
+          <StatTile label="Solved" value={solved} color={theme.statSolved} />
+          <StatTile label="Accuracy" value={accuracy} color={theme.statAccuracy} />
+          <StatTile label="Streak" value={`${streak}d`} color={theme.statStreak} />
         </View>
 
         <CoinWalletCard
           coins={coins}
           lifetimeEarned={coinData?.lifetimeEarned}
           lifetimeSpent={coinData?.lifetimeEarned != null ? coinData.lifetimeEarned - coins : null}
-          onHistoryPress={() => router.push('/coins-history' as never)}
+          onHistoryPress={() => router.push('/coins-history')}
           onShopPress={() => router.push('/shop')}
         />
 

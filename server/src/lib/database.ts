@@ -9,6 +9,9 @@ import pg from 'pg';
 import { MongoClient, Db } from 'mongodb';
 import { Redis } from 'ioredis';
 import { config } from '../config.js';
+import { createServiceLogger } from './logger.js';
+
+const log = createServiceLogger('Database');
 
 // ─── PostgreSQL ─────────────────────────────────────────────
 
@@ -25,7 +28,7 @@ export function getPostgresPool(): pg.Pool {
     // Absorb background errors from idle clients so they don't crash the process.
     // The pool automatically removes the broken client and creates a replacement.
     pgPool.on('error', (err: Error) => {
-      console.error('[PostgreSQL] Idle client error (handled):', err.message);
+      log.error({ err }, 'PostgreSQL idle client error (handled)');
     });
   }
   return pgPool;
@@ -67,7 +70,7 @@ export function getRedisClient(): Redis {
     // Absorb socket-level errors so the process doesn't crash.
     // ioredis will internally retry the connection per its strategy.
     redisClient.on('error', (err) => {
-      console.error('[Redis] Connection error (handled):', err.message);
+      log.error({ err }, 'Redis connection error (handled)');
     });
   }
   return redisClient;

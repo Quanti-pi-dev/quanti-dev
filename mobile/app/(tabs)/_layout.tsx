@@ -2,11 +2,18 @@
 // Bottom tabs with custom TabBar component.
 // Wrapped in RouteErrorBoundary so a crash in any tab shows recovery UI.
 
-import { Tabs } from 'expo-router';
+import { Tabs, Redirect } from 'expo-router';
+import { useAuth } from '../../src/contexts/AuthContext';
 import { TabBar } from '../../src/components/TabBar';
 import { RouteErrorBoundary } from '../../src/components/ui/RouteErrorBoundary';
 
 export default function TabLayout() {
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <Redirect href={'/(auth)/signup' as any} />;
+  }
+
   return (
     <RouteErrorBoundary fallbackTitle="This screen crashed">
       <Tabs

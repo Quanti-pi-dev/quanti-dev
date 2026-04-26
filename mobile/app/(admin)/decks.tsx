@@ -1,7 +1,7 @@
 // ─── Admin Deck Browser ──────────────────────────────────────
 // List all decks with card counts, paginated. Delete with cascade warning.
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { View, ScrollView, Alert, TouchableOpacity, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
@@ -13,6 +13,7 @@ import { Button } from '../../src/components/ui/Button';
 import { Card } from '../../src/components/ui/Card';
 import { Divider } from '../../src/components/ui/Divider';
 import { Skeleton } from '../../src/components/ui/Skeleton';
+import { Input } from '../../src/components/ui/Input';
 import {
   useAdminDecks,
   useDeleteDeck,
@@ -36,7 +37,18 @@ function categoryColour(cat: string): string {
 export default function DecksScreen() {
   const { theme } = useTheme();
   const [page, setPage] = useState(1);
-  const { data, isLoading } = useAdminDecks(page);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [search]);
+
+  const { data, isLoading } = useAdminDecks(page, debouncedSearch);
   const qc = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -89,6 +101,16 @@ export default function DecksScreen() {
             All Decks {pagination.total > 0 ? `(${pagination.total})` : ''}
           </Typography>
         </View>
+
+        {/* Search bar */}
+        <Input
+          placeholder="Search by name or ID..."
+          value={search}
+          onChangeText={setSearch}
+          leftIcon={<Ionicons name="search" size={20} color={theme.textTertiary} />}
+          rightIcon={search ? <Ionicons name="close-circle" size={20} color={theme.textTertiary} /> : undefined}
+          onRightIconPress={() => setSearch('')}
+        />
 
         {isLoading ? (
           <View style={{ gap: spacing.md }}>

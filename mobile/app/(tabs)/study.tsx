@@ -10,7 +10,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
-import { spacing, typography, radius } from '../../src/theme/tokens';
+import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';
 import { Input } from '../../src/components/ui/Input';
@@ -28,11 +28,7 @@ import type { Exam } from '@kd/shared';
 
 // CATEGORIES now derived dynamically from real exam data (see useMemo below)
 const FREE_PREVIEW_COUNT = 3;
-const DIFFICULTY_COLOURS: Record<string, string> = {
-  beginner: '#10B981',   // brand: correct / green
-  intermediate: '#F59E0B', // brand: coin / amber
-  advanced: '#EF4444',   // brand: incorrect / red
-};
+
 
 // Cycling accent palette consistent with the brand's extended colour range
 const EXAM_ACCENTS = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#EF4444', '#3B82F6', '#14B8A6'];
@@ -49,7 +45,6 @@ function ExamTile({
   exam: Exam; accent: string; onPress: () => void; isLocked: boolean; index: number;
 }) {
   const { theme } = useTheme();
-  const diffColour = DIFFICULTY_COLOURS[exam.difficulty] ?? accent;
   const { animStyle } = useFadeInUp({ delay: Math.min(index * 55, 330) });
 
   const card = (
@@ -100,23 +95,8 @@ function ExamTile({
 
         {/* Meta row */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-          <View
-            style={{
-              paddingHorizontal: 6, paddingVertical: 2,
-              borderRadius: radius.sm,
-              backgroundColor: diffColour + '18',
-            }}
-          >
-            <Typography
-              variant="caption"
-              color={diffColour}
-              style={{ fontFamily: typography.bodySemiBold, fontSize: 10, textTransform: 'capitalize' }}
-            >
-              {exam.difficulty}
-            </Typography>
-          </View>
           <Typography variant="caption" color={theme.textTertiary}>
-            {exam.questionCount > 0 ? `${exam.questionCount} q` : ' '}
+            {exam.questionCount > 0 ? `${exam.questionCount} q` : exam.category}
           </Typography>
         </View>
       </TouchableOpacity>
@@ -165,10 +145,7 @@ export default function StudyScreen() {
 
   function handleExamPress(exam: Exam) {
     if (limitReached) return;
-    router.push({
-      pathname: '/exams/[examId]/subjects' as const,
-      params: { examId: exam.id, title: exam.title },
-    });
+    router.push(`/exams/${exam.id}/subjects?title=${encodeURIComponent(exam.title)}` as never);
   }
 
   return (
@@ -185,7 +162,7 @@ export default function StudyScreen() {
 
         {/* Tournament quick-link */}
         <TouchableOpacity
-          onPress={() => router.push('/tournaments' as never)}
+          onPress={() => router.push('/tournaments')}
           activeOpacity={0.8}
           style={{
             backgroundColor: '#6366F112',

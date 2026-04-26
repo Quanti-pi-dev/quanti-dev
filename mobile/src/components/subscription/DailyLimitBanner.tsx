@@ -101,7 +101,7 @@ export function DailyLimitBanner({ examsUsedToday, limitReached }: DailyLimitBan
 
       {coinCta ? (
         <TouchableOpacity
-          onPress={() => router.push('/shop' as never)}
+          onPress={() => router.push('/shop')}
           activeOpacity={0.7}
         >
           <Typography variant="caption" color={theme.primary} style={{ textAlign: 'center', textDecorationLine: 'underline' }}>

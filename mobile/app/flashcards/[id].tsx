@@ -12,7 +12,7 @@
 //   - CoinToast            (floating "+coins" indicator)
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { View } from 'react-native';
+import { View, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { spacing, radius } from '../../src/theme/tokens';
@@ -109,12 +109,13 @@ export default function FlashcardStudyScreen() {
 
   // ─── Daily limit tracking ─────────────────────────────────
   const { incrementExamsUsedToday } = useExamsUsedToday();
+  const dailyLimitIncrementedRef = useRef(false);
   useEffect(() => {
-    if (!isLoading && cards && cards.length > 0) {
+    if (!isLoading && cards && cards.length > 0 && !dailyLimitIncrementedRef.current) {
+      dailyLimitIncrementedRef.current = true;
       void incrementExamsUsedToday();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading]);
+  }, [isLoading, cards, incrementExamsUsedToday]);
 
   // ─── Card navigation state ────────────────────────────────
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -152,7 +153,21 @@ export default function FlashcardStudyScreen() {
   const canGoNext = currentIdx < total - 1;
   const canGoPrev = currentIdx > 0;
   const isCurrentAnswered = answered[currentIdx] !== undefined;
-  const correctCount = answered.filter((a) => a === true).length;
+
+  // FIX PF5: Memoize filtered counts to avoid O(n) scan on every render
+  const { correctCount, answeredCount, incorrectCount, skippedCount, isComplete } = useMemo(() => {
+    const correct = answered.filter((a) => a === true).length;
+    const answeredTotal = answered.filter((a) => a !== undefined).length;
+    const incorrect = answered.filter((a) => a === false).length;
+    const skipped = answered.filter((a) => a === 'skipped').length;
+    return {
+      correctCount: correct,
+      answeredCount: answeredTotal,
+      incorrectCount: incorrect,
+      skippedCount: skipped,
+      isComplete: total > 0 && answeredTotal === total,
+    };
+  }, [answered, total]);
 
   // ─── Answer handler ───────────────────────────────────────
   const LETTER_KEYS_ANSWER = ['A', 'B', 'C', 'D'] as const;
@@ -225,6 +240,45 @@ export default function FlashcardStudyScreen() {
     if (canGoPrev) setCurrentIdx((i) => i - 1);
   }, [canGoPrev]);
 
+  // ─── Flush on completion (FIX B1: must be above early returns) ──
+  // FIX H2: submitTournamentScore removed from deps — it's an unstable mutation
+  // object that would cause infinite re-runs. The ref guard prevents duplicates.
+  useEffect(() => {
+    if (isComplete) {
+      session.flush();
+      // Submit tournament score if playing in tournament mode
+      if (tournamentId && !tournamentScoreSubmittedRef.current) {
+        tournamentScoreSubmittedRef.current = true;
+        submitTournamentScore.mutate({
+          id: tournamentId,
+          score: correctCount,
+          correct: correctCount,
+          total,
+        });
+      }
+    }
+  }, [isComplete, session, tournamentId, correctCount, total]);
+
+  // FIX U4: Confirm before leaving a session with progress
+  const handleBack = useCallback(() => {
+    if (answeredCount > 0 && !isComplete) {
+      Alert.alert(
+        'Leave Session?',
+        'Your progress so far has been saved, but you haven\'t finished all cards.',
+        [
+          { text: 'Stay', style: 'cancel' },
+          {
+            text: 'Leave',
+            style: 'destructive',
+            onPress: () => { session.flush(); router.back(); },
+          },
+        ],
+      );
+    } else {
+      router.back();
+    }
+  }, [answeredCount, isComplete, session, router]);
+
   // ─── Loading state ────────────────────────────────────────
   if (isLoading) {
     return (
@@ -266,31 +320,6 @@ export default function FlashcardStudyScreen() {
   }
 
   // ─── Completion screen ────────────────────────────────────
-  const answeredCards = answered.filter((a) => a !== undefined);
-  const answeredCount = answeredCards.length;
-  const incorrectCount = answered.filter((a) => a === false).length;
-  const skippedCount = answered.filter((a) => a === 'skipped').length;
-  const isComplete = total > 0 && answeredCount === total;
-
-  // Flush study session data when all cards are answered (side-effect, not render)
-  // FIX H2: submitTournamentScore removed from deps — it's an unstable mutation
-  // object that would cause infinite re-runs. The ref guard prevents duplicates.
-  useEffect(() => {
-    if (isComplete) {
-      session.flush();
-      // Submit tournament score if playing in tournament mode
-      if (tournamentId && !tournamentScoreSubmittedRef.current) {
-        tournamentScoreSubmittedRef.current = true;
-        submitTournamentScore.mutate({
-          id: tournamentId,
-          score: correctCount,
-          correct: correctCount,
-          total,
-        });
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isComplete, session, tournamentId, correctCount, total]);
 
   if (isComplete) {
     return (
@@ -322,7 +351,7 @@ export default function FlashcardStudyScreen() {
   return (
     <RouteErrorBoundary fallbackTitle="Session Interrupted">
     <ScreenWrapper>
-      <Header showBack title={title ?? 'Study'} />
+      <Header showBack title={title ?? 'Study'} onBack={handleBack} />
 
       <StudyProgressHeader
         currentIdx={currentIdx}

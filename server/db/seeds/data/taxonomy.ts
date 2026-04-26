@@ -5,6 +5,10 @@
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+// SubjectLevel is defined once in @kd/shared — re-export for seed consumers.
+import { type SubjectLevel, SUBJECT_LEVELS } from '@kd/shared';
+export type { SubjectLevel };
+
 export type ExamTitle = 'JEE' | 'NEET' | 'CLAT' | 'IPMAT' | 'CAT';
 export type SubjectName =
   | 'Physics'
@@ -17,8 +21,6 @@ export type SubjectName =
   | 'English & Verbal Ability'
   | 'Legal Reasoning'
   | 'Current Affairs & GK';
-
-export type SubjectLevel = 'Beginner' | 'Rookie' | 'Skilled' | 'Competent' | 'Expert' | 'Master';
 
 export interface TopicDef {
   slug: string;
@@ -44,14 +46,7 @@ export interface ExamDef {
 
 // ─── Levels (fixed, ordered) ─────────────────────────────────────────────────
 
-export const LEVELS: SubjectLevel[] = [
-  'Beginner',
-  'Rookie',
-  'Skilled',
-  'Competent',
-  'Expert',
-  'Master',
-];
+export const LEVELS: SubjectLevel[] = SUBJECT_LEVELS;
 
 // ─── Exams ────────────────────────────────────────────────────────────────────
 

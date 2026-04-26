@@ -4,7 +4,7 @@
 
 import { useMemo } from 'react';
 import { View, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { useTheme } from '../theme';
 import { spacing, radius } from '../theme/tokens';
 import { Typography } from './ui/Typography';
@@ -21,7 +21,7 @@ interface Insight {
   icon: string;
   title: string;
   body: string;
-  action?: { label: string; route: string };
+  action?: { label: string; route: Href };
   priority: number;
   color: string;
 }
@@ -145,7 +145,7 @@ export function StudyInsightsCard({ data }: { data: InsightData }) {
 
       {top.action && (
         <TouchableOpacity
-          onPress={() => router.push(top.action!.route as never)}
+          onPress={() => router.push(top.action!.route)}
           style={{
             backgroundColor: top.color,
             borderRadius: 10,

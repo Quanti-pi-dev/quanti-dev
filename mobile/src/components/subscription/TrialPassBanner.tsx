@@ -78,7 +78,7 @@ export function TrialPassBanner() {
 
         {/* CTA */}
         <TouchableOpacity
-          onPress={() => router.push('/subscription' as never)}
+          onPress={() => router.push('/subscription')}
           activeOpacity={0.8}
           style={{
             backgroundColor: '#6366F1',

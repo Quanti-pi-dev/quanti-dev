@@ -87,7 +87,10 @@ export function ImageUploadButton({
       const blob = await fileResponse.blob();
       const uploadResponse = await fetch(uploadUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': mimeType },
+        headers: {
+          'Content-Type': mimeType,
+          'Cache-Control': 'public, max-age=31536000, immutable',
+        },
         body: blob,
       });
 

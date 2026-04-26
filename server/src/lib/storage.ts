@@ -59,9 +59,11 @@ export async function generateAvatarPresignedUrl(
     Bucket: config.storage.bucket,
     Key: key,
     ContentType: mimeType,
-    // Serve avatars with a long cache lifetime — they're keyed by timestamp
-    // so each upload creates a unique URL; old URLs naturally become unreachable
-    CacheControl: 'public, max-age=31536000, immutable',
+    // NOTE: CacheControl is intentionally omitted from the signed command.
+    // Including it would require the mobile client to send the exact same
+    // Cache-Control header in its PUT, which React Native's fetch (Hermes/Blob)
+    // doesn't reliably do — causing a SignatureDoesNotMatch 403 from R2.
+    // Cache lifetime is configured at the CDN/bucket level instead.
   });
 
   // URL expires in 5 minutes — plenty for a mobile app to complete the upload
@@ -88,7 +90,6 @@ export async function generateAdminPresignedUrl(
     Bucket: config.storage.bucket,
     Key: key,
     ContentType: mimeType,
-    CacheControl: 'public, max-age=31536000, immutable',
   });
 
   const uploadUrl = await getSignedUrl(getClient(), command, { expiresIn: 300 });

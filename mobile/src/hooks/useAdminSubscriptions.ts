@@ -259,11 +259,11 @@ export interface AdminDeck {
   updatedAt: string;
 }
 
-export function useAdminDecks(page = 1) {
+export function useAdminDecks(page = 1, search = '') {
   return useQuery({
-    queryKey: ['admin', 'decks', page],
+    queryKey: ['admin', 'decks', page, search],
     queryFn: async () => {
-      const { data } = await adminApi.get('/decks', { params: { page, pageSize: 50 } });
+      const { data } = await adminApi.get('/decks', { params: { page, pageSize: 50, search: search || undefined } });
       return data as { data: AdminDeck[]; pagination: { total: number; page: number; pageSize: number } };
     },
   });

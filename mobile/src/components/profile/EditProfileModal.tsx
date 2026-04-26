@@ -2,10 +2,11 @@
 // Modal with avatar picker + name edit form.
 // Extracted from ProfileScreen. Manages its own avatar upload state.
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, TouchableOpacity, Modal, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useTheme } from '../../theme';
 import { spacing, radius } from '../../theme/tokens';
 import { Typography } from '../ui/Typography';
@@ -102,7 +103,7 @@ export const EditProfileModal = React.memo(function EditProfileModal({
   const [pendingAvatarUri, setPendingAvatarUri] = useState<string | null>(null);
 
   // Sync editName when modal opens with a new name
-  React.useEffect(() => {
+  useEffect(() => {
     if (visible) {
       setEditName(name);
       setPendingAvatarUri(null);
@@ -131,8 +132,28 @@ export const EditProfileModal = React.memo(function EditProfileModal({
     if (result.canceled || !result.assets?.[0]) return;
 
     const asset = result.assets[0];
-    const uri = asset.uri;
-    const mimeType = (asset.mimeType as 'image/jpeg' | 'image/png' | 'image/webp') ?? 'image/jpeg';
+
+    // ─── Resize & compress before upload ──────────────────────
+    // Cap at 512×512 (preserves aspect ratio when only width is set).
+    // Always save as JPEG so the mimeType is stable and file size small.
+    // quality 0.82 ≈ excellent visual quality at ~30-60 KB for a 512px image.
+    const MAX_DIMENSION = 512;
+    const needsResize = (asset.width ?? 0) > MAX_DIMENSION || (asset.height ?? 0) > MAX_DIMENSION;
+    const resizeAction = needsResize
+      ? [{ resize: asset.width >= (asset.height ?? 0)
+            ? { width: MAX_DIMENSION }
+            : { height: MAX_DIMENSION } }]
+      : [];
+
+    const compressed = await manipulateAsync(
+      asset.uri,
+      resizeAction,
+      { compress: 0.82, format: SaveFormat.JPEG },
+    );
+
+    const uri = compressed.uri;
+    // Always JPEG after manipulation — keeps the presign mimeType consistent.
+    const mimeType = 'image/jpeg' as const;
 
     setPendingAvatarUri(uri);
     setAvatarUploading(true);
@@ -151,7 +172,12 @@ export const EditProfileModal = React.memo(function EditProfileModal({
       const blob = await fileResponse.blob();
       const uploadResponse = await fetch(uploadUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': mimeType },
+        headers: {
+          'Content-Type': mimeType,
+          // NOTE: Do NOT add Cache-Control here. R2 presigned URLs sign the exact
+          // set of headers used during URL generation. Sending extra headers causes
+          // a SignatureDoesNotMatch 403. Cache lifetime is set at the CDN level.
+        },
         body: blob,
       });
 
@@ -162,7 +188,8 @@ export const EditProfileModal = React.memo(function EditProfileModal({
       await api.put('/users/avatar', { avatarUrl: cdnUrl });
       await onSaved();
       setPendingAvatarUri(null);
-    } catch {
+    } catch (err) {
+      console.error('[EditProfileModal] Avatar upload failed:', err);
       setPendingAvatarUri(null);
       Alert.alert('Upload Failed', 'Could not update your avatar. Please try again.');
     } finally {

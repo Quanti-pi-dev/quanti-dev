@@ -2,7 +2,7 @@
 // Final step: A brief celebratory moment before the user enters the main app.
 // Auto-navigates to /(tabs) after 3 seconds. Shows user's display name.
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
@@ -19,6 +19,8 @@ import { spacing } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';
 import { Button } from '../../src/components/ui/Button';
+// FIX B8: Use static import instead of dynamic import
+import { api } from '../../src/services/api';
 
 export default function OnboardingCompleteScreen() {
   const { theme } = useTheme();
@@ -43,10 +45,10 @@ export default function OnboardingCompleteScreen() {
   }));
 
   // Mark onboarding as completed
+  // FIX B8: Use static api import instead of dynamic import
   useEffect(() => {
     (async () => {
       try {
-        const { api } = await import('../../src/services/api');
         await api.put('/users/preferences', { onboardingCompleted: true });
         await refreshUser();
       } catch {
@@ -55,16 +57,17 @@ export default function OnboardingCompleteScreen() {
     })();
   }, []);
 
-  const handleContinue = () => {
+  // FIX B9: Wrap in useCallback so auto-navigate timer uses latest reference
+  const handleContinue = useCallback(() => {
     clearTimeout(timerRef.current);
     router.replace('/(tabs)' as never);
-  };
+  }, [router]);
 
   // Auto-navigate after 3 seconds
   useEffect(() => {
     timerRef.current = setTimeout(handleContinue, 3000);
     return () => clearTimeout(timerRef.current);
-  }, []);
+  }, [handleContinue]);
 
   return (
     <ScreenWrapper>

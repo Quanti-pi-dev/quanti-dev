@@ -79,6 +79,16 @@ class UserRepository {
     };
   }
 
+  // ─── Resolve PG UUID → Firebase UID ───────────────────
+  async getFirebaseUid(id: string): Promise<string | null> {
+    const result = await this.pool.query(
+      `SELECT firebase_uid FROM users WHERE id = $1`,
+      [id],
+    );
+    if (result.rows.length === 0) return null;
+    return result.rows[0].firebase_uid as string;
+  }
+
   // ─── Create user ─────────────────────────────────────
   async create(input: CreateUserInput): Promise<UserProfile> {
     // Generate a unique enrollment ID with retry on rare collision

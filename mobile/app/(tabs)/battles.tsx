@@ -66,7 +66,7 @@ export default function BattlesScreen() {
         <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
           <CoinDisplay coins={coins?.balance ?? 0} size="sm" />
           <TouchableOpacity
-            onPress={() => router.push('/social' as never)}
+            onPress={() => router.push('/social')}
             style={{
               width: 36,
               height: 36,
@@ -95,7 +95,7 @@ export default function BattlesScreen() {
             ) : active ? (
               <Animated.View entering={FadeInDown.duration(400)}>
                 <TouchableOpacity
-                  onPress={() => router.push(`/battles/active/${active.id}` as never)}
+                  onPress={() => router.push(`/battles/active/${active.id}`)}
                   activeOpacity={0.8}
                   style={{
                     backgroundColor: theme.primary,
@@ -240,7 +240,7 @@ export default function BattlesScreen() {
 
             {/* ── Create Challenge CTA ── */}
             <TouchableOpacity
-              onPress={() => router.push('/battles/create' as never)}
+              onPress={() => router.push('/battles/create')}
               activeOpacity={0.85}
               style={{
                 backgroundColor: theme.card,

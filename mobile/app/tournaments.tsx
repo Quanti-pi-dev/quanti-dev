@@ -20,15 +20,9 @@ import { CoinDisplay } from '../src/components/CoinDisplay';
 import { useTournaments, useEnterTournament } from '../src/hooks/useTournaments';
 import { useCoinBalance } from '../src/hooks/useGamification';
 import type { Tournament } from '../src/services/tournament.service';
+// FIX TD1: Use shared constants instead of inline duplicates
+import { TIER_LABELS, formatDate } from '../src/utils/constants';
 
-// ─── Helpers ─────────────────────────────────────────────────
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-
-const TIER_LABELS: Record<number, string> = { 0: 'Free', 1: 'Basic', 2: 'Pro', 3: 'Master' };
 const STATUS_COLORS: Record<string, string> = {
   active: '#10B981',
   draft: '#F59E0B',
@@ -185,7 +179,7 @@ export default function TournamentsScreen() {
 
   const handleView = useCallback((tournament: Tournament) => {
     router.push({
-      pathname: '/tournaments/[id]' as never,
+      pathname: '/tournaments/[id]',
       params: { id: tournament._id },
     });
   }, [router]);
@@ -238,7 +232,7 @@ export default function TournamentsScreen() {
           }}
           refreshControl={
             <RefreshControl
-              refreshing={isLoading}
+              refreshing={false}
               onRefresh={() => void refetch()}
               tintColor={theme.primary}
             />

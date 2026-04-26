@@ -3,7 +3,7 @@
 // Replaces Alert.alert for success/error feedback.
 // Pure Animated + SafeAreaView — no third-party deps.
 
-import React, { createContext, useContext, useCallback, useState, useRef } from 'react';
+import React, { createContext, useContext, useCallback, useState, useRef, useEffect } from 'react';
 import {
   View,
   Animated,
@@ -53,7 +53,7 @@ function Toast({ message, type, onDismiss }: { message: string; type: ToastType;
   const translateY = useRef(new Animated.Value(-20)).current;
   const config = TOAST_CONFIG[type];
 
-  React.useEffect(() => {
+  useEffect(() => {
     // Slide in
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),

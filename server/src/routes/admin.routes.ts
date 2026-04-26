@@ -151,7 +151,7 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
 
   // GET /admin/decks — List all decks
   fastify.get('/decks', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { page, pageSize } = request.query as { page?: string; pageSize?: string };
+    const { page, pageSize, search } = request.query as { page?: string; pageSize?: string; search?: string };
     const parsedPage = parseInt(page ?? '1', 10);
     const parsedPageSize = parseInt(pageSize ?? '50', 10);
     const safePage = Number.isNaN(parsedPage) ? 1 : Math.max(parsedPage, 1);
@@ -159,6 +159,7 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
     const result = await adminDeckRepository.findAll({
       page: safePage,
       pageSize: safePageSize,
+      search,
     });
     return reply.send({ success: true, data: result.data, pagination: { total: result.total, page: result.page, pageSize: result.pageSize }, timestamp: new Date().toISOString() });
   });
@@ -498,14 +499,21 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
 
     // Auto-create the deck if it doesn't exist yet
     if (!deck) {
+      // Resolve display names for human-friendly titles (Issue #2 fix)
+      const topic = (await topicRepository.findBySubjectId(subjectId)).find(t => t.slug === topicSlug);
+      const subject = await subjectRepository.findById(subjectId);
+      const displayName = topic?.displayName ?? topicSlug;
+      const subjectName = subject?.name ?? '';
+
       const deckResult = await db.collection('decks').insertOne({
-        title: `${topicSlug} — ${level}`,
-        description: `${level} level deck for ${topicSlug} (${subjectId})`,
+        title: `${displayName} — ${level}`,
+        description: `${level}-level questions on ${displayName} (${subjectName})`,
         category: 'subject',
         subjectId: new ObjectId(subjectId),
         level,
-        tags: [topicSlug],
+        tags: [topicSlug, subjectName, level],
         cardCount: 0,
+        imageUrl: null,
         isPublished: true,
         createdBy: request.user!.id,
         createdAt: new Date(),
@@ -720,14 +728,21 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
       );
 
       if (!deck) {
+        // Resolve display names for human-friendly titles (Issue #2 fix)
+        const topic = (await topicRepository.findBySubjectId(subjectId)).find(t => t.slug === topicSlug);
+        const subject = await subjectRepository.findById(subjectId);
+        const displayName = topic?.displayName ?? topicSlug;
+        const subjectName = subject?.name ?? '';
+
         const deckResult = await db.collection('decks').insertOne({
-          title: `${topicSlug} — ${level}`,
-          description: `${level} level deck for ${topicSlug} (${subjectId})`,
+          title: `${displayName} — ${level}`,
+          description: `${level}-level questions on ${displayName} (${subjectName})`,
           category: 'subject',
           subjectId: new ObjectId(subjectId),
           level,
-          tags: [topicSlug],
+          tags: [topicSlug, subjectName, level],
           cardCount: 0,
+          imageUrl: null,
           isPublished: true,
           createdBy: request.user!.id,
           createdAt: new Date(),

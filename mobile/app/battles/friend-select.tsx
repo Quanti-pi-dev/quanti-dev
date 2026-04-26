@@ -120,7 +120,7 @@ export default function FriendSelectScreen() {
             No friends yet.{'\n'}Find friends in the Social tab to challenge them!
           </Typography>
           <TouchableOpacity
-            onPress={() => router.push('/social' as never)}
+            onPress={() => router.push('/social')}
             style={{
               backgroundColor: theme.buttonPrimary,
               paddingHorizontal: spacing.xl,

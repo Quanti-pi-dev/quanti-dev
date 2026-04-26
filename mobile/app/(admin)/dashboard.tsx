@@ -1,7 +1,8 @@
 // ─── Admin Dashboard ─────────────────────────────────────────
 
 
-import { View, ScrollView } from 'react-native';
+import { useCallback } from 'react';
+import { View, ScrollView, Alert, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/theme';
 import { spacing } from '../../src/theme/tokens';
@@ -9,10 +10,11 @@ import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Header } from '../../src/components/layout/Header';
 import { Typography } from '../../src/components/ui/Typography';
 import { Card } from '../../src/components/ui/Card';
-import { StatCard } from '../../src/components/StatCard';
+import { StatTile } from '../../src/components/StatTile';
 import { Skeleton } from '../../src/components/ui/Skeleton';
 import { Icon } from '../../src/components/ui/Icon';
 import { useAdminAnalytics } from '../../src/hooks/useGamification';
+import { useAuth } from '../../src/contexts/AuthContext';
 
 /** Format large numbers: 1200 → "1.2K" */
 function fmt(n: number): string {
@@ -25,10 +27,25 @@ export default function AdminDashboard() {
   const { theme } = useTheme();
   const router = useRouter();
   const { data: analytics, isLoading } = useAdminAnalytics();
+  const { logout } = useAuth();
+
+  const handleLogout = useCallback(() => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign Out', style: 'destructive', onPress: () => logout() },
+    ]);
+  }, [logout]);
 
   return (
     <ScreenWrapper>
-      <Header showBack title="Admin Panel" />
+      <Header
+        title="Admin Panel"
+        rightAction={
+          <TouchableOpacity onPress={handleLogout} hitSlop={12}>
+            <Icon name="log-out-outline" size={24} color={theme.text} />
+          </TouchableOpacity>
+        }
+      />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ padding: spacing.xl, gap: spacing.xl, paddingBottom: spacing['4xl'] }}
@@ -50,12 +67,12 @@ export default function AdminDashboard() {
           ) : (
             <>
               <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                <StatCard icon="people-outline" label="Users" value={fmt(analytics?.totalUsers ?? 0)} accent="#6366F1" />
-                <StatCard icon="pulse-outline" label="Active Today" value={fmt(analytics?.activeUsersToday ?? 0)} accent="#10B981" />
+                <StatTile label="Users" value={fmt(analytics?.totalUsers ?? 0)} color="#6366F1" />
+                <StatTile label="Active Today" value={fmt(analytics?.activeUsersToday ?? 0)} color="#10B981" />
               </View>
               <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                <StatCard icon="library-outline" label="Sessions" value={fmt(analytics?.totalSessions ?? 0)} accent="#8B5CF6" />
-                <StatCard icon="flash-outline" label="Cards Answered" value={fmt(analytics?.totalCardsAnswered ?? 0)} accent="#F59E0B" />
+                <StatTile label="Sessions" value={fmt(analytics?.totalSessions ?? 0)} color="#8B5CF6" />
+                <StatTile label="Cards Answered" value={fmt(analytics?.totalCardsAnswered ?? 0)} color="#F59E0B" />
               </View>
             </>
           )}
@@ -68,19 +85,8 @@ export default function AdminDashboard() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
               <Icon name="book-outline" size={22} color={theme.primary} />
               <View style={{ flex: 1 }}>
-                <Typography variant="label">Manage Exams</Typography>
-                <Typography variant="caption" color={theme.textTertiary}>Create, edit, delete exam categories</Typography>
-              </View>
-              <Icon name="chevron-forward" size={18} color={theme.textTertiary} />
-            </View>
-          </Card>
-
-          <Card pressable onPress={() => router.push('/(admin)/content')} variant="outlined">
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-              <Icon name="albums-outline" size={22} color="#10B981" />
-              <View style={{ flex: 1 }}>
-                <Typography variant="label">Manage Flashcards</Typography>
-                <Typography variant="caption" color={theme.textTertiary}>Browse subjects → topics → levels to add cards</Typography>
+                <Typography variant="label">Exams & Content</Typography>
+                <Typography variant="caption" color={theme.textTertiary}>Manage exams, subjects, topics, and flashcards</Typography>
               </View>
               <Icon name="chevron-forward" size={18} color={theme.textTertiary} />
             </View>

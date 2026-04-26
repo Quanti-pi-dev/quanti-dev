@@ -59,7 +59,7 @@ export function AccuracyRing({
         easing: Easing.out(Easing.cubic),
       }),
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
   const half = size / 2;

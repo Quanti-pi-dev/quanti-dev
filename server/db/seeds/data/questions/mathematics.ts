@@ -1,0 +1,87 @@
+// ─── Mathematics Questions ────────────────────────────────────────────────────
+// JEE. 16 topics × 3 questions = 48 entries.
+
+import type { QuestionDef } from '../types.js';
+
+export const mathematicsQuestions: QuestionDef[] = [
+
+  // ── Sets, Relations & Functions ─────────────────────────────────────────
+  { topicSlug:'sets-relations-functions', question:'If A = {1,2,3} and B = {3,4,5}, then A ∩ B is:', options:[{id:'A',text:'{1,2,3,4,5}'},{id:'B',text:'{3}'},{id:'C',text:'{1,2}'},{id:'D',text:'∅'}], correctAnswerId:'B', explanation:'Intersection contains elements common to both sets: {3}.', tags:['Mathematics','sets-relations-functions','JEE'] },
+  { topicSlug:'sets-relations-functions', question:'A function f: A → B is onto (surjective) if:', options:[{id:'A',text:'Every element of A maps to B'},{id:'B',text:'Every element of B has a preimage in A'},{id:'C',text:'f is one-to-one'},{id:'D',text:'A = B'}], correctAnswerId:'B', explanation:'Surjective means every element in the codomain B is mapped to by some element in A.', tags:['Mathematics','sets-relations-functions','JEE'] },
+  { topicSlug:'sets-relations-functions', question:'The number of subsets of a set with n elements is:', options:[{id:'A',text:'n'},{id:'B',text:'n²'},{id:'C',text:'2ⁿ'},{id:'D',text:'n!'}], correctAnswerId:'C', explanation:'Each element is either included or excluded → 2ⁿ subsets.', tags:['Mathematics','sets-relations-functions','JEE'] },
+
+  // ── Complex Numbers ─────────────────────────────────────────────────────
+  { topicSlug:'complex-numbers', question:'The modulus of (3 + 4i) is:', options:[{id:'A',text:'7'},{id:'B',text:'5'},{id:'C',text:'25'},{id:'D',text:'1'}], correctAnswerId:'B', explanation:'|3+4i| = √(9+16) = √25 = 5.', tags:['Mathematics','complex-numbers','JEE'] },
+  { topicSlug:'complex-numbers', question:'i⁴ equals:', options:[{id:'A',text:'i'},{id:'B',text:'-1'},{id:'C',text:'1'},{id:'D',text:'-i'}], correctAnswerId:'C', explanation:'i² = -1, i⁴ = (i²)² = (-1)² = 1.', tags:['Mathematics','complex-numbers','JEE'] },
+  { topicSlug:'complex-numbers', question:'The argument of -1 + i is:', options:[{id:'A',text:'π/4'},{id:'B',text:'3π/4'},{id:'C',text:'-π/4'},{id:'D',text:'π'}], correctAnswerId:'B', explanation:'In Q2: arg = π − arctan(1/1) = π − π/4 = 3π/4.', tags:['Mathematics','complex-numbers','JEE'] },
+
+  // ── Quadratic Equations ─────────────────────────────────────────────────
+  { topicSlug:'quadratic-equations', question:'The discriminant of ax² + bx + c = 0 is:', options:[{id:'A',text:'b² + 4ac'},{id:'B',text:'b² − 4ac'},{id:'C',text:'4ac − b²'},{id:'D',text:'b − 4ac'}], correctAnswerId:'B', explanation:'D = b² − 4ac determines the nature of roots.', tags:['Mathematics','quadratic-equations','JEE'] },
+  { topicSlug:'quadratic-equations', question:'Sum of roots of 2x² − 6x + 1 = 0 is:', options:[{id:'A',text:'6'},{id:'B',text:'3'},{id:'C',text:'-3'},{id:'D',text:'1/2'}], correctAnswerId:'B', explanation:'Sum = −b/a = 6/2 = 3.', tags:['Mathematics','quadratic-equations','JEE'] },
+  { topicSlug:'quadratic-equations', question:'If roots of x² + bx + c = 0 are equal, then:', options:[{id:'A',text:'b² > 4c'},{id:'B',text:'b² = 4c'},{id:'C',text:'b² < 4c'},{id:'D',text:'c = 0'}], correctAnswerId:'B', explanation:'Equal roots require D = 0: b² − 4(1)(c) = 0 → b² = 4c.', tags:['Mathematics','quadratic-equations','JEE'] },
+
+  // ── Sequences & Series ──────────────────────────────────────────────────
+  { topicSlug:'sequences-series', question:'Sum of first n natural numbers is:', options:[{id:'A',text:'n(n+1)'},{id:'B',text:'n(n+1)/2'},{id:'C',text:'n²'},{id:'D',text:'n(n−1)/2'}], correctAnswerId:'B', explanation:'S = n(n+1)/2 — the arithmetic series formula.', tags:['Mathematics','sequences-series','JEE'] },
+  { topicSlug:'sequences-series', question:'In a GP with first term a and ratio r, the nth term is:', options:[{id:'A',text:'a + (n-1)r'},{id:'B',text:'ar^(n-1)'},{id:'C',text:'a·r·n'},{id:'D',text:'a/r^n'}], correctAnswerId:'B', explanation:'The nth term of a GP is aₙ = ar^(n−1).', tags:['Mathematics','sequences-series','JEE'] },
+  { topicSlug:'sequences-series', question:'The sum of an infinite GP with |r| < 1 is:', options:[{id:'A',text:'a/(1+r)'},{id:'B',text:'a/(1−r)'},{id:'C',text:'ar/(1−r)'},{id:'D',text:'Diverges'}], correctAnswerId:'B', explanation:'S∞ = a/(1−r) when |r| < 1.', tags:['Mathematics','sequences-series','JEE'] },
+
+  // ── Permutation & Combination ───────────────────────────────────────────
+  { topicSlug:'permutation-combination', question:'The value of 5! is:', options:[{id:'A',text:'20'},{id:'B',text:'60'},{id:'C',text:'120'},{id:'D',text:'720'}], correctAnswerId:'C', explanation:'5! = 5×4×3×2×1 = 120.', tags:['Mathematics','permutation-combination','JEE'] },
+  { topicSlug:'permutation-combination', question:'C(n,r) = C(n, n−r) is true because:', options:[{id:'A',text:'Choosing r items is the same as leaving out n−r items'},{id:'B',text:'It is a coincidence'},{id:'C',text:'n = r always'},{id:'D',text:'Both are zero'}], correctAnswerId:'A', explanation:'Choosing which r items to include is equivalent to choosing which n−r to exclude.', tags:['Mathematics','permutation-combination','JEE'] },
+  { topicSlug:'permutation-combination', question:'The number of ways to arrange n distinct objects in a circle is:', options:[{id:'A',text:'n!'},{id:'B',text:'(n−1)!'},{id:'C',text:'n!/2'},{id:'D',text:'(n+1)!'}], correctAnswerId:'B', explanation:'Circular permutations fix one object, so arrangements = (n−1)!.', tags:['Mathematics','permutation-combination','JEE'] },
+
+  // ── Matrices & Determinants ─────────────────────────────────────────────
+  { topicSlug:'matrices-determinants', question:'If A is a 3×3 matrix with det(A) = 5, then det(2A) is:', options:[{id:'A',text:'10'},{id:'B',text:'40'},{id:'C',text:'80'},{id:'D',text:'20'}], correctAnswerId:'B', explanation:'det(kA) = k^n · det(A) for n×n matrix. det(2A) = 2³ × 5 = 40.', tags:['Mathematics','matrices-determinants','JEE'] },
+  { topicSlug:'matrices-determinants', question:'A matrix A is singular if:', options:[{id:'A',text:'det(A) = 1'},{id:'B',text:'det(A) = 0'},{id:'C',text:'A is symmetric'},{id:'D',text:'A is square'}], correctAnswerId:'B', explanation:'A singular matrix has determinant zero and is non-invertible.', tags:['Mathematics','matrices-determinants','JEE'] },
+  { topicSlug:'matrices-determinants', question:'(AB)⁻¹ equals:', options:[{id:'A',text:'A⁻¹B⁻¹'},{id:'B',text:'B⁻¹A⁻¹'},{id:'C',text:'BA'},{id:'D',text:'(A⁻¹)(B⁻¹)ᵀ'}], correctAnswerId:'B', explanation:'The inverse of a product reverses the order: (AB)⁻¹ = B⁻¹A⁻¹.', tags:['Mathematics','matrices-determinants','JEE'] },
+
+  // ── Trigonometry ─────────────────────────────────────────────────────────
+  { topicSlug:'trigonometry', question:'sin²θ + cos²θ equals:', options:[{id:'A',text:'0'},{id:'B',text:'1'},{id:'C',text:'2'},{id:'D',text:'sinθ'}], correctAnswerId:'B', explanation:'The Pythagorean identity: sin²θ + cos²θ = 1 for all θ.', tags:['Mathematics','trigonometry','JEE'] },
+  { topicSlug:'trigonometry', question:'The general solution of sinx = 0 is:', options:[{id:'A',text:'x = nπ'},{id:'B',text:'x = (2n+1)π/2'},{id:'C',text:'x = 2nπ'},{id:'D',text:'x = nπ/2'}], correctAnswerId:'A', explanation:'sinx = 0 when x = nπ, where n is any integer.', tags:['Mathematics','trigonometry','JEE'] },
+  { topicSlug:'trigonometry', question:'sin(A+B) equals:', options:[{id:'A',text:'sinA + sinB'},{id:'B',text:'sinAcosB + cosAsinB'},{id:'C',text:'cosAcosB − sinAsinB'},{id:'D',text:'sinAsinB + cosAcosB'}], correctAnswerId:'B', explanation:'The addition formula: sin(A+B) = sinAcosB + cosAsinB.', tags:['Mathematics','trigonometry','JEE'] },
+
+  // ── Straight Lines & Circles ────────────────────────────────────────────
+  { topicSlug:'straight-lines-circles', question:'The slope of a line perpendicular to y = 3x + 1 is:', options:[{id:'A',text:'3'},{id:'B',text:'-1/3'},{id:'C',text:'1/3'},{id:'D',text:'-3'}], correctAnswerId:'B', explanation:'Perpendicular slopes multiply to -1. m₁ = 3, so m₂ = -1/3.', tags:['Mathematics','straight-lines-circles','JEE'] },
+  { topicSlug:'straight-lines-circles', question:'The equation x² + y² = 25 represents a circle with centre and radius:', options:[{id:'A',text:'(0,0), r=5'},{id:'B',text:'(5,5), r=25'},{id:'C',text:'(0,0), r=25'},{id:'D',text:'(5,0), r=5'}], correctAnswerId:'A', explanation:'Standard form x²+y² = r² → centre (0,0), radius = √25 = 5.', tags:['Mathematics','straight-lines-circles','JEE'] },
+  { topicSlug:'straight-lines-circles', question:'The distance between (1,2) and (4,6) is:', options:[{id:'A',text:'5'},{id:'B',text:'7'},{id:'C',text:'25'},{id:'D',text:'√7'}], correctAnswerId:'A', explanation:'d = √((4−1)² + (6−2)²) = √(9+16) = 5.', tags:['Mathematics','straight-lines-circles','JEE'] },
+
+  // ── Conic Sections ──────────────────────────────────────────────────────
+  { topicSlug:'conic-sections', question:'The eccentricity of a parabola is:', options:[{id:'A',text:'0'},{id:'B',text:'1'},{id:'C',text:'> 1'},{id:'D',text:'< 1'}], correctAnswerId:'B', explanation:'For a parabola, eccentricity e = 1.', tags:['Mathematics','conic-sections','JEE'] },
+  { topicSlug:'conic-sections', question:'The equation x²/16 + y²/9 = 1 represents:', options:[{id:'A',text:'Circle'},{id:'B',text:'Ellipse'},{id:'C',text:'Parabola'},{id:'D',text:'Hyperbola'}], correctAnswerId:'B', explanation:'Form x²/a² + y²/b² = 1 with a ≠ b is an ellipse.', tags:['Mathematics','conic-sections','JEE'] },
+  { topicSlug:'conic-sections', question:'The length of the latus rectum of parabola y² = 4ax is:', options:[{id:'A',text:'2a'},{id:'B',text:'4a'},{id:'C',text:'a'},{id:'D',text:'8a'}], correctAnswerId:'B', explanation:'For y² = 4ax, the latus rectum has length 4a.', tags:['Mathematics','conic-sections','JEE'] },
+
+  // ── 3D Geometry & Vectors ───────────────────────────────────────────────
+  { topicSlug:'3d-geometry-vectors', question:'The dot product of perpendicular vectors is:', options:[{id:'A',text:'1'},{id:'B',text:'-1'},{id:'C',text:'0'},{id:'D',text:'|a||b|'}], correctAnswerId:'C', explanation:'a·b = |a||b|cosθ. When θ = 90°, cos90° = 0, so a·b = 0.', tags:['Mathematics','3d-geometry-vectors','JEE'] },
+  { topicSlug:'3d-geometry-vectors', question:'The magnitude of cross product |a×b| equals:', options:[{id:'A',text:'|a||b|cosθ'},{id:'B',text:'|a||b|sinθ'},{id:'C',text:'|a||b|'},{id:'D',text:'|a|+|b|'}], correctAnswerId:'B', explanation:'|a×b| = |a||b|sinθ — represents the area of the parallelogram formed.', tags:['Mathematics','3d-geometry-vectors','JEE'] },
+  { topicSlug:'3d-geometry-vectors', question:'Direction cosines l, m, n satisfy:', options:[{id:'A',text:'l+m+n = 1'},{id:'B',text:'l²+m²+n² = 1'},{id:'C',text:'l²+m²+n² = 0'},{id:'D',text:'lmn = 1'}], correctAnswerId:'B', explanation:'Direction cosines satisfy l²+m²+n² = 1 (unit vector condition).', tags:['Mathematics','3d-geometry-vectors','JEE'] },
+
+  // ── Limits & Continuity ─────────────────────────────────────────────────
+  { topicSlug:'limits-continuity', question:'lim(x→0) sinx/x equals:', options:[{id:'A',text:'0'},{id:'B',text:'1'},{id:'C',text:'∞'},{id:'D',text:'−1'}], correctAnswerId:'B', explanation:'A standard limit: lim(x→0) sinx/x = 1.', tags:['Mathematics','limits-continuity','JEE'] },
+  { topicSlug:'limits-continuity', question:'A function f is continuous at x=a if:', options:[{id:'A',text:'f(a) exists'},{id:'B',text:'lim f(x) exists as x→a'},{id:'C',text:'f(a) = lim f(x) as x→a'},{id:'D',text:'All of the above'}], correctAnswerId:'D', explanation:'Continuity requires: f(a) defined, limit exists, and they are equal.', tags:['Mathematics','limits-continuity','JEE'] },
+  { topicSlug:'limits-continuity', question:'lim(x→∞) (1 + 1/x)^x equals:', options:[{id:'A',text:'1'},{id:'B',text:'∞'},{id:'C',text:'e'},{id:'D',text:'0'}], correctAnswerId:'C', explanation:'This is the definition of Euler\'s number e ≈ 2.718.', tags:['Mathematics','limits-continuity','JEE'] },
+
+  // ── Differentiation ─────────────────────────────────────────────────────
+  { topicSlug:'differentiation', question:'d/dx(eˣ) equals:', options:[{id:'A',text:'xeˣ'},{id:'B',text:'eˣ'},{id:'C',text:'eˣ⁻¹'},{id:'D',text:'xe^(x-1)'}], correctAnswerId:'B', explanation:'The exponential function is its own derivative: d/dx(eˣ) = eˣ.', tags:['Mathematics','differentiation','JEE'] },
+  { topicSlug:'differentiation', question:'The derivative of sin(2x) is:', options:[{id:'A',text:'cos(2x)'},{id:'B',text:'2cos(2x)'},{id:'C',text:'-2cos(2x)'},{id:'D',text:'2sin(2x)'}], correctAnswerId:'B', explanation:'By chain rule: d/dx sin(2x) = cos(2x)·2 = 2cos(2x).', tags:['Mathematics','differentiation','JEE'] },
+  { topicSlug:'differentiation', question:'If y = ln(x), then dy/dx is:', options:[{id:'A',text:'x'},{id:'B',text:'1/x'},{id:'C',text:'eˣ'},{id:'D',text:'1'}], correctAnswerId:'B', explanation:'d/dx(ln x) = 1/x for x > 0.', tags:['Mathematics','differentiation','JEE'] },
+
+  // ── Applications of Derivatives ─────────────────────────────────────────
+  { topicSlug:'applications-derivatives', question:'At a point of maximum, the second derivative is:', options:[{id:'A',text:'Positive'},{id:'B',text:'Negative'},{id:'C',text:'Zero'},{id:'D',text:'Undefined'}], correctAnswerId:'B', explanation:'At a local max: f\'(x)=0 and f\'\'(x) < 0 (concave down).', tags:['Mathematics','applications-derivatives','JEE'] },
+  { topicSlug:'applications-derivatives', question:'The equation of the tangent to y=x² at x=1 is:', options:[{id:'A',text:'y = x'},{id:'B',text:'y = 2x − 1'},{id:'C',text:'y = 2x + 1'},{id:'D',text:'y = x + 1'}], correctAnswerId:'B', explanation:'y\'=2x → slope at x=1 is 2. Point (1,1). y−1=2(x−1) → y=2x−1.', tags:['Mathematics','applications-derivatives','JEE'] },
+  { topicSlug:'applications-derivatives', question:'Rolle\'s theorem requires the function to be:', options:[{id:'A',text:'Differentiable on [a,b]'},{id:'B',text:'Continuous on [a,b], differentiable on (a,b), f(a)=f(b)'},{id:'C',text:'Monotonic on [a,b]'},{id:'D',text:'Bounded only'}], correctAnswerId:'B', explanation:'Rolle\'s theorem: continuous on [a,b], differentiable on (a,b), and f(a)=f(b) → ∃c: f\'(c)=0.', tags:['Mathematics','applications-derivatives','JEE'] },
+
+  // ── Integration ─────────────────────────────────────────────────────────
+  { topicSlug:'integration', question:'∫eˣ dx equals:', options:[{id:'A',text:'xeˣ + C'},{id:'B',text:'eˣ + C'},{id:'C',text:'eˣ/x + C'},{id:'D',text:'eˣ⁺¹ + C'}], correctAnswerId:'B', explanation:'∫eˣ dx = eˣ + C.', tags:['Mathematics','integration','JEE'] },
+  { topicSlug:'integration', question:'∫₀¹ x² dx equals:', options:[{id:'A',text:'1/2'},{id:'B',text:'1/3'},{id:'C',text:'1'},{id:'D',text:'2/3'}], correctAnswerId:'B', explanation:'∫₀¹ x² dx = [x³/3]₀¹ = 1/3.', tags:['Mathematics','integration','JEE'] },
+  { topicSlug:'integration', question:'∫(1/x) dx equals:', options:[{id:'A',text:'x + C'},{id:'B',text:'ln|x| + C'},{id:'C',text:'-1/x² + C'},{id:'D',text:'eˣ + C'}], correctAnswerId:'B', explanation:'∫(1/x) dx = ln|x| + C for x ≠ 0.', tags:['Mathematics','integration','JEE'] },
+
+  // ── Differential Equations ──────────────────────────────────────────────
+  { topicSlug:'differential-equations', question:'The order of the DE d²y/dx² + 3(dy/dx) + y = 0 is:', options:[{id:'A',text:'1'},{id:'B',text:'2'},{id:'C',text:'3'},{id:'D',text:'0'}], correctAnswerId:'B', explanation:'The order is the highest derivative present — d²y/dx² → order 2.', tags:['Mathematics','differential-equations','JEE'] },
+  { topicSlug:'differential-equations', question:'The degree of (dy/dx)³ + y² = 0 is:', options:[{id:'A',text:'1'},{id:'B',text:'2'},{id:'C',text:'3'},{id:'D',text:'Undefined'}], correctAnswerId:'C', explanation:'Degree is the power of the highest-order derivative: (dy/dx)³ → degree 3.', tags:['Mathematics','differential-equations','JEE'] },
+  { topicSlug:'differential-equations', question:'The solution of dy/dx = y is:', options:[{id:'A',text:'y = x + C'},{id:'B',text:'y = Ceˣ'},{id:'C',text:'y = Ce⁻ˣ'},{id:'D',text:'y = x²/2'}], correctAnswerId:'B', explanation:'Separating: dy/y = dx → ln|y| = x + C₁ → y = Ceˣ.', tags:['Mathematics','differential-equations','JEE'] },
+
+  // ── Statistics & Probability ────────────────────────────────────────────
+  { topicSlug:'statistics-probability', question:'If P(A) = 0.3 and P(B) = 0.4, and A, B are independent, then P(A∩B) is:', options:[{id:'A',text:'0.7'},{id:'B',text:'0.12'},{id:'C',text:'0.1'},{id:'D',text:'0.3'}], correctAnswerId:'B', explanation:'For independent events: P(A∩B) = P(A)·P(B) = 0.3 × 0.4 = 0.12.', tags:['Mathematics','statistics-probability','JEE'] },
+  { topicSlug:'statistics-probability', question:'The mean of the first n natural numbers is:', options:[{id:'A',text:'n/2'},{id:'B',text:'(n+1)/2'},{id:'C',text:'n(n+1)/2'},{id:'D',text:'n'}], correctAnswerId:'B', explanation:'Mean = Sum/n = [n(n+1)/2]/n = (n+1)/2.', tags:['Mathematics','statistics-probability','JEE'] },
+  { topicSlug:'statistics-probability', question:'Bayes\' theorem is used to:', options:[{id:'A',text:'Find variance'},{id:'B',text:'Update probability based on new evidence'},{id:'C',text:'Calculate permutations'},{id:'D',text:'Find the mode'}], correctAnswerId:'B', explanation:'Bayes\' theorem: P(A|B) = P(B|A)·P(A)/P(B) — updates prior probability with new evidence.', tags:['Mathematics','statistics-probability','JEE'] },
+];

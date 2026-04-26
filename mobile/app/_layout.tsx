@@ -3,7 +3,7 @@
 
 import '../src/global.css';
 
-import { useEffect, useState, useRef, Component, ReactNode } from 'react';
+import { useEffect, useState, Component, ReactNode } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import {
   PlayfairDisplay_400Regular,
@@ -17,7 +17,7 @@ import {
   Inter_700Bold,
   useFonts as useInterFonts,
 } from '@expo-google-fonts/inter';
-import { SplashScreen, Stack, useRouter } from 'expo-router';
+import { SplashScreen, Stack } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -84,13 +84,16 @@ class ErrorBoundary extends Component<{ children: ReactNode }, EBState> {
 // ─── Root Navigation ─────────────────────────────────────────
 
 function RootNavigation() {
-  const { isAuthenticated, isLoading, preferences, user } = useAuth();
-  const router = useRouter();
+  const { isAuthenticated, isLoading, preferences } = useAuth();
 
   // Don't render navigation until we know BOTH auth state and preferences.
   // This prevents a brief flash of the wrong screen when auth resolves
   // before preferences (race condition fix).
   const isReady = !isLoading && (isAuthenticated ? preferences !== null : true);
+
+  // FIX H4: We now use the root `app/index.tsx` redirector to handle auth flow.
+  // There is no need to conditionally evaluate route inclusions or perform
+  // manual redirects here, as Expo Router's file system resolves paths naturally.
 
   useEffect(() => {
     if (isReady) SplashScreen.hideAsync();
@@ -98,42 +101,19 @@ function RootNavigation() {
 
   if (!isReady) return null;
 
-  const showTabs = isAuthenticated && (preferences?.onboardingCompleted ?? false);
-  const showOnboarding = isAuthenticated && !preferences?.onboardingCompleted;
-  const isAdmin = user?.role === 'admin';
-
-  // FIX H4: Guard against duplicate navigation when showOnboarding toggles
-  // rapidly during auth/preference hydration.
-  const isNavigatingRef = useRef(false);
-  useEffect(() => {
-    if (showOnboarding && !isNavigatingRef.current) {
-      isNavigatingRef.current = true;
-      router.replace('/(onboarding)/welcome' as never);
-    }
-    if (!showOnboarding) {
-      isNavigatingRef.current = false;
-    }
-  }, [showOnboarding, router]);
-
   const navStack = (
       <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-        {showTabs ? (
-          <Stack.Screen name="(tabs)" />
-        ) : showOnboarding ? (
-          <Stack.Screen name="(onboarding)" />
-        ) : (
-          <Stack.Screen name="(auth)" />
-        )}
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="(onboarding)" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(admin)" />
         <Stack.Screen name="shop" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="coins-history" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="subscription" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="flashcards/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="exams/[examId]/subjects" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="exams/[examId]/subjects/[subjectId]/levels" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="battles" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="social/index" options={{ animation: 'slide_from_right' }} />
-        {/* Admin panel: only mounted in the nav tree for admin users */}
-        {isAdmin && <Stack.Screen name="(admin)" />}
       </Stack>
   );
 

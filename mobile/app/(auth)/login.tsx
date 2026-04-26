@@ -21,6 +21,7 @@ import { SocialLoginButton } from '../../src/components/ui/SocialLoginButton';
 import type { SocialProvider } from '../../src/components/ui/SocialLoginButton';
 import { useBiometricAuth } from '../../src/hooks/useBiometricAuth';
 import { auth } from '../../src/lib/firebase';
+import { authEmitter } from '../../src/services/authEmitter';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const LOGO_SOURCE = require('../../assets/adaptive-icon.png');
@@ -44,6 +45,15 @@ export default function LoginScreen() {
   // Firebase persists auth state via AsyncStorage — check if a session exists
   useEffect(() => {
     setHasStoredSession(auth.currentUser !== null);
+  }, []);
+
+  useEffect(() => {
+    const unsub = authEmitter.on('AUTH_ERROR', (msg?: string) => {
+      setError(msg || 'Authentication failed. Please try again.');
+      setIsLoading(false);
+      setSocialLoading(null);
+    });
+    return unsub;
   }, []);
 
   const handleBiometricLogin = async () => {
@@ -76,7 +86,6 @@ export default function LoginScreen() {
       await loginWithPassword(email, password);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed. Please check your credentials.');
-    } finally {
       setIsLoading(false);
     }
   };
@@ -119,7 +128,7 @@ export default function LoginScreen() {
           </View>
 
           <Typography variant="h2" align="center" color={theme.text}>
-            Quanti-pi
+            Quanti-Pi
           </Typography>
           <Typography variant="bodySmall" align="center" color={theme.textTertiary}
             style={{ marginTop: spacing.xs }}>
@@ -218,23 +227,14 @@ export default function LoginScreen() {
           variant="full"
         />
 
-        {/* Secondary social provider — icon */}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.md, marginTop: spacing.sm }}>
-          <SocialLoginButton
-            provider="twitter"
-            onPress={handleSocialLogin}
-            loading={socialLoading === 'twitter'}
-            disabled={socialLoading !== null && socialLoading !== 'twitter'}
-            variant="icon"
-          />
-        </View>
+
 
         {/* Sign up link */}
         <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xl }}>
           <Typography variant="bodySmall" color={theme.textTertiary}>
             Don't have an account?
           </Typography>
-          <TouchableOpacity onPress={() => router.push('/(auth)/signup')}>
+          <TouchableOpacity onPress={() => router.push('/(auth)/signup' as any)}>
             <Typography variant="bodySmall" color={theme.primary}>
               Sign up
             </Typography>

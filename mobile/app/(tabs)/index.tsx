@@ -21,7 +21,7 @@ import { Typography } from '../../src/components/ui/Typography';
 import { Button } from '../../src/components/ui/Button';
 import { Divider } from '../../src/components/ui/Divider';
 import { Skeleton } from '../../src/components/ui/Skeleton';
-import { StatCard } from '../../src/components/StatCard';
+import { StatTile } from '../../src/components/StatTile';
 import { ExamCard } from '../../src/components/ExamCard';
 import { ActivityItem } from '../../src/components/ActivityItem';
 import { StreakWidget } from '../../src/components/StreakWidget';
@@ -218,12 +218,12 @@ export default function HomeScreen() {
           <View style={{ gap: spacing.sm }}>
             <Typography variant="label" color={theme.textTertiary}>Your stats</Typography>
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-              <StatCard icon="flash-outline" label="Solved" value={String(solved)} accent={theme.statSolved} />
-              <StatCard icon="checkmark-circle-outline" label="Accuracy" value={accuracy} accent={theme.statAccuracy} />
+              <StatTile label="Solved" value={String(solved)} color={theme.statSolved} />
+              <StatTile label="Accuracy" value={accuracy} color={theme.statAccuracy} />
             </View>
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-              <StatCard icon="ellipse-outline" label="Coins" value={coins.toLocaleString()} accent={theme.statCoins} />
-              <StatCard icon="flame-outline" label="Streak" value={`${streak}d`} accent={theme.statStreak} />
+              <StatTile label="Coins" value={coins.toLocaleString()} color={theme.statCoins} />
+              <StatTile label="Streak" value={`${streak}d`} color={theme.statStreak} />
             </View>
           </View>
 
@@ -308,10 +308,7 @@ export default function HomeScreen() {
                         progress={0}
                         icon="library-outline"
                         accent={theme.statSolved}
-                        onPress={() => router.push({
-                          pathname: '/exams/[examId]/subjects' as const,
-                          params: { examId: exam.id, title: exam.title },
-                        })}
+                        onPress={() => router.push(`/exams/${exam.id}/subjects?title=${encodeURIComponent(exam.title)}` as never)}
                         style={{ width: 180 }}
                       />
                     );

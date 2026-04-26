@@ -36,14 +36,26 @@ import { withCronLock } from './lib/cron-lock.js';
 
 // ─── Fastify Instance ───────────────────────────────────────
 
+const devTransport = {
+  target: 'pino-pretty',
+  options: {
+    colorize:      true,
+    translateTime: 'HH:MM:ss',
+    ignore:        'pid,hostname,reqId,responseTime,req,res',
+    messageFormat: '{msg}',
+    customColors:  'fatal:bgRed,error:red,warn:yellow,info:cyan,debug:gray,trace:white',
+    singleLine:    false,
+  },
+};
+
 const server = Fastify({
   trustProxy: true, // Crucial for Cloudflare to pass X-Forwarded-For IPs correctly
+  // Suppress Fastify's built-in per-request noise — our requestLoggerPlugin
+  // emits a single clean line per request instead.
+  disableRequestLogging: true,
   logger: {
     level: config.logLevel,
-    transport:
-      config.env !== 'production'
-        ? { target: 'pino-pretty', options: { colorize: true } }
-        : undefined,
+    transport: config.env !== 'production' ? devTransport : undefined,
   },
   genReqId: () => crypto.randomUUID(),
 });
@@ -224,11 +236,10 @@ async function start() {
     // Ensure MongoDB indexes exist
     await tournamentRepository.ensureIndexes().catch(err => server.log.error(err, 'tournament-indexes failed'));
     await server.listen({ port: config.port, host: config.host });
-    server.log.info(`Server listening on http://${config.host}:${config.port}`);
+    server.log.info(`🚀  Listening on http://${config.host}:${config.port}  [${config.env}]`);
     startCronJobs();
   } catch (err) {
-    console.error('FATAL STARTUP ERROR:', err);
-    server.log.error(err);
+    server.log.fatal({ err }, 'FATAL STARTUP ERROR — exiting');
     process.exit(1);
   }
 }

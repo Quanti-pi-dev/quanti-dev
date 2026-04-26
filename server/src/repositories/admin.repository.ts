@@ -136,11 +136,19 @@ class AdminDeckRepository {
     return getMongoDb().collection('decks');
   }
 
-  async findAll({ page = 1, pageSize = 50 }: { page?: number; pageSize?: number } = {}) {
+  async findAll({ page = 1, pageSize = 50, search }: { page?: number; pageSize?: number; search?: string } = {}) {
     const skip = (page - 1) * pageSize;
+    const query: any = {};
+    if (search) {
+      if (ObjectId.isValid(search)) {
+        query._id = new ObjectId(search);
+      } else {
+        query.title = { $regex: search, $options: 'i' };
+      }
+    }
     const [docs, total] = await Promise.all([
-      this.col.find({}).sort({ createdAt: -1 }).skip(skip).limit(pageSize).toArray(),
-      this.col.countDocuments(),
+      this.col.find(query).sort({ createdAt: -1 }).skip(skip).limit(pageSize).toArray(),
+      this.col.countDocuments(query),
     ]);
     return {
       data: docs.map((doc) => ({

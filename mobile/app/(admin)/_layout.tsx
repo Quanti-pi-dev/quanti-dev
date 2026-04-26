@@ -68,7 +68,8 @@ class AdminErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundar
 // ─── Layout ──────────────────────────────────────────────────
 
 export default function AdminLayout() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Redirect href={'/(auth)/signup' as any} />;
   if (user?.role !== 'admin') return <Redirect href="/(tabs)" />;
   return (
     <AdminErrorBoundary>

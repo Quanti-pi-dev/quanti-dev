@@ -212,14 +212,12 @@ export default function ExamSubjectsScreen() {
                       <Button
                         variant="secondary" size="sm"
                         icon={<Ionicons name="list-outline" size={13} color={theme.textSecondary} />}
-                        onPress={() => router.push({
-                          pathname: '/(admin)/subjects/[subjectId]/levels',
-                          params: {
-                            subjectId: es.subjectId,
-                            title: subject?.name ?? 'Subject',
-                            accent: subject?.accent ?? undefined,
-                          },
-                        } as never)}
+                        onPress={() => {
+                          const queryParams = new URLSearchParams();
+                          queryParams.append('title', subject?.name ?? 'Subject');
+                          if (subject?.accent) queryParams.append('accent', subject.accent);
+                          router.push(`/(admin)/subjects/${es.subjectId}/levels?${queryParams.toString()}` as never);
+                        }}
                       >
                         Levels
                       </Button>

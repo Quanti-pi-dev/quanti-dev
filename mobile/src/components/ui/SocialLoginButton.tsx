@@ -13,7 +13,7 @@ import { spacing, typography, radius } from '../../theme/tokens';
 
 // ─── Types ───────────────────────────────────────────────────
 
-export type SocialProvider = 'google' | 'twitter';
+export type SocialProvider = 'google';
 
 interface SocialLoginButtonProps {
   provider: SocialProvider;
@@ -35,13 +35,6 @@ const PROVIDER_CONFIG: Record<
     bg: '#FFFFFF',
     text: '#3C4043',
     border: '#DADCE0',
-  },
-  twitter: {
-    label: 'Continue with Twitter',
-    icon: 'logo-twitter',
-    bg: '#1DA1F2',
-    text: '#FFFFFF',
-    border: '#1DA1F2',
   },
 };
 

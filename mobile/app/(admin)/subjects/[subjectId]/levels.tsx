@@ -194,7 +194,7 @@ function TopicRow({
                     topicSlug: topic.slug,
                     title: `${topic.displayName} — ${level}`,
                   },
-                } as never)
+                })
               }
             />
           ))}

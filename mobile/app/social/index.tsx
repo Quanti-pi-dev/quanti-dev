@@ -237,8 +237,8 @@ export default function SocialScreen() {
               <TouchableOpacity
                 onPress={() =>
                   router.push({
-                    pathname: '/battles/create' as never,
-                  } as never)
+                    pathname: '/battles/create',
+                  })
                 }
                 style={{
                   backgroundColor: theme.primaryMuted,
@@ -286,68 +286,7 @@ export default function SocialScreen() {
             )
           }
           renderItem={({ item }) => (
-            <View
-              style={{
-                backgroundColor: theme.card,
-                borderRadius: radius.md,
-                padding: spacing.base,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: spacing.md,
-                borderWidth: 1,
-                borderColor: theme.borderLight,
-              }}
-            >
-              {item.avatarUrl ? (
-                <Image
-                  source={{ uri: item.avatarUrl }}
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: radius.full,
-                  }}
-                />
-              ) : (
-                <View
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: radius.full,
-                    backgroundColor: theme.primaryMuted,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Typography variant="bodyBold" style={{ color: theme.primary }}>
-                    {item.displayName.charAt(0).toUpperCase()}
-                  </Typography>
-                </View>
-              )}
-              <View style={{ flex: 1 }}>
-                <Typography variant="bodySemiBold">{item.displayName}</Typography>
-                <Typography variant="caption" style={{ color: theme.textTertiary }}>
-                  ID: {item.enrollmentId}
-                </Typography>
-              </View>
-              <TouchableOpacity
-                onPress={() => sendRequestMutation.mutate(item.id)}
-                disabled={sendRequestMutation.isPending}
-                style={{
-                  backgroundColor: theme.buttonPrimary,
-                  paddingHorizontal: spacing.md,
-                  paddingVertical: spacing.xs,
-                  borderRadius: radius.full,
-                }}
-              >
-                {sendRequestMutation.isPending ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Typography variant="captionBold" style={{ color: theme.buttonPrimaryText }}>
-                    Add Friend
-                  </Typography>
-                )}
-              </TouchableOpacity>
-            </View>
+            <SearchResultRow item={item} />
           )}
         />
       )}
@@ -404,7 +343,10 @@ export default function SocialScreen() {
                 <Ionicons name="person-add" size={20} color={theme.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Typography variant="bodySemiBold">Friend Request</Typography>
+                {/* FIX U2: Show sender's name instead of generic label */}
+                <Typography variant="bodySemiBold">
+                  {(item as { requesterName?: string }).requesterName ?? 'Friend Request'}
+                </Typography>
                 <Typography variant="caption" style={{ color: theme.textSecondary }}>
                   {new Date(item.createdAt).toLocaleDateString()}
                 </Typography>
@@ -442,5 +384,83 @@ export default function SocialScreen() {
         />
       )}
     </ScreenWrapper>
+  );
+}
+
+// ─── FIX B7 + U3: Per-row component with its own mutation state ──
+
+function SearchResultRow({ item }: { item: { id: string; displayName: string; enrollmentId?: string; avatarUrl?: string | null } }) {
+  const { theme } = useTheme();
+  const [sent, setSent] = useState(false);
+  const mutation = useSendFriendRequest();
+
+  const handleSend = () => {
+    mutation.mutate(item.id, {
+      onSuccess: () => setSent(true),
+    });
+  };
+
+  return (
+    <View
+      style={{
+        backgroundColor: theme.card,
+        borderRadius: radius.md,
+        padding: spacing.base,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.md,
+        borderWidth: 1,
+        borderColor: theme.borderLight,
+      }}
+    >
+      {item.avatarUrl ? (
+        <Image
+          source={{ uri: item.avatarUrl }}
+          style={{ width: 40, height: 40, borderRadius: radius.full }}
+        />
+      ) : (
+        <View
+          style={{
+            width: 40, height: 40, borderRadius: radius.full,
+            backgroundColor: theme.primaryMuted,
+            alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <Typography variant="bodyBold" style={{ color: theme.primary }}>
+            {item.displayName.charAt(0).toUpperCase()}
+          </Typography>
+        </View>
+      )}
+      <View style={{ flex: 1 }}>
+        <Typography variant="bodySemiBold">{item.displayName}</Typography>
+        {item.enrollmentId && (
+          <Typography variant="caption" style={{ color: theme.textTertiary }}>
+            ID: {item.enrollmentId}
+          </Typography>
+        )}
+      </View>
+      <TouchableOpacity
+        onPress={handleSend}
+        disabled={mutation.isPending || sent}
+        style={{
+          backgroundColor: sent ? theme.successMuted : theme.buttonPrimary,
+          paddingHorizontal: spacing.md,
+          paddingVertical: spacing.xs,
+          borderRadius: radius.full,
+        }}
+      >
+        {mutation.isPending ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : sent ? (
+          <Typography variant="captionBold" style={{ color: theme.success }}>
+            Sent ✓
+          </Typography>
+        ) : (
+          <Typography variant="captionBold" style={{ color: theme.buttonPrimaryText }}>
+            Add Friend
+          </Typography>
+        )}
+      </TouchableOpacity>
+    </View>
   );
 }

@@ -7,21 +7,21 @@ import { useMemo } from 'react';
 import { View, TouchableOpacity, FlatList } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '@/theme';
-import { spacing, radius } from '@/theme/tokens';
-import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
-import { Header } from '@/components/layout/Header';
-import { Typography } from '@/components/ui/Typography';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { LockedFeature } from '@/components/subscription/LockedFeature';
-import { LockedFeatureBanner } from '@/components/subscription/LockedFeature';
-import { useExamSubjects, useExamProgress } from '@/hooks/useSubjects';
-import { useExamsUsedToday } from '@/hooks/useExamsUsedToday';
-import { useSubscriptionGate } from '@/hooks/useSubscriptionGate';
+import { useTheme } from '../../../../src/theme';
+import { spacing, radius } from '../../../../src/theme/tokens';
+import { ScreenWrapper } from '../../../../src/components/layout/ScreenWrapper';
+import { Header } from '../../../../src/components/layout/Header';
+import { Typography } from '../../../../src/components/ui/Typography';
+import { Skeleton } from '../../../../src/components/ui/Skeleton';
+import { LockedFeature } from '../../../../src/components/subscription/LockedFeature';
+import { LockedFeatureBanner } from '../../../../src/components/subscription/LockedFeature';
+import { useExamSubjects, useExamProgress } from '../../../../src/hooks/useSubjects';
+import { useExamsUsedToday } from '../../../../src/hooks/useExamsUsedToday';
+import { useSubscriptionGate } from '../../../../src/hooks/useSubscriptionGate';
 import { SUBJECT_LEVELS } from '@kd/shared';
 import type { Subject } from '@kd/shared';
-
-const LEVEL_COLOURS = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#EF4444'] as const;
+// FIX TD1: Use shared constants instead of inline duplicates
+import { LEVEL_COLOURS } from '../../../../src/utils/constants';
 
 export default function SubjectsScreen() {
   const { examId, title, tournamentId } = useLocalSearchParams<{ examId: string; title?: string; tournamentId?: string }>();
@@ -77,10 +77,8 @@ export default function SubjectsScreen() {
 
   function handleSubjectPress(subject: Subject, index: number) {
     if (isSubjectLocked(index) || sessionLimitReached) return;
-    router.push({
-      pathname: '/exams/[examId]/subjects/[subjectId]/levels',
-      params: { examId, subjectId: subject.id, title: subject.name, ...(tournamentId ? { tournamentId } : {}) },
-    } as never);
+    const queryParams = new URLSearchParams({ title: subject.name, ...(tournamentId ? { tournamentId } : {}) }).toString();
+    router.push(`/exams/${examId}/subjects/${subject.id}/levels?${queryParams}`);
   }
 
   return (

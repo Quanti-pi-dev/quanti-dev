@@ -92,7 +92,7 @@ export function useSubscriptionGate(): SubscriptionGate {
   );
 
   const goToUpgrade = useCallback(() => {
-    router.push('/subscription' as never);
+    router.push('/subscription');
   }, [router]);
 
   return {

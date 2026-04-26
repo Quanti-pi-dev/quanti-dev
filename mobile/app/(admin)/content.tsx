@@ -30,20 +30,11 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { examFormSchema, type ExamFormValues } from '../../src/utils/adminSchemas';
 
-type Difficulty = 'beginner' | 'intermediate' | 'advanced';
-
-const DIFFICULTIES: Difficulty[] = ['beginner', 'intermediate', 'advanced'];
-const DIFF_COLOURS: Record<Difficulty, string> = {
-  beginner: '#10B981',
-  intermediate: '#F59E0B',
-  advanced: '#EF4444',
-};
 
 const DEFAULT_VALUES: ExamFormValues = {
   title: '',
   description: '',
   category: '',
-  difficulty: 'beginner',
   durationMinutes: '30',
 };
 
@@ -70,12 +61,10 @@ export default function ContentScreen() {
   const [editingExam, setEditingExam] = useState<AdminExam | null>(null);
 
   // ── react-hook-form (Component C) ───────────────────────────
-  const { control, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<ExamFormValues>({
+  const { control, handleSubmit, reset, formState: { errors } } = useForm<ExamFormValues>({
     resolver: zodResolver(examFormSchema),
     defaultValues: DEFAULT_VALUES,
   });
-
-  const difficulty = watch('difficulty');
 
   // ── Search & Filter ───────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
@@ -110,7 +99,6 @@ export default function ContentScreen() {
       title: exam.title,
       description: exam.description,
       category: exam.category,
-      difficulty: exam.difficulty,
       durationMinutes: String(exam.durationMinutes),
     });
     setModalVisible(true);
@@ -121,7 +109,6 @@ export default function ContentScreen() {
       title: data.title.trim(),
       description: data.description.trim(),
       category: data.category.trim(),
-      difficulty: data.difficulty,
       durationMinutes: parseInt(data.durationMinutes, 10),
     };
 
@@ -254,16 +241,6 @@ export default function ContentScreen() {
                     paddingHorizontal: spacing.sm,
                     paddingVertical: 2,
                     borderRadius: radius.full,
-                    backgroundColor: DIFF_COLOURS[exam.difficulty] + '22',
-                  }}>
-                    <Typography variant="caption" color={DIFF_COLOURS[exam.difficulty]}>
-                      {exam.difficulty}
-                    </Typography>
-                  </View>
-                  <View style={{
-                    paddingHorizontal: spacing.sm,
-                    paddingVertical: 2,
-                    borderRadius: radius.full,
                     backgroundColor: exam.isPublished ? theme.primary + '22' : theme.cardAlt,
                   }}>
                     <Typography
@@ -288,10 +265,7 @@ export default function ContentScreen() {
                 variant="secondary"
                 size="sm"
                 icon={<Ionicons name="people-outline" size={14} color={theme.textSecondary} />}
-                onPress={() => router.push({
-                  pathname: '/(admin)/exams/[examId]/subjects',
-                  params: { examId: exam.id, title: exam.title },
-                } as never)}
+                onPress={() => router.push(`/(admin)/exams/${exam.id}/subjects?title=${encodeURIComponent(exam.title)}` as never)}
               >
                 Subjects
               </Button>
@@ -384,29 +358,6 @@ export default function ContentScreen() {
             <Controller control={control} name="durationMinutes" render={({ field: { onChange, value } }) => (
               <Input label="Duration (minutes)" placeholder="30" value={value} onChangeText={onChange} keyboardType="number-pad" error={errors.durationMinutes?.message} />
             )} />
-
-            {/* Difficulty selector */}
-            <View style={{ gap: spacing.sm }}>
-              <Typography variant="label">Difficulty</Typography>
-              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                {DIFFICULTIES.map((d) => (
-                  <TouchableOpacity
-                    key={d}
-                    onPress={() => setValue('difficulty', d)}
-                    style={{
-                      flex: 1, paddingVertical: spacing.sm, borderRadius: radius.lg, alignItems: 'center',
-                      borderWidth: 1.5,
-                      borderColor: difficulty === d ? DIFF_COLOURS[d] : theme.border,
-                      backgroundColor: difficulty === d ? DIFF_COLOURS[d] + '22' : theme.card,
-                    }}
-                  >
-                    <Typography variant="caption" color={difficulty === d ? DIFF_COLOURS[d] : theme.textSecondary}>
-                      {d}
-                    </Typography>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
 
             <Button fullWidth size="lg" loading={isSaving} onPress={handleSubmit(onFormSubmit)}
               icon={<Ionicons name="save-outline" size={18} color="#FFFFFF" />}>

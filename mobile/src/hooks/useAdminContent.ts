@@ -25,7 +25,6 @@ export interface AdminExam {
   title: string;
   description: string;
   category: string;
-  difficulty: 'beginner' | 'intermediate' | 'advanced';
   durationMinutes: number;
   isPublished: boolean;
   createdBy: string;

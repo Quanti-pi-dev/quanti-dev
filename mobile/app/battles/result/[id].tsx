@@ -155,7 +155,7 @@ export default function ResultScreen() {
           style={{ width: '100%', gap: spacing.md }}
         >
           <TouchableOpacity
-            onPress={() => router.push('/battles/create' as never)}
+            onPress={() => router.push('/battles/create')}
             style={{
               backgroundColor: theme.buttonPrimary,
               borderRadius: radius.md,

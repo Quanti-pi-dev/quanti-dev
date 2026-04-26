@@ -117,8 +117,9 @@ export default function CoinHistoryScreen() {
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
           <CoinDisplay coins={coins} size="lg" />
+          {/* FIX U6: Standard back arrow instead of close icon */}
           <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="close-circle" size={28} color={theme.textTertiary} />
+            <Ionicons name="chevron-back" size={28} color={theme.textSecondary} />
           </TouchableOpacity>
         </View>
       </View>

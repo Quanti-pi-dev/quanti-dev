@@ -31,7 +31,7 @@ export default function LobbyScreen() {
   // Auto-navigate when accepted
   useEffect(() => {
     if (challenge?.status === 'accepted') {
-      router.replace(`/battles/active/${id}` as never);
+      router.replace(`/battles/active/${id}`);
     }
   }, [challenge?.status, id, router]);
 

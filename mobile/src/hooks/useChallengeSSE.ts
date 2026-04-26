@@ -54,6 +54,12 @@ export function useChallengeSSE(
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gameOverRef = useRef(false);
 
+  // FIX PF2: Store mutable values in refs so `connect` has a stable identity
+  const challengeIdRef = useRef(challengeId);
+  challengeIdRef.current = challengeId;
+  const myRoleRef = useRef(myRole);
+  myRoleRef.current = myRole;
+
   // Client-side countdown
   const startCountdown = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -71,9 +77,11 @@ export function useChallengeSSE(
     }, 100);
   }, []);
 
-  // SSE connection
+  // SSE connection — FIX PF2: Reads from refs to keep stable callback identity
   const connect = useCallback(async () => {
-    if (!challengeId || !myRole || gameOverRef.current) return;
+    const cId = challengeIdRef.current;
+    const role = myRoleRef.current;
+    if (!cId || !role || gameOverRef.current) return;
 
     const token = await auth.currentUser?.getIdToken();
     if (!token) return;
@@ -83,7 +91,7 @@ export function useChallengeSSE(
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/v1/p2p/challenges/${challengeId}/stream`,
+        `${API_BASE_URL}/api/v1/p2p/challenges/${cId}/stream`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -123,8 +131,8 @@ export function useChallengeSSE(
               const opponentScore = event.opponentScore ?? 0;
               setState((prev) => ({
                 ...prev,
-                myScore: myRole === 'creator' ? creatorScore : opponentScore,
-                opponentScore: myRole === 'creator' ? opponentScore : creatorScore,
+                myScore: role === 'creator' ? creatorScore : opponentScore,
+                opponentScore: role === 'creator' ? opponentScore : creatorScore,
               }));
               if (event.startedAt && event.durationSeconds) {
                 startedAtRef.current = new Date(event.startedAt).getTime();
@@ -135,7 +143,7 @@ export function useChallengeSSE(
 
             if (event.type === 'score' && event.role && event.newScore !== undefined) {
               setState((prev) => {
-                if (event.role === myRole) {
+                if (event.role === role) {
                   return { ...prev, myScore: event.newScore! };
                 } else {
                   return { ...prev, opponentScore: event.newScore! };
@@ -164,14 +172,13 @@ export function useChallengeSSE(
       setState((prev) => ({ ...prev, connected: false }));
 
       // Reconnect with exponential backoff
-      // FIX H3: store the timeout ID so cleanup can cancel it
       if (!gameOverRef.current) {
         const delay = Math.min(500 * 2 ** reconnectAttemptsRef.current, 5000);
         reconnectAttemptsRef.current++;
         reconnectTimerRef.current = setTimeout(connect, delay);
       }
     }
-  }, [challengeId, myRole, startCountdown]);
+  }, [startCountdown]); // FIX PF2: Only depends on startCountdown (stable)
 
   // AppState lifecycle
   useEffect(() => {
@@ -194,10 +201,9 @@ export function useChallengeSSE(
       sub.remove();
       abortRef.current?.abort();
       if (timerRef.current) clearInterval(timerRef.current);
-      // FIX H3: clear any pending reconnect timeout on unmount
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
     };
-  }, [challengeId, connect]);
+  }, [challengeId, connect]); // connect is now stable (PF2)
 
   return state;
 }

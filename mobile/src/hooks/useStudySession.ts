@@ -148,7 +148,8 @@ export function useStudySession({ deckId, startedAt }: UseStudySessionConfig): U
 
   const recordAnswer = useCallback(
     (correct: boolean, cardId: string, responseTimeMs: number) => {
-      answersRef.current = [...answersRef.current, { cardId, correct, responseTimeMs }];
+      // FIX PF4: Use O(1) push instead of O(n) spread — ref doesn't drive renders
+      answersRef.current.push({ cardId, correct, responseTimeMs });
       // Update state counters so consuming components re-render (FIX C1)
       setAnsweredCount(prev => prev + 1);
       if (correct) setCorrectCount(prev => prev + 1);
@@ -169,7 +170,7 @@ export function useStudySession({ deckId, startedAt }: UseStudySessionConfig): U
       isFlushing.current = false;
       void flushRef.current();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
   return {

@@ -343,7 +343,7 @@ export default function CreateChallengeScreen() {
             <TouchableOpacity
               onPress={() =>
                 router.push({
-                  pathname: '/battles/friend-select' as never,
+                  pathname: '/battles/friend-select',
                   params: {
                     examId: selectedExamId!,
                     subjectId: selectedSubjectId!,
@@ -351,7 +351,7 @@ export default function CreateChallengeScreen() {
                     betAmount: String(betAmount),
                     durationSeconds: String(durationSeconds),
                   },
-                } as never)
+                })
               }
               style={{
                 backgroundColor: theme.buttonPrimary,

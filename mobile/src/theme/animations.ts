@@ -104,7 +104,7 @@ export function useFadeInUp({ delay = 0 }: { delay?: number } = {}) {
   useEffect(() => {
     opacity.value = withDelay(delay, withTiming(1, TIMING_REVEAL));
     translateY.value = withDelay(delay, withSpring(0, SPRING_ENTRY));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
   const animStyle = useAnimatedStyle(() => ({

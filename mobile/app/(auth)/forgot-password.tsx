@@ -118,7 +118,7 @@ export default function ForgotPasswordScreen() {
               Use a different email
             </Button>
 
-            <Button fullWidth variant="ghost" onPress={() => router.replace('/(auth)')} size="lg">
+            <Button fullWidth variant="ghost" onPress={() => router.replace('/(auth)/login')} size="lg">
               Back to Sign In
             </Button>
           </View>

@@ -98,7 +98,7 @@ export const SettingsSection = React.memo(function SettingsSection({
           <SettingRow
             icon="time-outline"
             label="Coin History"
-            onPress={() => router.push('/coins-history' as never)}
+            onPress={() => router.push('/coins-history')}
           />
           <Divider />
           <SettingRow
@@ -129,7 +129,7 @@ export const SettingsSection = React.memo(function SettingsSection({
           <SettingRow
             icon="shield-outline"
             label="Admin Panel"
-            onPress={() => router.push('/(admin)')}
+            onPress={() => router.push('/(admin)' as any)}
           />
         </Card>
       )}

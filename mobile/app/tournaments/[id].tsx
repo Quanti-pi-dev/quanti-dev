@@ -19,18 +19,8 @@ import { ErrorState } from '../../src/components/ui/ErrorState';
 import { CoinDisplay } from '../../src/components/CoinDisplay';
 import { useTournament, useTournamentLeaderboard, useEnterTournament } from '../../src/hooks/useTournaments';
 import { useCoinBalance } from '../../src/hooks/useGamification';
-
-// ─── Helpers ─────────────────────────────────────────────────
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString('en-IN', {
-    weekday: 'short', month: 'short', day: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
-}
-
-const TIER_LABELS: Record<number, string> = { 0: 'Free', 1: 'Basic', 2: 'Pro', 3: 'Master' };
+// FIX TD1: Use shared constants instead of inline duplicates
+import { TIER_LABELS, formatDate } from '../../src/utils/constants';
 
 // ─── Screen ──────────────────────────────────────────────────
 
@@ -38,8 +28,9 @@ export default function TournamentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { theme } = useTheme();
   const router = useRouter();
-  const { data: tournament, isLoading, isError, refetch } = useTournament(id!);
-  const { data: leaderboard, isLoading: lbLoading, refetch: refetchLb } = useTournamentLeaderboard(id!);
+  // FIX B6: Remove non-null assertions — use safe fallback with enabled guard in hook
+  const { data: tournament, isLoading, isError, refetch } = useTournament(id ?? '');
+  const { data: leaderboard, isLoading: lbLoading, refetch: refetchLb } = useTournamentLeaderboard(id ?? '');
   const { data: coinData } = useCoinBalance();
   const enterMutation = useEnterTournament();
   const [entering, setEntering] = useState(false);
@@ -92,7 +83,7 @@ export default function TournamentDetailScreen() {
       });
     } else if (tournament.deckId) {
       router.push({
-        pathname: '/flashcards/[id]' as never,
+        pathname: '/flashcards/[id]',
         params: { id: tournament.deckId, title: tournament.name, tournamentId: tournament._id },
       });
     } else {
@@ -309,10 +300,10 @@ export default function TournamentDetailScreen() {
                     </Typography>
                   </View>
 
-                  {/* User */}
+                  {/* User — FIX U1: show displayName instead of raw userId */}
                   <View style={{ flex: 1 }}>
                     <Typography variant="bodySmall" numberOfLines={1}>
-                      {entry.userId.substring(0, 12)}…
+                      {(entry as { displayName?: string }).displayName ?? `User ${entry.userId.substring(0, 8)}`}
                     </Typography>
                     <Typography variant="caption" color={theme.textTertiary}>
                       {entry.answersCorrect}/{entry.answersTotal} correct

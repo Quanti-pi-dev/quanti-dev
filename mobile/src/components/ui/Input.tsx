@@ -10,8 +10,6 @@ import {
   TextInputProps,
   ViewStyle,
   TouchableOpacity,
-  NativeSyntheticEvent,
-  TextInputFocusEventData,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -75,13 +73,13 @@ export function Input({
     opacity: borderOpacity.value,
   }));
 
-  const handleFocus = (e: NativeSyntheticEvent<TextInputFocusEventData>) => {
+  const handleFocus = (e: any) => {
     setIsFocused(true);
     borderOpacity.value = withTiming(1, { duration: 200 });
     onFocus?.(e);
   };
 
-  const handleBlur = (e: NativeSyntheticEvent<TextInputFocusEventData>) => {
+  const handleBlur = (e: any) => {
     setIsFocused(false);
     if (!error && !success) borderOpacity.value = withTiming(0, { duration: 200 });
     onBlur?.(e);

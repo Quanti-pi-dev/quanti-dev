@@ -1,7 +1,7 @@
 // ─── Signup Screen ───────────────────────────────────────────
 
-import {  useState  } from 'react';
-import { View, TouchableOpacity, ScrollView, type DimensionValue } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Image, TouchableOpacity, ScrollView, type DimensionValue } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -14,8 +14,13 @@ import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
 import { Divider } from '../../src/components/ui/Divider';
 import { SocialLoginButton } from '../../src/components/ui/SocialLoginButton';
+import { authEmitter } from '../../src/services/authEmitter';
 import type { SocialProvider } from '../../src/components/ui/SocialLoginButton';
 import { isValidEmail } from '../../src/utils/validation';
+
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const LOGO_SOURCE = require('../../assets/adaptive-icon.png');
 
 // ─── Password Strength ──────────────────────────────────────
 
@@ -35,10 +40,10 @@ function getPasswordStrength(pw: string): { level: StrengthLevel; score: number 
 }
 
 const STRENGTH_CONFIG: Record<StrengthLevel, { label: string; color: string; width: DimensionValue }> = {
-  none:   { label: '',       color: 'transparent', width: '0%' },
-  weak:   { label: 'Weak',   color: '#EF4444',     width: '33%' },
-  medium: { label: 'Medium', color: '#F59E0B',     width: '66%' },
-  strong: { label: 'Strong', color: '#10B981',     width: '100%' },
+  none: { label: '', color: 'transparent', width: '0%' },
+  weak: { label: 'Weak', color: '#EF4444', width: '33%' },
+  medium: { label: 'Medium', color: '#F59E0B', width: '66%' },
+  strong: { label: 'Strong', color: '#10B981', width: '100%' },
 };
 
 
@@ -56,6 +61,15 @@ export default function SignupScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
 
+  useEffect(() => {
+    const unsub = authEmitter.on('AUTH_ERROR', (msg?: string) => {
+      setErrors({ general: msg || 'Authentication failed. Please try again.' });
+      setIsLoading(false);
+      setSocialLoading(null);
+    });
+    return unsub;
+  }, []);
+
   const validate = () => {
     const e: Record<string, string> = {};
     if (!name.trim()) e.name = 'Name is required';
@@ -70,9 +84,11 @@ export default function SignupScreen() {
     setIsLoading(true);
     try {
       await signupWithPassword(email, password, name.trim());
+      // Do not set isLoading(false) here on success!
+      // AuthContext will take over, hydrate the profile, and then the layout will redirect.
+      // Keeping the spinner active prevents the user from clicking again or thinking it failed.
     } catch (err: unknown) {
       setErrors({ general: err instanceof Error ? err.message : 'Sign up failed. Please try again.' });
-    } finally {
       setIsLoading(false);
     }
   };
@@ -96,6 +112,32 @@ export default function SignupScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Logo / brand */}
+        <View style={{ alignItems: 'center', marginBottom: spacing['3xl'] }}>
+          <View
+            style={{
+              width: 300,
+              height: 300,
+              borderRadius: 28,
+              overflow: 'hidden',
+              //marginBottom: spacing.base,
+            }}
+          >
+            <Image
+              source={LOGO_SOURCE}
+              style={{ width: '100%', height: '100%', borderRadius: 28 }}
+              resizeMode="cover"
+            />
+          </View>
+
+          <Typography variant="h2" align="center" color={theme.text}>
+            Quanti-Pi
+          </Typography>
+          <Typography variant="bodySmall" align="center" color={theme.textTertiary}
+            style={{ marginTop: spacing.xs }}>
+            Your quantitative aptitude companion
+          </Typography>
+        </View>
         <Typography variant="bodySmall" color={theme.textTertiary} style={{ marginBottom: spacing.lg }}>
           Join Quanti-pi and start your learning journey
         </Typography>
@@ -193,20 +235,11 @@ export default function SignupScreen() {
           variant="full"
         />
 
-        {/* Secondary social provider — icon */}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.md, marginTop: spacing.sm }}>
-          <SocialLoginButton
-            provider="twitter"
-            onPress={handleSocialLogin}
-            loading={socialLoading === 'twitter'}
-            disabled={socialLoading !== null && socialLoading !== 'twitter'}
-            variant="icon"
-          />
-        </View>
+
 
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xs, marginTop: spacing.xl }}>
           <Typography variant="bodySmall" color={theme.textTertiary}>Already have an account?</Typography>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity onPress={() => router.push('/(auth)/login')}>
             <Typography variant="bodySmall" color={theme.primary}>Sign in</Typography>
           </TouchableOpacity>
         </View>

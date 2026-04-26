@@ -51,7 +51,7 @@ function ConfettiParticle({ particle, screenHeight }: { particle: Particle; scre
       particle.delay + particle.duration * 0.7,
       withTiming(0, { duration: particle.duration * 0.3 }),
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
   const animStyle = useAnimatedStyle(() => ({

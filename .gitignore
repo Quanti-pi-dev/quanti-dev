@@ -112,4 +112,11 @@ pids/
 
 # Secrets
 server/firebase-service-account.json
+mobile/google-services.json
+
+# Scratch / One-off scripts
+scratch_*
+test-firebase*
+server/update-exam-counts.ts
+
 node_modules

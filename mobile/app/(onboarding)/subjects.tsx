@@ -60,7 +60,7 @@ export default function SubjectSelectionScreen() {
     onSuccess: async () => {
       await refreshUser();
       // Route to subscription prompt with onboarding context
-      router.push({ pathname: '/subscription', params: { fromOnboarding: 'true' } } as never);
+      router.push({ pathname: '/subscription', params: { fromOnboarding: 'true' } });
     },
     onError: () => {
       Alert.alert(
@@ -93,7 +93,7 @@ export default function SubjectSelectionScreen() {
 
     if (!userHasEmail) {
       router.push({
-        pathname: '/(onboarding)/email-prompt' as never,
+        pathname: '/(onboarding)/email-prompt',
         params: {
           examIds: examIds ?? '',
           selectedSubjects: selectedSubjects.join(','),

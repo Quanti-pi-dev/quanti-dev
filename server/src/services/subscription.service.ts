@@ -461,14 +461,21 @@ class SubscriptionService {
       throw Object.assign(new Error('User not found'), { code: 'USER_NOT_FOUND' });
     }
 
+    // 1b. Resolve Firebase UID — subscriptions.user_id stores Firebase UIDs,
+    //     but the admin UI sends the PG UUID from the user search results.
+    const firebaseUid = await userRepository.getFirebaseUid(userId);
+    if (!firebaseUid) {
+      throw Object.assign(new Error('User Firebase UID not found'), { code: 'USER_NOT_FOUND' });
+    }
+
     // 2. Validate plan exists and is active
     const plan = await planRepository.findById(planId);
     if (!plan || !plan.isActive) {
       throw Object.assign(new Error('Plan not found or inactive'), { code: 'PLAN_NOT_FOUND' });
     }
 
-    // 3. Check for existing active subscription
-    const existing = await subscriptionRepository.findActiveByUserId(userId);
+    // 3. Check for existing active subscription (using Firebase UID)
+    const existing = await subscriptionRepository.findActiveByUserId(firebaseUid);
     let superseded: Subscription | undefined;
 
     if (existing) {
@@ -482,7 +489,7 @@ class SubscriptionService {
       // Expire the old subscription
       await subscriptionRepository.updateStatus(existing.id, 'expired');
       await subscriptionRepository.logEvent(
-        existing.id, userId, 'expired', existing.status, 'expired',
+        existing.id, firebaseUid, 'expired', existing.status, 'expired',
         { reason: 'superseded_by_manual_grant', admin_id: adminId },
       );
       superseded = existing;
@@ -501,9 +508,9 @@ class SubscriptionService {
       periodEnd.setDate(periodEnd.getDate() + billingCycleDays(plan.billingCycle));
     }
 
-    // 5. Create subscription
+    // 5. Create subscription (using Firebase UID to match user-facing lookups)
     const sub = await subscriptionRepository.create({
-      userId,
+      userId: firebaseUid,
       planId,
       status: 'active',
       currentPeriodStart: now,
@@ -512,7 +519,7 @@ class SubscriptionService {
 
     // 6. Log event
     await subscriptionRepository.logEvent(
-      sub.id, userId, 'manual_grant', null, 'active',
+      sub.id, firebaseUid, 'manual_grant', null, 'active',
       {
         admin_id: adminId,
         plan_slug: plan.slug,
@@ -523,7 +530,7 @@ class SubscriptionService {
     );
 
     // 7. Invalidate cache
-    await this.invalidateCache(userId);
+    await this.invalidateCache(firebaseUid);
 
     return { subscription: sub, superseded };
   }

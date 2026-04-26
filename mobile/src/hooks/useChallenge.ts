@@ -25,13 +25,15 @@ export const challengeKeys = {
   detail: (id: string) => [...challengeKeys.all, id] as const,
 };
 
-/** Pending invites (opponent's inbox). Auto-refreshes every 5s. */
-export function usePendingChallenges() {
+/** Pending invites (opponent's inbox). Auto-refreshes every 5s when enabled.
+ *  FIX PF1: Pass `enabled: false` when the screen is not focused to stop polling. */
+export function usePendingChallenges(enabled = true) {
   return useQuery({
     queryKey: challengeKeys.pending(),
     queryFn: fetchPendingChallenges,
-    refetchInterval: 5_000, // Poll frequently for new invites
+    refetchInterval: enabled ? 5_000 : false, // Only poll when screen is focused
     staleTime: 3_000,
+    enabled,
   });
 }
 
@@ -84,7 +86,12 @@ export function useCreateChallenge() {
     onSuccess: (challenge) => {
       queryClient.invalidateQueries({ queryKey: gamificationKeys.coins() });
       queryClient.invalidateQueries({ queryKey: challengeKeys.all });
-      router.push(`/battles/lobby/${challenge.id}` as never);
+      router.push(`/battles/lobby/${challenge.id}`);
+    },
+    // FIX U7/U8: Show user-facing error when challenge creation fails
+    onError: (err: Error) => {
+      const { Alert } = require('react-native');
+      Alert.alert('Challenge Failed', err.message || 'Could not create the challenge. Please try again.');
     },
   });
 }
@@ -99,7 +106,7 @@ export function useAcceptChallenge() {
     onSuccess: (challenge) => {
       queryClient.invalidateQueries({ queryKey: gamificationKeys.coins() });
       queryClient.invalidateQueries({ queryKey: challengeKeys.all });
-      router.push(`/battles/active/${challenge.id}` as never);
+      router.push(`/battles/active/${challenge.id}`);
     },
   });
 }

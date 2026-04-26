@@ -13,24 +13,25 @@ import { useState } from 'react';
 import { View, TouchableOpacity, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '@/theme';
-import { spacing, radius } from '@/theme/tokens';
-import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
-import { Header } from '@/components/layout/Header';
-import { Typography } from '@/components/ui/Typography';
-import { ProgressBar } from '@/components/ui/ProgressBar';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { LockedFeatureBanner } from '@/components/subscription/LockedFeature';
-import { DailyLimitBanner } from '@/components/subscription/DailyLimitBanner';
-import { useSubjectLevelSummary, useSubjectTopics } from '@/hooks/useSubjects';
-import { useSubscriptionGate } from '@/hooks/useSubscriptionGate';
-import { useExamsUsedToday } from '@/hooks/useExamsUsedToday';
+import { useTheme } from '../../../../../src/theme';
+import { spacing, radius } from '../../../../../src/theme/tokens';
+import { ScreenWrapper } from '../../../../../src/components/layout/ScreenWrapper';
+import { Header } from '../../../../../src/components/layout/Header';
+import { Typography } from '../../../../../src/components/ui/Typography';
+import { ProgressBar } from '../../../../../src/components/ui/ProgressBar';
+import { Skeleton } from '../../../../../src/components/ui/Skeleton';
+import { LockedFeatureBanner } from '../../../../../src/components/subscription/LockedFeature';
+import { DailyLimitBanner } from '../../../../../src/components/subscription/DailyLimitBanner';
+import { useSubjectLevelSummary, useSubjectTopics } from '../../../../../src/hooks/useSubjects';
+import { useSubscriptionGate } from '../../../../../src/hooks/useSubscriptionGate';
+import { useExamsUsedToday } from '../../../../../src/hooks/useExamsUsedToday';
 import { SUBJECT_LEVELS, LEVEL_UNLOCK_THRESHOLD } from '@kd/shared';
 import type { LevelProgress, SubjectLevel } from '@kd/shared';
+// FIX TD1: Use shared constants instead of inline duplicates
+import { LEVEL_COLOURS } from '../../../../../src/utils/constants';
 
 // ─── Level config ─────────────────────────────────────────────
 
-const LEVEL_COLOURS = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#EF4444'];
 const LEVEL_ICONS: Record<SubjectLevel, string> = {
   Beginner:  'leaf-outline',
   Rookie:    'rocket-outline',
@@ -44,17 +45,19 @@ const LEVEL_ICONS: Record<SubjectLevel, string> = {
 
 function TopicAccordion({
   examId, subjectId, subjectName: _subjectName, topic, router, tournamentId,
+  // FIX PF3: Accept gate props from parent instead of calling hooks per-accordion
+  isLevelTierLocked, isDailyLimitReached: dailyLimitReached, goToUpgrade,
 }: {
   examId: string; subjectId: string; subjectName: string;
   topic: { slug: string; displayName: string };
   router: ReturnType<typeof useRouter>;
   tournamentId?: string;
+  isLevelTierLocked: (idx: number) => boolean;
+  isDailyLimitReached: boolean;
+  goToUpgrade: () => void;
 }) {
   const { theme } = useTheme();
   const [open, setOpen] = useState(false);
-  const { isLevelTierLocked, isDailyLimitReached, goToUpgrade } = useSubscriptionGate();
-  const { examsUsedToday } = useExamsUsedToday();
-  const dailyLimitReached = isDailyLimitReached(examsUsedToday);
 
   // Only fetch level summary when expanded (saves API calls)
   const { data: summary, isLoading } = useSubjectLevelSummary(
@@ -69,18 +72,15 @@ function TopicAccordion({
     if (isLevelTierLocked(levelIndex)) { goToUpgrade(); return; }
     if (!level.isUnlocked || dailyLimitReached) return;
 
-    router.push({
-      pathname: '/flashcards/[id]',
-      params: {
-        id: 'subject-level',
-        examId,
-        subjectId,
-        level: level.level,
-        topicSlug: topic.slug,
-        title: `${topic.displayName} — ${level.level}`,
-        ...(tournamentId ? { tournamentId } : {}),
-      },
-    } as never);
+    const queryParams = new URLSearchParams({
+      examId,
+      subjectId,
+      level: level.level,
+      topicSlug: topic.slug,
+      title: `${topic.displayName} — ${level.level}`,
+      ...(tournamentId ? { tournamentId } : {}),
+    }).toString();
+    router.push(`/flashcards/subject-level?${queryParams}`);
   }
 
   return (
@@ -237,7 +237,7 @@ export default function LevelsScreen() {
   }>();
   const { theme } = useTheme();
   const router = useRouter();
-  const { isDailyLimitReached } = useSubscriptionGate();
+  const { isLevelTierLocked, isDailyLimitReached, goToUpgrade } = useSubscriptionGate();
   const { examsUsedToday } = useExamsUsedToday();
   const dailyLimitReached = isDailyLimitReached(examsUsedToday);
 
@@ -285,6 +285,9 @@ export default function LevelsScreen() {
               topic={topic}
               router={router}
               tournamentId={tournamentId}
+              isLevelTierLocked={isLevelTierLocked}
+              isDailyLimitReached={dailyLimitReached}
+              goToUpgrade={goToUpgrade}
             />
           ))
         )}

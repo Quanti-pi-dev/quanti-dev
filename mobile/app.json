@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Quanti-pi",
+    "name": "Quanti-Pi",
     "slug": "quanti-pi",
     "version": "1.0.0",
     "runtimeVersion": "1.0.0",
@@ -8,7 +8,6 @@
     "icon": "./assets/icon.png",
     "scheme": "quanti-pi",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -35,6 +34,7 @@
       },
       "package": "com.kd.quantipi",
       "versionCode": 1,
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE"
@@ -65,7 +65,9 @@
           "imageWidth": 200
         }
       ],
-      "expo-image"
+      "expo-image",
+      "expo-web-browser",
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true
@@ -74,6 +76,12 @@
       "enabled": true,
       "fallbackToCacheTimeout": 3000,
       "url": "https://u.expo.dev/quanti-pi"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "19b0064b-a10d-471c-9865-5af3946ab73a"
+      }
     }
   }
 }

@@ -2,6 +2,7 @@
 // Fix 5: Rewrote entirely using theme tokens + inline styles.
 // Removed all NativeWind className strings and hardcoded colour values.
 
+import React from 'react';
 import { View, TouchableOpacity, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -45,20 +46,27 @@ export function LockedFeature({
 
   function handleUpgrade() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.push('/subscription' as never);
+    router.push('/subscription');
   }
+
+  const hasChildren = React.Children.toArray(children).filter(Boolean).length > 0;
 
   return (
     <View style={[{ position: 'relative' }, style]}>
       {/* Dimmed children */}
-      <View style={{ opacity: 0.2 }} pointerEvents="none">
-        {children}
-      </View>
+      {hasChildren && (
+        <View style={{ opacity: 0.2 }} pointerEvents="none">
+          {children}
+        </View>
+      )}
 
       {/* Overlay */}
       <View style={{
-        position: 'absolute',
-        top: 0, left: 0, right: 0, bottom: 0,
+        position: hasChildren ? 'absolute' : 'relative',
+        top: hasChildren ? 0 : undefined,
+        left: hasChildren ? 0 : undefined,
+        right: hasChildren ? 0 : undefined,
+        bottom: hasChildren ? 0 : undefined,
         alignItems: 'center',
         justifyContent: 'center',
         padding: spacing.xl,
@@ -134,7 +142,7 @@ export function LockedFeatureBanner({ feature, minTier = 1 }: LockedBannerProps)
 
   return (
     <TouchableOpacity
-      onPress={() => router.push('/subscription' as never)}
+      onPress={() => router.push('/subscription')}
       activeOpacity={0.85}
       style={{
         flexDirection: 'row',

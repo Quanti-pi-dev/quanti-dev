@@ -342,14 +342,15 @@ export default function SubscriptionScreen() {
             </View>
           )}
 
-          {/* ── Coupon input (visible for all unsubscribed users) ── */}
-          {!isSubscribed && sorted.length > 0 && (
+          {/* ── Coupon input (visible after selecting a plan) ── */}
+          {/* FIX U9: Only show after plan is selected to avoid validating against wrong planId */}
+          {!isSubscribed && selectedPlan && (
             <Animated.View entering={FadeInDown.delay(400).duration(350)}>
               <Typography variant="label" color={theme.textSecondary} style={{ marginBottom: spacing.xs }}>
                 Have a coupon?
               </Typography>
               <CouponInput
-                planId={selectedPlan?.id ?? sorted[0]?.id ?? ''}
+                planId={selectedPlan.id}
                 onValidated={setCouponResult}
               />
             </Animated.View>

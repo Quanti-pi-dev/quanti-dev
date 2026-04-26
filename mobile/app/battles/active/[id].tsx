@@ -2,8 +2,8 @@
 // The core gameplay screen: shows flashcards, live scoreboard,
 // countdown timer, and SSE-driven score updates.
 
-import { useState, useEffect, useCallback } from 'react';
-import { View, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { View, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -26,6 +26,8 @@ export default function ActiveChallengeScreen() {
   const { data: challenge } = useChallengeDetail(id ?? null);
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  // FIX B5: Track auto-advance timer for cleanup on unmount
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(false);
 
@@ -40,21 +42,31 @@ export default function ActiveChallengeScreen() {
   const submitAnswer = useSubmitAnswer(id ?? '');
 
   // Fetch cards on mount
+  // FIX B5: Add cancellation flag to prevent state update on unmounted component
   useEffect(() => {
+    let cancelled = false;
     if (challenge?.deckId) {
-      fetchDeckCards(challenge.deckId).then(setCards).catch(() => {});
+      fetchDeckCards(challenge.deckId).then((c) => { if (!cancelled) setCards(c); }).catch(() => {});
     }
+    return () => { cancelled = true; };
   }, [challenge?.deckId]);
 
   // Navigate to results when game ends
   useEffect(() => {
     if (sse.gameOver) {
       const timer = setTimeout(() => {
-        router.replace(`/battles/result/${id}` as never);
+        router.replace(`/battles/result/${id}`);
       }, 1500);
       return () => clearTimeout(timer);
     }
   }, [sse.gameOver, id, router]);
+
+  // FIX B5: Clean up auto-advance timer on unmount
+  useEffect(() => {
+    return () => {
+      if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
+    };
+  }, []);
 
   const currentCard = cards[currentIndex];
 
@@ -68,8 +80,9 @@ export default function ActiveChallengeScreen() {
 
       submitAnswer.mutate({ cardId: currentCard.id, selectedAnswerId: optionId });
 
-      // Auto-advance after 600ms; cycle back to first card when deck is exhausted
-      setTimeout(() => {
+      // FIX B5: Auto-advance after 600ms with cleanup on unmount
+      if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
+      advanceTimerRef.current = setTimeout(() => {
         setSelectedOption(null);
         setShowResult(false);
         setCurrentIndex((prev) => {
@@ -101,6 +114,34 @@ export default function ActiveChallengeScreen() {
 
   return (
     <ScreenWrapper>
+      {/* ── FIX U5: Forfeit button ── */}
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: spacing.md, paddingTop: spacing.xs }}>
+        <TouchableOpacity
+          onPress={() => {
+            Alert.alert(
+              'Forfeit Match?',
+              'You will lose this challenge and any coins wagered.',
+              [
+                { text: 'Stay', style: 'cancel' },
+                {
+                  text: 'Forfeit',
+                  style: 'destructive',
+                  onPress: () => router.replace('/(tabs)/battles' as never),
+                },
+              ],
+            );
+          }}
+          style={{
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.xs,
+            borderRadius: radius.full,
+            backgroundColor: theme.errorMuted,
+          }}
+        >
+          <Typography variant="captionBold" style={{ color: theme.error }}>Forfeit</Typography>
+        </TouchableOpacity>
+      </View>
+
       {/* ── Scoreboard Header ── */}
       <View
         style={{

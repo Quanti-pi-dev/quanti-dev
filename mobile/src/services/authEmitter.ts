@@ -6,8 +6,8 @@
 // Pattern: api.ts emits 'FORCE_LOGOUT'; AuthContext listens and
 // clears its state. No React context involved here — plain JS.
 
-type AuthEvent = 'FORCE_LOGOUT';
-type Listener = () => void;
+type AuthEvent = 'FORCE_LOGOUT' | 'AUTH_ERROR';
+type Listener = (payload?: string) => void;
 
 const listeners = new Map<AuthEvent, Set<Listener>>();
 
@@ -19,7 +19,7 @@ export const authEmitter = {
     return () => listeners.get(event)?.delete(fn);
   },
 
-  emit(event: AuthEvent): void {
-    listeners.get(event)?.forEach((fn) => fn());
+  emit(event: AuthEvent, payload?: string): void {
+    listeners.get(event)?.forEach((fn) => fn(payload));
   },
 };
