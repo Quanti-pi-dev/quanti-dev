@@ -44,7 +44,7 @@ class AuthService {
 
     if (user.email && !user.email.includes('@placeholder.')) {
       // Don't await to avoid blocking login response
-      emailService.sendWelcomeEmail(user.email, user.displayName).catch(err => {
+      emailService.sendWelcomeEmail(user.email, user.displayName).catch((err: any) => {
         log.error({ err, email: user.email }, 'Failed to trigger welcome email');
       });
     }
