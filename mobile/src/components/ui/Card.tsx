@@ -6,6 +6,7 @@
 import {
   TouchableOpacity,
   ViewStyle,
+  ViewProps,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -20,7 +21,7 @@ import { radius, spacing, shadows } from '../../theme/tokens';
 
 type CardVariant = 'elevated' | 'outlined' | 'flat';
 
-interface CardProps {
+interface CardProps extends ViewProps {
   variant?: CardVariant;
   pressable?: boolean;
   onPress?: () => void;
@@ -40,6 +41,7 @@ export function Card({
   padding = spacing.base,
   style,
   children,
+  ...rest
 }: CardProps) {
   const { theme } = useTheme();
   const scale = useSharedValue(1);
@@ -77,6 +79,7 @@ export function Card({
         onPressOut={handlePressOut}
         activeOpacity={1}
         style={[animStyle, cardStyle, style]}
+        {...(rest as any)}
       >
         {children}
       </AnimatedTouchable>
@@ -84,7 +87,7 @@ export function Card({
   }
 
   return (
-    <Animated.View style={[cardStyle, style]}>
+    <Animated.View style={[cardStyle, style]} {...rest}>
       {children}
     </Animated.View>
   );

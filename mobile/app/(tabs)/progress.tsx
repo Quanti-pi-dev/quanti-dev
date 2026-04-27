@@ -18,7 +18,7 @@ import { BadgeItem } from '../../src/components/BadgeItem';
 import { StatTile } from '../../src/components/StatTile';
 import { StreakWidget } from '../../src/components/StreakWidget';
 import { StudyInsightsCard } from '../../src/components/StudyInsightsCard';
-import { LockedFeature } from '../../src/components/subscription/LockedFeature';
+
 import { UpgradeCTABanner } from '../../src/components/subscription/UpgradeCTABanner';
 import { SectionHeader, BarChart, LineChart, Heatmap } from '../../src/components/progress';
 import { ChronotypeCard } from '../../src/components/analytics/ChronotypeCard';
@@ -75,7 +75,7 @@ export default function ProgressScreen() {
   const lifetimeEarned = coinData?.lifetimeEarned ?? 0;
   const longestStreak = streakData?.longestStreak ?? 0;
   const freezes = streakData?.streakFreezes ?? 0;
-  const isPersonalBestStreak = streak > 0 && streak >= longestStreak;
+  const isPersonalBestStreak = streak > 1 && streak >= longestStreak;
 
   // ── Badges ─────────────────────────────────────────────────
   const badgeList = ((userBadges ?? []) as UserBadge[]).map((b) => ({
@@ -329,13 +329,21 @@ export default function ProgressScreen() {
             <Card>
               <View style={{ gap: spacing.md }}>
                 <SectionHeader title="Accuracy Trend" sub="Last 7 sessions" />
-                {accuracyChartData.length >= 2 ? (
-                  <LineChart data={accuracyChartData} chartWidth={CHART_W} />
-                ) : (
-                  <Typography variant="body" color={theme.textTertiary} align="center">
-                    Study more sessions to see your trend
-                  </Typography>
-                )}
+                <LineChart
+                  data={
+                    accuracyChartData.length >= 2
+                      ? accuracyChartData
+                      : [
+                          { label: 'S1', value: 0 },
+                          { label: 'S2', value: 0 },
+                          { label: 'S3', value: 0 },
+                          { label: 'S4', value: 0 },
+                          { label: 'S5', value: 0 },
+                        ]
+                  }
+                  chartWidth={CHART_W}
+                  empty={accuracyChartData.length < 2}
+                />
                 {avgAccuracy != null && (
                   <View
                     style={{
@@ -374,13 +382,21 @@ export default function ProgressScreen() {
             <Card>
               <View style={{ gap: spacing.md }}>
                 <SectionHeader title="Cards Studied" sub="Per session" />
-                {cardsChartData.length > 0 ? (
-                  <BarChart data={cardsChartData} color="#6366F1" />
-                ) : (
-                  <Typography variant="body" color={theme.textTertiary} align="center">
-                    No sessions yet
-                  </Typography>
-                )}
+                <BarChart
+                  data={
+                    cardsChartData.length > 0
+                      ? cardsChartData
+                      : [
+                          { label: 'S1', value: 0 },
+                          { label: 'S2', value: 0 },
+                          { label: 'S3', value: 0 },
+                          { label: 'S4', value: 0 },
+                          { label: 'S5', value: 0 },
+                        ]
+                  }
+                  color="#6366F1"
+                  empty={cardsChartData.length === 0}
+                />
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Typography variant="caption" color={theme.textTertiary}>
                     Total: {totalWeekCards} cards
@@ -398,27 +414,28 @@ export default function ProgressScreen() {
             <Card>
               <View style={{ gap: spacing.md }}>
                 <SectionHeader title="Topic Distribution" sub="By correct answers" />
-                {topicBreakdownPct.length > 0 ? (
-                  <View style={{ gap: spacing.sm }}>
-                    {topicBreakdownPct.map((t, i) => (
-                      <View key={i} style={{ gap: spacing.xs }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <Typography variant="caption" color={theme.textSecondary}>
-                            {t.name}
-                          </Typography>
-                          <Typography variant="caption" color={t.color}>
-                            {t.pct}%
-                          </Typography>
-                        </View>
-                        <ProgressBar progress={t.pct / 100} height={6} color={t.color} />
+                <View style={{ gap: spacing.sm }}>
+                  {(topicBreakdownPct.length > 0
+                    ? topicBreakdownPct
+                    : [
+                        { name: 'Subject A', pct: 0, color: '#6366F1' },
+                        { name: 'Subject B', pct: 0, color: '#10B981' },
+                        { name: 'Subject C', pct: 0, color: '#F59E0B' },
+                      ]
+                  ).map((t, i) => (
+                    <View key={i} style={{ gap: spacing.xs, opacity: topicBreakdownPct.length === 0 ? 0.35 : 1 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Typography variant="caption" color={theme.textSecondary}>
+                          {t.name}
+                        </Typography>
+                        <Typography variant="caption" color={t.color}>
+                          {t.pct}%
+                        </Typography>
                       </View>
-                    ))}
-                  </View>
-                ) : (
-                  <Typography variant="body" color={theme.textTertiary} align="center">
-                    Study some subjects to see distribution
-                  </Typography>
-                )}
+                      <ProgressBar progress={t.pct / 100} height={6} color={t.color} />
+                    </View>
+                  ))}
+                </View>
               </View>
             </Card>
 
@@ -433,42 +450,175 @@ export default function ProgressScreen() {
         )}
 
         {/* ══════════════════════════════════════════════════════════
-            DEEP INSIGHTS — Pro + Master only
+            PREMIUM FEATURES GATE — data-driven, subscription-aware
+            Builds a list of only the features the user does NOT yet
+            have, renders unlocked features normally, and disappears
+            entirely once everything is unlocked.
             ══════════════════════════════════════════════════════════ */}
 
-        {hasAdvancedAnalytics && !hasDeepInsights && (
-          <UpgradeCTABanner
-            icon="bulb-outline"
-            title="Unlock Deep Insights"
-            subtitle="Study chronotype & speed-accuracy matrix — Pro plan and above"
-          />
-        )}
+        {(() => {
+          // ── 1. Define every premium feature with its unlock condition ──
+          const ALL_FEATURES = [
+            {
+              key: 'chronotype',
+              icon: 'time-outline' as const,
+              label: 'Study Chronotype',
+              desc: 'Discover your peak learning hours',
+              tier: 'Pro' as const,
+              unlocked: hasDeepInsights,
+              component: advancedData?.chronotype
+                ? <ChronotypeCard key="chronotype" data={advancedData.chronotype} />
+                : null,
+            },
+            {
+              key: 'speed_accuracy',
+              icon: 'speedometer-outline' as const,
+              label: 'Speed vs. Accuracy',
+              desc: 'Visualise your recall performance',
+              tier: 'Pro' as const,
+              unlocked: hasDeepInsights,
+              component: advancedData?.speedAccuracy
+                ? <SpeedAccuracyChart key="speed_accuracy" data={advancedData.speedAccuracy} />
+                : null,
+            },
+            {
+              key: 'mastery_radar',
+              icon: 'radio-outline' as const,
+              label: 'Subject Mastery Radar',
+              desc: 'Radar chart across all subjects',
+              tier: 'Master' as const,
+              unlocked: hasMasteryRadar,
+              component: advancedData?.subjectStrengths
+                ? <SubjectRadarChart key="mastery_radar" data={advancedData.subjectStrengths} />
+                : null,
+            },
+          ];
 
-        <LockedFeature featureKey="deep_insights" label="Study Chronotype — Pro feature">
-          {advancedData?.chronotype && <ChronotypeCard data={advancedData.chronotype} />}
-        </LockedFeature>
+          const unlockedFeatures = ALL_FEATURES.filter((f) => f.unlocked);
+          const lockedFeatures   = ALL_FEATURES.filter((f) => !f.unlocked);
 
-        <LockedFeature featureKey="deep_insights" label="Speed vs. Accuracy — Pro feature">
-          {advancedData?.speedAccuracy && <SpeedAccuracyChart data={advancedData.speedAccuracy} />}
-        </LockedFeature>
+          // Next tier the user needs to upgrade to
+          const needsMaster = lockedFeatures.some((f) => f.tier === 'Master') &&
+                              lockedFeatures.every((f) => f.tier === 'Master');
+          const upgradeTier = needsMaster ? 'Master' : 'Pro';
+          const upgradeColor = needsMaster ? '#F59E0B' : theme.primary;
+          const upgradeColorMuted = needsMaster ? '#F59E0B18' : theme.primaryMuted;
+          const upgradeBorderColor = needsMaster ? '#F59E0B40' : theme.primary + '40';
 
-        {/* ══════════════════════════════════════════════════════════
-            MASTERY RADAR — Master only
-            ══════════════════════════════════════════════════════════ */}
+          return (
+            <>
+              {/* Render all already-unlocked feature components */}
+              {unlockedFeatures.map((f) => f.component)}
 
-        {hasDeepInsights && !hasMasteryRadar && (
-          <UpgradeCTABanner
-            icon="diamond-outline"
-            title="Unlock Mastery Radar & AI Tips"
-            subtitle="Subject radar chart & personalized study tips — Master plan"
-          />
-        )}
+              {/* Single gate card — only shown when there's something left to unlock */}
+              {lockedFeatures.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => router.push('/subscription')}
+                  activeOpacity={0.9}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    lockedFeatures.length === 1
+                      ? `Unlock ${lockedFeatures[0]!.label}. Upgrade to ${upgradeTier}.`
+                      : `Unlock ${lockedFeatures.length} more features. Upgrade to ${upgradeTier}.`
+                  }
+                  style={{
+                    backgroundColor: theme.card,
+                    borderRadius: radius['2xl'],
+                    borderWidth: 1.5,
+                    borderColor: upgradeBorderColor,
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* Header strip */}
+                  <View
+                    style={{
+                      backgroundColor: upgradeColor + '18',
+                      paddingHorizontal: spacing.xl,
+                      paddingVertical: spacing.lg,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: spacing.md,
+                      borderBottomWidth: 1,
+                      borderBottomColor: upgradeColor + '25',
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 40, height: 40, borderRadius: radius.full,
+                        backgroundColor: upgradeColor + '25',
+                        alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons
+                        name={needsMaster ? 'diamond-outline' : 'rocket-outline'}
+                        size={20}
+                        color={upgradeColor}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Typography variant="label" color={upgradeColor}>
+                        {lockedFeatures.length === 1
+                          ? `Unlock ${lockedFeatures[0]!.label}`
+                          : `Unlock ${lockedFeatures.length} More Features`}
+                      </Typography>
+                      <Typography variant="caption" color={theme.textSecondary}>
+                        {`${upgradeTier} plan — upgrade to access`}
+                      </Typography>
+                    </View>
+                  </View>
 
-        <LockedFeature featureKey="mastery_radar" label="Subject Mastery Radar — Master feature">
-          {advancedData?.subjectStrengths && (
-            <SubjectRadarChart data={advancedData.subjectStrengths} />
-          )}
-        </LockedFeature>
+                  {/* Locked feature rows */}
+                  <View style={{ paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, gap: spacing.md }}>
+                    {lockedFeatures.map((f) => (
+                      <View key={f.key} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                        <View
+                          style={{
+                            width: 36, height: 36, borderRadius: radius.lg,
+                            backgroundColor: theme.cardAlt,
+                            alignItems: 'center', justifyContent: 'center',
+                          }}
+                        >
+                          <Ionicons name={f.icon} size={17} color={theme.textSecondary} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Typography variant="label">{f.label}</Typography>
+                          <Typography variant="caption" color={theme.textTertiary}>{f.desc}</Typography>
+                        </View>
+                        <View
+                          style={{
+                            paddingHorizontal: spacing.sm, paddingVertical: 2,
+                            borderRadius: radius.full,
+                            backgroundColor: f.tier === 'Master' ? '#F59E0B18' : upgradeColorMuted,
+                          }}
+                        >
+                          <Typography variant="caption" color={f.tier === 'Master' ? '#F59E0B' : upgradeColor}>
+                            {f.tier}
+                          </Typography>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* CTA */}
+                  <View style={{ paddingHorizontal: spacing.xl, paddingBottom: spacing.xl }}>
+                    <View
+                      style={{
+                        backgroundColor: upgradeColor,
+                        borderRadius: radius.full,
+                        paddingVertical: spacing.md,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Typography variant="label" color="#FFFFFF">
+                        {`Upgrade to ${upgradeTier} →`}
+                      </Typography>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              )}
+            </>
+          );
+        })()}
 
         {/* ── Level Mastery — overall knowledge depth per subject (free for all) ── */}
         {levelSummary.length > 0 && (

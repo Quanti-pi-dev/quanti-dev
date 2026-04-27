@@ -72,19 +72,7 @@ export function SpeedAccuracyChart({ data }: SpeedAccuracyChartProps) {
     return { points: classified, medianMs: medMs, dominantQuadrant: dominant, quadrantCounts: counts };
   }, [data]);
 
-  if (data.length < 3) {
-    return (
-      <Card>
-        <View style={{ gap: spacing.md }}>
-          <Typography variant="h4">Speed vs. Accuracy</Typography>
-          <Typography variant="body" color={theme.textTertiary} align="center">
-            Complete at least 3 study sessions to see your speed-accuracy profile
-          </Typography>
-        </View>
-      </Card>
-    );
-  }
-
+  const isEmpty = data.length < 3;
   // Normalize for scatter: X = response time (0-1), Y = accuracy (0-1)
   const maxMs = Math.max(...points.map((p) => p.avgResponseMs), 1);
   const CHART_H = 160;
@@ -101,7 +89,11 @@ export function SpeedAccuracyChart({ data }: SpeedAccuracyChartProps) {
 
   return (
     <View style={{ gap: spacing.md }}>
-      <Card>
+      <Card
+        style={{ opacity: isEmpty ? 0.35 : 1 }}
+        accessibilityElementsHidden={isEmpty}
+        importantForAccessibility={isEmpty ? 'no-hide-descendants' : 'auto'}
+      >
         <View style={{ gap: spacing.md }}>
           <Typography variant="h4">Speed vs. Accuracy</Typography>
 
@@ -158,7 +150,7 @@ export function SpeedAccuracyChart({ data }: SpeedAccuracyChartProps) {
                 position: 'absolute',
                 top: 0,
                 bottom: 0,
-                left: `${Math.min((medianMs / maxMs) * 100, 95)}%`,
+                left: isEmpty ? '50%' : `${Math.min((medianMs / maxMs) * 100, 95)}%`,
                 width: 1,
                 backgroundColor: theme.border,
                 opacity: 0.6,
@@ -205,49 +197,53 @@ export function SpeedAccuracyChart({ data }: SpeedAccuracyChartProps) {
             </Typography>
           </View>
 
-          {/* Quadrant summary pills */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-            {(Object.entries(quadrantCounts) as [QuadrantKey, number][])
-              .filter(([, count]) => count > 0)
-              .sort((a, b) => b[1] - a[1])
-              .map(([key, count]) => (
-                <View
-                  key={key}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 4,
-                    backgroundColor: QUADRANTS[key].color + '15',
-                    paddingHorizontal: spacing.sm,
-                    paddingVertical: 2,
-                    borderRadius: radius.full,
-                  }}
-                >
+          {/* Quadrant summary pills — only when there is data */}
+          {!isEmpty && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+              {(Object.entries(quadrantCounts) as [QuadrantKey, number][])
+                .filter(([, count]) => count > 0)
+                .sort((a, b) => b[1] - a[1])
+                .map(([key, count]) => (
                   <View
+                    key={key}
                     style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: 3,
-                      backgroundColor: QUADRANTS[key].color,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      backgroundColor: QUADRANTS[key].color + '15',
+                      paddingHorizontal: spacing.sm,
+                      paddingVertical: 2,
+                      borderRadius: radius.full,
                     }}
-                  />
-                  <Typography variant="caption" color={QUADRANTS[key].color} style={{ fontSize: 10 }}>
-                    {QUADRANTS[key].label} ({count})
-                  </Typography>
-                </View>
-              ))}
-          </View>
+                  >
+                    <View
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: QUADRANTS[key].color,
+                      }}
+                    />
+                    <Typography variant="caption" color={QUADRANTS[key].color} style={{ fontSize: 10 }}>
+                      {QUADRANTS[key].label} ({count})
+                    </Typography>
+                  </View>
+                ))}
+            </View>
+          )}
         </View>
       </Card>
 
-      {/* Insight */}
-      <InsightCard
-        icon={cfg.label.split(' ')[0]!}
-        title={`Your pattern: ${cfg.desc}`}
-        body={insightTexts[dominantQuadrant]}
-        accentColor={cfg.color}
-        delay={300}
-      />
+      {/* Insight — only when there is data */}
+      {!isEmpty && (
+        <InsightCard
+          icon={cfg.label.split(' ')[0]!}
+          title={`Your pattern: ${cfg.desc}`}
+          body={insightTexts[dominantQuadrant]}
+          accentColor={cfg.color}
+          delay={300}
+        />
+      )}
     </View>
   );
 }

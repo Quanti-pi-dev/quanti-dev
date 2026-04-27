@@ -12,8 +12,9 @@
 //   - CoinToast            (floating "+coins" indicator)
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { View, Alert } from 'react-native';
+import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
 
 import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
@@ -47,6 +48,7 @@ type CardAnswer = boolean | 'skipped' | undefined;
 export default function FlashcardStudyScreen() {
 
   const router = useRouter();
+  const { showAlert } = useGlobalUI();
   const { id, decks, title, examId, subjectId, level, topicSlug, tournamentId } =
     useLocalSearchParams<{
       id: string;
@@ -262,22 +264,19 @@ export default function FlashcardStudyScreen() {
   // FIX U4: Confirm before leaving a session with progress
   const handleBack = useCallback(() => {
     if (answeredCount > 0 && !isComplete) {
-      Alert.alert(
-        'Leave Session?',
-        'Your progress so far has been saved, but you haven\'t finished all cards.',
-        [
+      showAlert({
+        title: 'Leave Session?',
+        message: "Your progress so far has been saved, but you haven't finished all cards.",
+        type: 'warning',
+        buttons: [
           { text: 'Stay', style: 'cancel' },
-          {
-            text: 'Leave',
-            style: 'destructive',
-            onPress: () => { session.flush(); router.back(); },
-          },
+          { text: 'Leave', style: 'destructive', onPress: () => router.back() },
         ],
-      );
+      });
     } else {
       router.back();
     }
-  }, [answeredCount, isComplete, session, router]);
+  }, [answeredCount, isComplete, router, showAlert]);
 
   // ─── Loading state ────────────────────────────────────────
   if (isLoading) {
@@ -345,7 +344,7 @@ export default function FlashcardStudyScreen() {
   }));
   const correctLetterKey = LETTER_KEYS[
     (card.options ?? []).findIndex((o) => o.id === card.correctAnswerId)
-  ] ?? 'A';
+  ] ?? LETTER_KEYS[0] ?? 'A';
 
   // ─── Active study view ────────────────────────────────────
   return (

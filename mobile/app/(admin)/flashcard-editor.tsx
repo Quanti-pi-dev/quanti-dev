@@ -3,10 +3,11 @@
 // Create, edit, and delete MCQ flashcards within the level deck.
 
 import { useState, useCallback } from 'react';
-import { View, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
+import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
 import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Header } from '../../src/components/layout/Header';
@@ -26,7 +27,6 @@ import { BulkImportModal } from '../../src/components/admin/BulkImportModal';
 import { ParsedFlashcard } from '../../src/utils/csvParser';
 import { adminApi } from '../../src/services/api';
 import { useQueryClient } from '@tanstack/react-query';
-import { useToast } from '../../src/contexts/ToastContext';
 
 type OptionKey = 'A' | 'B' | 'C' | 'D';
 const OPTION_KEYS: OptionKey[] = ['A', 'B', 'C', 'D'];
@@ -53,8 +53,8 @@ export default function FlashcardEditorScreen() {
     title?: string;
   }>();
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
 
-  const { showToast } = useToast();
 
   const [editingCard, setEditingCard] = useState<AdminFlashcard | null>(null);
   const [form, setForm] = useState<CardForm>(BLANK_FORM);
@@ -100,13 +100,18 @@ export default function FlashcardEditorScreen() {
   }
 
   function confirmDelete(card: AdminFlashcard) {
-    Alert.alert('Delete Card', 'Remove this flashcard permanently?', [
+    showAlert({
+      title: 'Delete Card',
+      message: 'Remove this flashcard permanently?',
+      type: 'destructive',
+      buttons: [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive',
         onPress: () => deleteCard.mutate({ subjectId, level, topicSlug, cardId: card.id }),
       },
-    ]);
+    ],
+    });
   }
 
   async function handleSave() {

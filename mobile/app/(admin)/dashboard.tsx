@@ -2,7 +2,7 @@
 
 
 import { useCallback } from 'react';
-import { View, ScrollView, Alert, TouchableOpacity } from 'react-native';
+import { View, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/theme';
 import { spacing } from '../../src/theme/tokens';
@@ -15,6 +15,7 @@ import { Skeleton } from '../../src/components/ui/Skeleton';
 import { Icon } from '../../src/components/ui/Icon';
 import { useAdminAnalytics } from '../../src/hooks/useGamification';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
 
 /** Format large numbers: 1200 → "1.2K" */
 function fmt(n: number): string {
@@ -28,13 +29,19 @@ export default function AdminDashboard() {
   const router = useRouter();
   const { data: analytics, isLoading } = useAdminAnalytics();
   const { logout } = useAuth();
+  const { showAlert } = useGlobalUI();
 
   const handleLogout = useCallback(() => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: () => logout() },
-    ]);
-  }, [logout]);
+    showAlert({
+      title: 'Sign Out',
+      message: 'Are you sure you want to sign out?',
+      type: 'warning',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: () => logout() },
+      ],
+    });
+  }, [logout, showAlert]);
 
   return (
     <ScreenWrapper>

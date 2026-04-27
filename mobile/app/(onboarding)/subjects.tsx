@@ -4,7 +4,7 @@
 // the design system (FIX B4 + P4).
 
 import { useState } from 'react';
-import { View, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import * as Haptics from 'expo-haptics';
 import { api } from '../../src/services/api';
 import { useTheme } from '../../src/theme';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
 import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Header } from '../../src/components/layout/Header';
@@ -27,6 +28,7 @@ export default function SubjectSelectionScreen() {
     totalSteps: string;
   }>();
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   const { refreshUser, user } = useAuth();
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const categoryArray = categories?.split(',') ?? [];
@@ -35,14 +37,26 @@ export default function SubjectSelectionScreen() {
   const totalSteps = parseInt(totalStepsParam ?? '3', 10);
   const currentStep = 2; // This is step 2 (0-indexed: 1)
 
-  const { data: decks, isLoading } = useQuery({
-    queryKey: ['onboarding-decks', categories],
+  const examIdArray = examIds?.split(',') ?? [];
+
+  const { data: subjects, isLoading } = useQuery({
+    queryKey: ['onboarding-subjects', examIds],
     queryFn: async () => {
-      const queryParams = categoryArray.map(c => `categories=${encodeURIComponent(c)}`).join('&');
-      const res = await api.get(`/decks?pageSize=50&${queryParams}`);
-      return res.data.data;
+      if (!examIds) return [];
+      const requests = examIdArray.map(id => api.get(`/exams/${id}/subjects`));
+      const responses = await Promise.all(requests);
+      
+      const subjectMap = new Map();
+      for (const res of responses) {
+        if (res.data?.success && res.data.data) {
+          for (const subject of res.data.data) {
+            subjectMap.set(subject.id, subject);
+          }
+        }
+      }
+      return Array.from(subjectMap.values());
     },
-    enabled: categoryArray.length > 0,
+    enabled: examIdArray.length > 0,
   });
 
   // Check if user needs to provide their email (social login without email)
@@ -63,17 +77,18 @@ export default function SubjectSelectionScreen() {
       router.push({ pathname: '/subscription', params: { fromOnboarding: 'true' } });
     },
     onError: () => {
-      Alert.alert(
-        'Setup Failed',
-        'Could not save your preferences. Would you like to skip for now?',
-        [
+      showAlert({
+        title: 'Setup Failed',
+        message: 'Could not save your preferences. Would you like to skip for now?',
+        type: 'info',
+        buttons: [
           { text: 'Try Again', style: 'cancel' },
           {
             text: 'Skip for Now',
             onPress: () => void handleSkipOnboarding(),
           },
         ],
-      );
+      });
     },
   });
 
@@ -84,7 +99,7 @@ export default function SubjectSelectionScreen() {
       await refreshUser();
       router.replace('/(tabs)' as never);
     } catch {
-      Alert.alert('Connection Issue', 'Please check your connection and restart the app.');
+      showToast('Please check your connection and restart the app.', 'error');
     }
   };
 
@@ -145,7 +160,7 @@ export default function SubjectSelectionScreen() {
             <Skeleton key={i} height={72} borderRadius={radius.xl} />
           ))}
         </View>
-      ) : !decks || decks.length === 0 ? (
+      ) : !subjects || subjects.length === 0 ? (
         /* ─── Empty state (P1.4) ─── */
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing['2xl'], gap: spacing.lg }}>
           <Ionicons name="book-outline" size={52} color={theme.textTertiary} />
@@ -162,12 +177,12 @@ export default function SubjectSelectionScreen() {
           contentContainerStyle={{ paddingHorizontal: spacing.xl, gap: spacing.md, paddingBottom: spacing['4xl'] }}
           showsVerticalScrollIndicator={false}
         >
-          {decks?.map((deck: any) => {
-            const selected = selectedSubjects.includes(deck.id);
+          {subjects?.map((subject: any) => {
+            const selected = selectedSubjects.includes(subject.id);
             return (
               <TouchableOpacity
-                key={deck.id}
-                onPress={() => toggleSubject(deck.id)}
+                key={subject.id}
+                onPress={() => toggleSubject(subject.id)}
                 activeOpacity={0.7}
                 style={{
                   flexDirection: 'row',
@@ -199,10 +214,10 @@ export default function SubjectSelectionScreen() {
                 </View>
 
                 <View style={{ flex: 1 }}>
-                  <Typography variant="label">{deck.title}</Typography>
-                  {deck.description ? (
+                  <Typography variant="label">{subject.name}</Typography>
+                  {subject.description ? (
                     <Typography variant="caption" color={theme.textTertiary} numberOfLines={1}>
-                      {deck.description}
+                      {subject.description}
                     </Typography>
                   ) : null}
                 </View>

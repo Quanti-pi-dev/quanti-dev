@@ -2,9 +2,9 @@
 // Extracted from shop.tsx (TD4) — handles IAP coin pack purchases
 // and custom coin amount purchases via Razorpay.
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import {
-  View, ScrollView, TouchableOpacity, Alert, ActivityIndicator, TextInput,
+  View, ScrollView, TouchableOpacity, ActivityIndicator, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -16,6 +16,7 @@ import { ErrorState } from '../ui/ErrorState';
 import { CoinPackCard } from '../CoinPackCard';
 import { useCoinPacks, useCoinPackCheckout, useCoinPackVerify, useCustomCoinCheckout } from '../../hooks/useCoinPacks';
 import type { CoinPack } from '../../services/coinpack.service';
+import { useGlobalUI } from '../../contexts/GlobalUIContext';
 
 export interface CoinPacksTabProps {
   coinBalanceRef: React.MutableRefObject<number>;
@@ -24,6 +25,7 @@ export interface CoinPacksTabProps {
 
 export function CoinPacksTab({ coinBalanceRef, onPurchaseSuccess }: CoinPacksTabProps) {
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   const [buyingPackId, setBuyingPackId] = useState<string | null>(null);
   const [customCoinAmount, setCustomCoinAmount] = useState('');
 
@@ -36,10 +38,11 @@ export function CoinPacksTab({ coinBalanceRef, onPurchaseSuccess }: CoinPacksTab
   const handleBuyCoinPack = useCallback((pack: CoinPack) => {
     const priceRupees = (pack.pricePaise / 100).toFixed(0);
 
-    Alert.alert(
-      'Buy Coins',
-      `Purchase ${pack.coins.toLocaleString()} coins for ₹${priceRupees}?`,
-      [
+    showAlert({
+      title: 'Buy Coins',
+      message: `Purchase ${pack.coins.toLocaleString()} coins for ₹${priceRupees}?`,
+      type: 'info',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Buy Now',
@@ -81,15 +84,15 @@ export function CoinPacksTab({ coinBalanceRef, onPurchaseSuccess }: CoinPacksTab
               const msg =
                 razorpayErr.description ??
                 (err instanceof Error ? err.message : 'Could not complete purchase.');
-              Alert.alert('Checkout Failed', msg);
+              showToast(msg, 'error');
             } finally {
               setBuyingPackId(null);
             }
           },
         },
       ],
-    );
-  }, [checkoutMutation, verifyMutation, coinBalanceRef, onPurchaseSuccess]);
+    });
+  }, [showAlert, showToast, checkoutMutation, verifyMutation, coinBalanceRef, onPurchaseSuccess]);
 
   // ─── Custom amount purchase ───────────────────────────────
   const handleCustomPurchase = async () => {
@@ -123,7 +126,7 @@ export function CoinPacksTab({ coinBalanceRef, onPurchaseSuccess }: CoinPacksTab
       const razorpayErr = err as { code?: number; description?: string };
       if (razorpayErr.code === 2) return;
       const msg = razorpayErr.description ?? (err instanceof Error ? err.message : 'Could not complete purchase.');
-      Alert.alert('Checkout Failed', msg);
+      showToast(msg, 'error');
     }
   };
 

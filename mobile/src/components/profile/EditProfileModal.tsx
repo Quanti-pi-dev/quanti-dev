@@ -3,7 +3,7 @@
 // Extracted from ProfileScreen. Manages its own avatar upload state.
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, TouchableOpacity, Modal, Alert, ActivityIndicator } from 'react-native';
+import { View, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
@@ -14,6 +14,7 @@ import { Avatar } from '../ui/Avatar';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { api } from '../../services/api';
+import { useGlobalUI } from '../../contexts/GlobalUIContext';
 
 // ─── AvatarPicker (private) ──────────────────────────────────
 
@@ -96,6 +97,7 @@ export const EditProfileModal = React.memo(function EditProfileModal({
   onSaved,
 }: EditProfileModalProps) {
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
 
   const [editName, setEditName] = useState(name);
   const [editSaving, setEditSaving] = useState(false);
@@ -114,10 +116,12 @@ export const EditProfileModal = React.memo(function EditProfileModal({
   const handlePickAvatar = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(
-        'Permission Required',
-        'Please allow access to your photo library in Settings to change your avatar.',
-      );
+      showAlert({
+        title: 'Permission Required',
+        message: 'Please allow access to your photo library in Settings to change your avatar.',
+        type: 'info',
+        buttons: [{ text: 'OK' }],
+      });
       return;
     }
 
@@ -191,7 +195,7 @@ export const EditProfileModal = React.memo(function EditProfileModal({
     } catch (err) {
       console.error('[EditProfileModal] Avatar upload failed:', err);
       setPendingAvatarUri(null);
-      Alert.alert('Upload Failed', 'Could not update your avatar. Please try again.');
+      showToast('Could not update your avatar. Please try again.', 'error');
     } finally {
       setAvatarUploading(false);
     }
@@ -206,7 +210,7 @@ export const EditProfileModal = React.memo(function EditProfileModal({
       await onSaved();
       onClose();
     } catch {
-      Alert.alert('Error', 'Could not update profile. Please try again.');
+      showToast('Could not update profile. Please try again.', 'error');
     } finally {
       setEditSaving(false);
     }

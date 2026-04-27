@@ -3,12 +3,13 @@
 // Uses centralized hooks, Zod form validation, and toast notifications.
 
 import { useState } from 'react';
-import { View, ScrollView, Alert, ActivityIndicator, Modal, TouchableOpacity } from 'react-native';
+import { View, ScrollView, ActivityIndicator, Modal, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTheme } from '../../src/theme';
+import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
 import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Header } from '../../src/components/layout/Header';
@@ -17,7 +18,6 @@ import { Input } from '../../src/components/ui/Input';
 import { Button } from '../../src/components/ui/Button';
 import { Card } from '../../src/components/ui/Card';
 import { Divider } from '../../src/components/ui/Divider';
-import { useToast } from '../../src/contexts/ToastContext';
 import {
   useAdminShopItems,
   useCreateShopItem,
@@ -50,7 +50,7 @@ function hasValidImage(url: string): boolean {
 
 export default function ShopEditorScreen() {
   const { theme } = useTheme();
-  const { showToast } = useToast();
+  const { showAlert, showToast } = useGlobalUI();
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<ShopItem | null>(null);
@@ -97,7 +97,11 @@ export default function ShopEditorScreen() {
   }
 
   function confirmDelete(item: ShopItem) {
-    Alert.alert('Delete Item', `Remove "${item.name}" from the shop?`, [
+    showAlert({
+      title: 'Delete Item',
+      message: `Remove "${item.name}" from the shop?`,
+      type: 'destructive',
+      buttons: [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive',
@@ -106,7 +110,8 @@ export default function ShopEditorScreen() {
           onError: () => showToast('Failed to delete item', 'error'),
         }),
       },
-    ]);
+    ],
+    });
   }
 
   function onFormSubmit(data: ShopItemFormValues) {

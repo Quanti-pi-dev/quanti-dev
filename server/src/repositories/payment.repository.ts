@@ -29,6 +29,7 @@ interface CreatePaymentInput {
   amountPaise: number;
   currency?: string;
   attemptNumber?: number;
+  razorpaySubscriptionId?: string | null;
 }
 
 class PaymentRepository {
@@ -40,8 +41,8 @@ class PaymentRepository {
   async create(input: CreatePaymentInput): Promise<Payment> {
     const result = await this.pool.query(
       `INSERT INTO payments
-         (subscription_id, user_id, razorpay_order_id, amount_paise, currency, attempt_number)
-       VALUES ($1, $2, $3, $4, $5, $6)
+         (subscription_id, user_id, razorpay_order_id, amount_paise, currency, attempt_number, razorpay_subscription_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
       [
         input.subscriptionId,
@@ -50,9 +51,15 @@ class PaymentRepository {
         input.amountPaise,
         input.currency ?? 'INR',
         input.attemptNumber ?? 1,
+        input.razorpaySubscriptionId ?? null,
       ],
     );
     return rowToPayment(result.rows[0]);
+  }
+
+  // ─── Create payment for renewal ───────────────────────
+  async createForRenewal(input: Omit<CreatePaymentInput, 'attemptNumber'> & { attemptNumber: number }): Promise<Payment> {
+    return this.create(input);
   }
 
   // ─── Find by PG UUID ──────────────────────────────────

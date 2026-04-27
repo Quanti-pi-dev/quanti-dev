@@ -3,7 +3,7 @@
 // exams, subjects, level cards.
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert } from 'react-native';
+import { useGlobalUI } from '../contexts/GlobalUIContext';
 import { adminApi } from '../services/api';
 import {
   adminCreateExamApi,
@@ -11,11 +11,23 @@ import {
   adminDeleteExamApi,
 } from '../services/admin-shop-contracts';
 
-// ─── Shared error handler for admin mutations ───────────────
+// ─── Module-level showAlert reference ───────────────────────
+// Populated by useAdminMutationErrorHandler() which must be called once
+// at the root of any admin screen to activate glass alerts.
+
+let _showAlert: ReturnType<typeof useGlobalUI>['showAlert'] | null = null;
+
+/** Call once in the root admin layout to wire up glass alerts. */
+export function useAdminMutationErrorHandler() {
+  const { showAlert } = useGlobalUI();
+  _showAlert = showAlert;
+}
 
 function showMutationError(action: string, err: unknown) {
   const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
-  Alert.alert(`${action} Failed`, message);
+  if (_showAlert) {
+    _showAlert({ title: `${action} Failed`, message, type: 'error' });
+  }
 }
 
 // ─── Types ──────────────────────────────────────────────────

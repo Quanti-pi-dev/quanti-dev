@@ -7,10 +7,11 @@
 // Subject → [Topics CRUD] → [6 Levels] → Flashcard Editor
 
 import { useState } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal } from 'react-native';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../src/theme';
+import { useGlobalUI } from '../../../../src/contexts/GlobalUIContext';
 import { spacing, radius } from '../../../../src/theme/tokens';
 import { ScreenWrapper } from '../../../../src/components/layout/ScreenWrapper';
 import { Header } from '../../../../src/components/layout/Header';
@@ -25,7 +26,6 @@ import {
   useDeleteTopic,
   type TopicEntry,
 } from '../../../../src/hooks/useAdminContent';
-import { useToast } from '../../../../src/contexts/ToastContext';
 import { SUBJECT_LEVELS } from '@kd/shared';
 import type { SubjectLevel } from '@kd/shared';
 
@@ -60,6 +60,7 @@ function LevelRow({
   subjectName: string; topicName: string; onPress: () => void;
 }) {
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   const { data, isLoading } = useAdminLevelCards(subjectId, level, topicSlug);
   const meta = LEVEL_META[level];
   const cardCount = data?.cardCount ?? 0;
@@ -123,6 +124,7 @@ function TopicRow({
   onDelete: (topic: TopicEntry) => void;
 }) {
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   const [open, setOpen] = useState(false);
 
   return (
@@ -216,6 +218,7 @@ function TopicFormModal({
   submitting: boolean;
 }) {
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   const [displayName, setDisplayName] = useState(editing?.displayName ?? '');
   const [slug, setSlug] = useState(editing?.slug ?? '');
   const [autoSlug, setAutoSlug] = useState(!editing); // auto-generate slug in create mode
@@ -302,8 +305,8 @@ export default function SubjectLevelsScreen() {
     subjectId: string; title?: string; accent?: string;
   }>();
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   const router = useRouter();
-  const { showToast } = useToast();
 
   // Fetch topics from dynamic MongoDB API
   const { data: topicData, isLoading: loadingTopics } = useAdminSubjectTopics(subjectId);
@@ -353,10 +356,11 @@ export default function SubjectLevelsScreen() {
   }
 
   function confirmDelete(topic: TopicEntry) {
-    Alert.alert(
-      'Delete Topic',
-      `Delete "${topic.displayName}"?\n\nThis will fail if the topic has existing decks with flashcards.`,
-      [
+    showAlert({
+      title: 'Delete Topic',
+      message: `Delete "${topic.displayName}"?\n\nThis will fail if the topic has existing decks with flashcards.`,
+      type: 'destructive',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete', style: 'destructive',
@@ -375,7 +379,7 @@ export default function SubjectLevelsScreen() {
           },
         },
       ],
-    );
+    });
   }
 
   return (

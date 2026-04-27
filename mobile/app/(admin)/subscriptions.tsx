@@ -2,7 +2,7 @@
 // List, filter, grant, and manage user subscriptions.
 
 import { useState, useMemo, useCallback } from 'react';
-import { View, ScrollView, Alert, ActivityIndicator, Modal, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, ScrollView, ActivityIndicator, Modal, TouchableOpacity, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
 import { spacing, radius } from '../../src/theme/tokens';
@@ -23,6 +23,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import type { SubscriptionStatus, UserProfile } from '@kd/shared';
 import { useToast } from '../../src/contexts/ToastContext';
+import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
 
 // ─── Constants ───────────────────────────────────────────────
 
@@ -55,6 +56,7 @@ function formatDate(dateStr: string): string {
 export default function SubscriptionsScreen() {
   const { theme } = useTheme();
   const { showToast } = useToast();
+  const { showAlert } = useGlobalUI();
 
   // ── State ──────────────────────────────────────────────────
   const [page, setPage] = useState(1);
@@ -145,10 +147,11 @@ export default function SubscriptionsScreen() {
       canceled: 'The user will retain access until their current billing period ends.',
       active: 'This will restore the user\'s subscription and access to premium features.',
     };
-    Alert.alert(
-      `${labels[status] ?? status} Subscription`,
-      warnings[status] ?? `Are you sure you want to set this subscription to "${status}"?`,
-      [
+    showAlert({
+      title: `${labels[status] ?? status} Subscription`,
+      message: warnings[status] ?? `Are you sure you want to set this subscription to "${status}"?`,
+      type: status === 'active' ? 'warning' : 'destructive',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: labels[status] ?? status,
@@ -159,7 +162,7 @@ export default function SubscriptionsScreen() {
           }),
         },
       ],
-    );
+    });
   }
 
   // ── Render ──────────────────────────────────────────────────
@@ -280,7 +283,22 @@ export default function SubscriptionsScreen() {
                       <Typography variant="caption" color="#EF4444">Cancels at end</Typography>
                     </View>
                   )}
+                  {/* Auto-renew mandate badge */}
+                  {sub.razorpaySubscriptionId && !sub.cancelAtPeriodEnd && (
+                    <View style={{
+                      paddingHorizontal: spacing.xs, paddingVertical: 1, borderRadius: radius.sm,
+                      backgroundColor: '#10B98122',
+                    }}>
+                      <Typography variant="caption" color="#10B981">↻ Auto-renews</Typography>
+                    </View>
+                  )}
                 </View>
+                {/* Razorpay mandate ID — visible to admin for debugging */}
+                {sub.razorpaySubscriptionId && (
+                  <Typography variant="caption" color={theme.textTertiary} style={{ marginTop: 2 }}>
+                    Mandate: {sub.razorpaySubscriptionId}
+                  </Typography>
+                )}
               </View>
 
               <Divider />

@@ -112,7 +112,6 @@ pids/
 
 # Secrets
 server/firebase-service-account.json
-mobile/google-services.json
 
 # Scratch / One-off scripts
 scratch_*

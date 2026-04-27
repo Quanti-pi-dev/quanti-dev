@@ -41,6 +41,8 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
         <Animated.View entering={FadeInDown.delay(800).duration(300)}>
           <TouchableOpacity
             onPress={() => setShowDeepDive(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Show AI explanation for this answer"
             style={{
               backgroundColor: theme.primaryMuted,
               borderRadius: radius.xl,
@@ -61,7 +63,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
         <View style={{ backgroundColor: theme.primaryMuted, borderRadius: radius.xl, padding: spacing.md, gap: spacing.xs }}>
           <Typography variant="label" color={theme.primary}>💡 AI Deep Dive</Typography>
           <Typography variant="bodySmall" color={theme.textSecondary}>
-            {explanation}
+            {explanation || 'No additional explanation is available for this card.'}
           </Typography>
         </View>
       )}

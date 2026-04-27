@@ -3,13 +3,14 @@
 
 import { useState, useCallback } from 'react';
 import {
-  View, ScrollView, TouchableOpacity, Alert,
+  View, ScrollView, TouchableOpacity,
   ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../src/theme';
+import { useGlobalUI } from '../src/contexts/GlobalUIContext';
 import { spacing, radius } from '../src/theme/tokens';
 import { ScreenWrapper } from '../src/components/layout/ScreenWrapper';
 import { Header } from '../src/components/layout/Header';
@@ -46,6 +47,7 @@ function TournamentCard({
   coins: number;
 }) {
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   const isActive = tournament.status === 'active';
   const isFull = tournament.maxParticipants > 0 && tournament.entryCount >= tournament.maxParticipants;
   const canAfford = coins >= tournament.entryFeeCoins;
@@ -154,6 +156,7 @@ function TournamentCard({
 
 function InfoChip({ icon, label }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string }) {
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   return (
     <View style={{
       flexDirection: 'row', alignItems: 'center', gap: 4,
@@ -170,6 +173,7 @@ function InfoChip({ icon, label }: { icon: React.ComponentProps<typeof Ionicons>
 
 export default function TournamentsScreen() {
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   const router = useRouter();
   const { data: tournaments, isLoading, isError, refetch } = useTournaments();
   const { data: coinData } = useCoinBalance();
@@ -189,10 +193,11 @@ export default function TournamentsScreen() {
       ? `\nEntry fee: ${tournament.entryFeeCoins} coins`
       : '\nFree entry';
 
-    Alert.alert(
-      'Enter Tournament',
-      `Join "${tournament.name}"?${feeMsg}`,
-      [
+    showAlert({
+      title: 'Enter Tournament',
+      message: `Join "${tournament.name}"?${feeMsg}`,
+      type: 'info',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Enter',
@@ -201,17 +206,17 @@ export default function TournamentsScreen() {
             try {
               const result = await enterMutation.mutateAsync(tournament._id);
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert('🎉 Entered!', result.message);
+              showToast(result.message, 'success');
             } catch (err) {
               const msg = err instanceof Error ? err.message : 'Could not enter tournament.';
-              Alert.alert('Entry Failed', msg);
+              showToast(msg, 'error');
             } finally {
               setEnteringId(null);
             }
           },
         },
       ],
-    );
+    });
   }, [enterMutation]);
 
   return (

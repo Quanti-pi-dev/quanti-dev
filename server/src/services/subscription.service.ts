@@ -11,6 +11,7 @@ import { paymentService } from './payment.service.js';
 import { notificationService } from './notification.service.js';
 import { analyticsService } from './analytics.service.js';
 import { userRepository } from '../repositories/user.repository.js';
+import { emailService } from './email.service.js';
 import type {
   Subscription,
   SubscriptionSummary,
@@ -102,16 +103,19 @@ class SubscriptionService {
       cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
       isActive,
       daysRemaining: computeDaysRemaining(sub.currentPeriodEnd),
+      // autoRenews = has a Razorpay mandate and has NOT requested cancellation
+      autoRenews: !!sub.razorpaySubscriptionId && !sub.cancelAtPeriodEnd,
     };
   }
 
-  // ─── Initiate checkout: validate + create Razorpay order ─
+  // ─── Initiate checkout: validate + create Razorpay subscription ─
   async initiateCheckout(
     userId: string,
     planId: string,
     couponCode?: string,
   ): Promise<{
-    orderId: string;
+    orderId: string;          // 'trial' | razorpay_order_id (legacy one-off)
+    razorpaySubscriptionId?: string; // present for recurring paid subscriptions
     amountPaise: number;
     keyId: string;
     plan: Plan;
@@ -201,7 +205,8 @@ class SubscriptionService {
     userId: string,
     plan: Plan,
   ): Promise<{
-    orderId: string; amountPaise: number; keyId: string;
+    orderId: string; razorpaySubscriptionId?: string;
+    amountPaise: number; keyId: string;
     plan: Plan; discountPaise: number; subscription: Subscription;
   }> {
     const now = new Date();
@@ -241,13 +246,14 @@ class SubscriptionService {
       orderId: 'trial',
       amountPaise: 0,
       keyId: '',
+      razorpaySubscriptionId: undefined,
       plan,
       discountPaise: 0,
       subscription: sub,
     };
   }
 
-  // ─── Paid path: Razorpay order creation ─────────────────
+  // ─── Paid path: Razorpay Subscription creation (auto-debit) ──
   private async createPaidSubscription(
     userId: string,
     plan: Plan,
@@ -256,7 +262,8 @@ class SubscriptionService {
     couponId?: string,
     couponCode?: string,
   ): Promise<{
-    orderId: string; amountPaise: number; keyId: string;
+    orderId: string; razorpaySubscriptionId?: string;
+    amountPaise: number; keyId: string;
     plan: Plan; discountPaise: number; subscription: Subscription;
   }> {
     const now = new Date();
@@ -272,45 +279,73 @@ class SubscriptionService {
     const periodEnd = new Date(now);
     periodEnd.setDate(periodEnd.getDate() + billingCycleDays(plan.billingCycle));
 
-    const sub = await subscriptionRepository.create({
-      userId,
-      planId: plan.id,
-      status: 'active', // optimistic; webhook confirms
-      currentPeriodStart: now,
-      currentPeriodEnd: periodEnd,
-      couponId: couponId ?? null,
-    });
+    // ─── Step 1: Lazily ensure a Razorpay Plan exists for this internal plan ───
+    // Razorpay Plans are reusable billing templates. We create once and reuse.
+    let razorpayPlanId = plan.razorpayPlanId;
+    if (!razorpayPlanId) {
+      const { razorpayPlanId: newRpPlanId } = await paymentService.createRazorpayPlan({
+        name: plan.displayName,
+        amountPaise: plan.pricePaise, // use full plan price, not discounted
+        period: plan.billingCycle,
+        currency: plan.currency ?? 'INR',
+      });
+      razorpayPlanId = newRpPlanId;
+      // Persist so the next user subscribing to this plan reuses the same Razorpay Plan.
+      // Uses WHERE razorpay_plan_id IS NULL to prevent race conditions.
+      await planRepository.setRazorpayPlanId(plan.id, razorpayPlanId);
+    }
 
-    // Create Razorpay order
-    let razorpayOrderId: string;
+    // ─── Step 2: Create Razorpay Subscription (mandate) ─────────────────────
+    // 120 billing cycles ≈ 10 years of monthly / 2.3 years of weekly billing.
+    // Razorpay requires a finite total_count; 120 is a safe upper bound.
+    let razorpaySubscriptionId: string;
     try {
-      const order = await paymentService.createOrder(finalPricePaise, sub.id);
-      razorpayOrderId = order.orderId;
+      const { razorpaySubscriptionId: subId } = await paymentService.createRazorpaySubscription({
+        razorpayPlanId,
+        totalCount: 120,
+        customerNotify: 1,
+      });
+      razorpaySubscriptionId = subId;
     } catch (err) {
-      // Roll back subscription and coupon lock on Razorpay failure
-      await subscriptionRepository.updateStatus(sub.id, 'expired');
+      // Roll back coupon lock on Razorpay failure
       if (couponId) await couponRepository.decrementUsage(couponId);
       throw err;
     }
 
-    // Create payment record
+    // ─── Step 3: Create local subscription row ───────────────────────────────
+    const sub = await subscriptionRepository.create({
+      userId,
+      planId: plan.id,
+      status: 'active', // optimistic; webhook confirms first charge
+      currentPeriodStart: now,
+      currentPeriodEnd: periodEnd,
+      couponId: couponId ?? null,
+      razorpaySubscriptionId,
+    });
+
+    // ─── Step 4: Create payment record ──────────────────────────────────────
+    // For subscription-mode, razorpayOrderId = razorpaySubscriptionId (unique receipt key).
+    // The actual per-cycle charge order is created by Razorpay on each billing date.
     await paymentRepository.create({
       subscriptionId: sub.id,
       userId,
-      razorpayOrderId,
+      razorpayOrderId: razorpaySubscriptionId,
       amountPaise: finalPricePaise,
+      razorpaySubscriptionId,
     });
 
     await subscriptionRepository.logEvent(sub.id, userId, 'created', null, 'active', {
       plan_slug: plan.slug,
-      razorpay_order_id: razorpayOrderId,
+      razorpay_subscription_id: razorpaySubscriptionId,
+      razorpay_plan_id: razorpayPlanId,
     });
 
     // Fire-and-forget analytics
     void analyticsService.trackCheckoutInitiated(userId, plan.slug, finalPricePaise, couponCode);
 
     return {
-      orderId: razorpayOrderId,
+      orderId: razorpaySubscriptionId, // used by mobile SDK as subscription_id
+      razorpaySubscriptionId,
       amountPaise: finalPricePaise,
       keyId: '',  // filled in route from config
       plan,
@@ -384,6 +419,10 @@ class SubscriptionService {
           type: 'subscription_activated', userId, email: user.email, planName: plan.displayName,
         }),
       ]);
+
+      if (user.email && !user.email.includes('@placeholder.')) {
+        emailService.sendSubscriptionUpgradeEmail(user.email, user.displayName, plan.displayName).catch(() => {});
+      }
     }
 
     const summary = await this.getSummary(userId);
@@ -398,13 +437,29 @@ class SubscriptionService {
       throw Object.assign(new Error('No active subscription to cancel'), { code: 'NO_ACTIVE_SUBSCRIPTION' });
     }
 
+    // If this subscription has a Razorpay mandate, cancel it at cycle end
+    // so Razorpay stops debiting the user automatically.
+    if (sub.razorpaySubscriptionId) {
+      try {
+        await paymentService.cancelRazorpaySubscription(
+          sub.razorpaySubscriptionId,
+          1, // cancel_at_cycle_end=1 (graceful)
+        );
+      } catch (err) {
+        // Log but don't block the local cancel — the cron job will expire the sub anyway.
+        console.error('[subscription.service] Failed to cancel Razorpay mandate:', err);
+      }
+    }
+
     const updated = await subscriptionRepository.updateStatus(sub.id, 'canceled', {
       canceledAt: new Date(),
       cancelAtPeriodEnd: true,
     });
 
     await subscriptionRepository.logEvent(
-      sub.id, userId, 'cancel_requested', sub.status, 'canceled', {},
+      sub.id, userId, 'cancel_requested', sub.status, 'canceled', {
+        via_razorpay: !!sub.razorpaySubscriptionId,
+      },
     );
 
     await this.invalidateCache(userId);
@@ -423,6 +478,7 @@ class SubscriptionService {
       cancelAtPeriodEnd: true,
       isActive: false,
       daysRemaining: computeDaysRemaining(sub.currentPeriodEnd),
+      autoRenews: false,
     } as SubscriptionSummary);
   }
 
@@ -486,6 +542,17 @@ class SubscriptionService {
         );
         throw err;
       }
+
+      // ─── Cancel Razorpay mandate if it exists ───
+      if (existing.razorpaySubscriptionId) {
+        try {
+          await paymentService.cancelRazorpaySubscription(existing.razorpaySubscriptionId, 0); // 0 = immediate cancel
+        } catch (err) {
+          // Log but don't block the manual grant
+          console.error('[subscription.service] Failed to cancel Razorpay mandate during manual override:', err);
+        }
+      }
+
       // Expire the old subscription
       await subscriptionRepository.updateStatus(existing.id, 'expired');
       await subscriptionRepository.logEvent(
@@ -531,6 +598,10 @@ class SubscriptionService {
 
     // 7. Invalidate cache
     await this.invalidateCache(firebaseUid);
+
+    if (user.email && !user.email.includes('@placeholder.')) {
+      emailService.sendSubscriptionUpgradeEmail(user.email, user.displayName, plan.displayName).catch(() => {});
+    }
 
     return { subscription: sub, superseded };
   }

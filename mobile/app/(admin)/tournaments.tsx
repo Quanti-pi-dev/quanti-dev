@@ -4,11 +4,12 @@
 
 import { useState, useCallback } from 'react';
 import {
-  View, ScrollView, TouchableOpacity, Alert,
+  View, ScrollView, TouchableOpacity,
   ActivityIndicator, RefreshControl, TextInput, Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
+import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
 import { spacing, radius, typography } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Header } from '../../src/components/layout/Header';
@@ -117,6 +118,7 @@ function tournamentToForm(t: Tournament): FormData {
 
 export default function AdminTournamentsScreen() {
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   const queryClient = useQueryClient();
   const { data: tournaments, isLoading, refetch } = useAdminTournaments();
   const [modalVisible, setModalVisible] = useState(false);
@@ -172,10 +174,11 @@ export default function AdminTournamentsScreen() {
   }, []);
 
   const handleDelete = useCallback((t: Tournament) => {
-    Alert.alert(
-      'Delete Tournament',
-      `Are you sure you want to delete "${t.name}"?`,
-      [
+    showAlert({
+      title: 'Delete Tournament',
+      message: `Are you sure you want to delete "${t.name}"?`,
+      type: 'destructive',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
@@ -183,12 +186,12 @@ export default function AdminTournamentsScreen() {
           onPress: () => deleteMutation.mutate(t._id),
         },
       ],
-    );
+    });
   }, [deleteMutation]);
 
   const handleSave = useCallback(() => {
     if (!form.name.trim()) {
-      Alert.alert('Validation', 'Name is required');
+      showToast('Name is required', 'error');
       return;
     }
 

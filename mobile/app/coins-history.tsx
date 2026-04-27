@@ -42,8 +42,12 @@ function TransactionRow({ tx }: { tx: CoinTransaction }) {
   const isEarn = tx.amount > 0;
   const meta = REASON_LABEL[tx.reason] ?? { label: tx.reason.replace(/_/g, ' '), icon: '💰' };
 
+  const label = `${isEarn ? 'Earned' : 'Spent'} ${Math.abs(tx.amount)} coins for ${meta.label} on ${formatCompactDateTime(tx.createdAt)}`;
+
   return (
     <View
+      accessible={true}
+      accessibilityLabel={label}
       style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -118,7 +122,12 @@ export default function CoinHistoryScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
           <CoinDisplay coins={coins} size="lg" />
           {/* FIX U6: Standard back arrow instead of close icon */}
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Ionicons name="chevron-back" size={28} color={theme.textSecondary} />
           </TouchableOpacity>
         </View>
@@ -169,6 +178,9 @@ export default function CoinHistoryScreen() {
               <TouchableOpacity
                 disabled={!pagination.hasPreviousPage || isFetching}
                 onPress={() => setPage((p) => p - 1)}
+                accessibilityRole="button"
+                accessibilityLabel="Newer transactions"
+                accessibilityState={{ disabled: !pagination.hasPreviousPage || isFetching }}
                 style={{
                   paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
                   backgroundColor: pagination.hasPreviousPage ? theme.primary : theme.surface,
@@ -187,6 +199,9 @@ export default function CoinHistoryScreen() {
               <TouchableOpacity
                 disabled={!pagination.hasNextPage || isFetching}
                 onPress={() => setPage((p) => p + 1)}
+                accessibilityRole="button"
+                accessibilityLabel="Older transactions"
+                accessibilityState={{ disabled: !pagination.hasNextPage || isFetching }}
                 style={{
                   paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
                   backgroundColor: pagination.hasNextPage ? theme.primary : theme.surface,

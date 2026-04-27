@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { MongoClient, ObjectId } from 'mongodb';
+import { MongoClient } from 'mongodb';
 
 async function run() {
   const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/kd_dev';

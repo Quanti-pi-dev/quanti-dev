@@ -17,7 +17,6 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.kd.quantipi",
       "buildNumber": "1",
-      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSCameraUsageDescription": "Used for profile photo upload.",
         "NSPhotoLibraryUsageDescription": "Used to select a profile photo.",

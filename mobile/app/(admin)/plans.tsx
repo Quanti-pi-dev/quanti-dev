@@ -3,11 +3,12 @@
 // Uses react-hook-form + Zod validation and toast notifications.
 
 import { useState, useMemo, useCallback } from 'react';
-import { View, ScrollView, Alert, ActivityIndicator, Modal, TouchableOpacity, Switch, RefreshControl } from 'react-native';
+import { View, ScrollView, ActivityIndicator, Modal, TouchableOpacity, Switch, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTheme } from '../../src/theme';
+import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
 import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Header } from '../../src/components/layout/Header';
@@ -16,7 +17,6 @@ import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
 import { Card } from '../../src/components/ui/Card';
 import { Divider } from '../../src/components/ui/Divider';
-import { useToast } from '../../src/contexts/ToastContext';
 import {
   useAdminPlans,
   useCreatePlan,
@@ -78,7 +78,7 @@ function formatPrice(paise: number): string {
 
 export default function PlansScreen() {
   const { theme } = useTheme();
-  const { showToast } = useToast();
+  const { showAlert, showToast } = useGlobalUI();
   const { data: plans = [], isLoading, isError } = useAdminPlans();
   const [refreshing, setRefreshing] = useState(false);
   const qc = useQueryClient();
@@ -167,10 +167,11 @@ export default function PlansScreen() {
   }
 
   function confirmDelete(plan: Plan) {
-    Alert.alert(
-      'Deactivate Plan',
-      `This will deactivate "${plan.displayName}". It won't be available for new subscribers. Continue?`,
-      [
+    showAlert({
+      title: 'Deactivate Plan',
+      message: `This will deactivate "${plan.displayName}". It won't be available for new subscribers. Continue?`,
+      type: 'info',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Deactivate',
@@ -181,7 +182,7 @@ export default function PlansScreen() {
           }),
         },
       ],
-    );
+    });
   }
 
   function updateFeature<K extends keyof PlanFeatures>(key: K, value: PlanFeatures[K]) {
@@ -325,6 +326,22 @@ export default function PlansScreen() {
                       Lvl {plan.features.max_level === -1 ? '∞' : plan.features.max_level}
                     </Typography>
                   </View>
+                </View>
+
+                {/* Razorpay sync status — shows whether this plan has a Razorpay Plan ID */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs }}>
+                  {plan.razorpayPlanId ? (
+                    <>
+                      <View style={{ paddingHorizontal: spacing.xs, paddingVertical: 1, borderRadius: radius.sm, backgroundColor: '#10B98122' }}>
+                        <Typography variant="caption" color="#10B981">⚡ Razorpay synced</Typography>
+                      </View>
+                      <Typography variant="caption" color={theme.textTertiary}>{plan.razorpayPlanId}</Typography>
+                    </>
+                  ) : (
+                    <View style={{ paddingHorizontal: spacing.xs, paddingVertical: 1, borderRadius: radius.sm, backgroundColor: theme.cardAlt }}>
+                      <Typography variant="caption" color={theme.textTertiary}>⏳ Razorpay sync pending (lazy on first checkout)</Typography>
+                    </View>
+                  )}
                 </View>
               </View>
 

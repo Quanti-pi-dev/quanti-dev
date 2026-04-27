@@ -4,7 +4,7 @@
 // Extracted from ProfileScreen for memoization.
 
 import React from 'react';
-import { View, TouchableOpacity, Alert } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
@@ -13,6 +13,7 @@ import { Typography } from '../ui/Typography';
 import { Card } from '../ui/Card';
 import { SubscriptionStatusCard } from '../subscription/SubscriptionStatusCard';
 import { useSubscription } from '../../contexts/SubscriptionContext';
+import { useGlobalUI } from '../../contexts/GlobalUIContext';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../services/api';
 import { cancelSubscription, reactivateSubscription } from '../../services/subscription.service';
@@ -21,6 +22,7 @@ export const SubscriptionCard = React.memo(function SubscriptionCard() {
   const { theme } = useTheme();
   const router = useRouter();
   const { subscription, isSubscribed, refreshSubscription } = useSubscription();
+  const { showToast } = useGlobalUI();
 
   // ─── Subscription Payment History ─────────────────────────
   const { data: invoices } = useQuery({
@@ -39,7 +41,7 @@ export const SubscriptionCard = React.memo(function SubscriptionCard() {
       await cancelSubscription();
       await refreshSubscription();
     } catch {
-      Alert.alert('Error', 'Could not cancel your subscription. Please try again.');
+      showToast('Could not cancel your subscription. Please try again.', 'error');
     }
   }
 
@@ -48,7 +50,7 @@ export const SubscriptionCard = React.memo(function SubscriptionCard() {
       await reactivateSubscription();
       await refreshSubscription();
     } catch {
-      Alert.alert('Error', 'Could not reactivate your subscription. Please try again.');
+      showToast('Could not reactivate your subscription. Please try again.', 'error');
     }
   }
 

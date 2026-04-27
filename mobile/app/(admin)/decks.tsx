@@ -2,9 +2,10 @@
 // List all decks with card counts, paginated. Delete with cascade warning.
 
 import { useState, useCallback, useEffect } from 'react';
-import { View, ScrollView, Alert, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
+import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
 import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Header } from '../../src/components/layout/Header';
@@ -20,7 +21,6 @@ import {
   type AdminDeck,
 } from '../../src/hooks/useAdminSubscriptions';
 import { useQueryClient } from '@tanstack/react-query';
-import { useToast } from '../../src/contexts/ToastContext';
 
 // ─── Category badge colours ──────────────────────────────────
 
@@ -36,6 +36,7 @@ function categoryColour(cat: string): string {
 
 export default function DecksScreen() {
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -57,7 +58,6 @@ export default function DecksScreen() {
     setRefreshing(false);
   }, [qc]);
   const deleteDeck = useDeleteDeck();
-  const { showToast } = useToast();
 
   const decks = data?.data ?? [];
   const pagination = data?.pagination ?? { total: 0, page: 1, pageSize: 50 };
@@ -68,7 +68,11 @@ export default function DecksScreen() {
       ? `Delete "${deck.title}" and its ${deck.cardCount} flashcard(s)? This cannot be undone.`
       : `Delete "${deck.title}"? This cannot be undone.`;
 
-    Alert.alert('Delete Deck', msg, [
+    showAlert({
+      title: 'Delete Deck',
+      message: msg,
+      type: 'destructive',
+      buttons: [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -78,7 +82,8 @@ export default function DecksScreen() {
           onError: (err) => showToast((err as Error).message ?? 'Failed to delete deck', 'error'),
         }),
       },
-    ]);
+    ],
+    });
   }
 
   function fmtDate(iso: string): string {

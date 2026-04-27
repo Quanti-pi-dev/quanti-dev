@@ -105,6 +105,31 @@ async function authPluginInner(fastify: FastifyInstance): Promise<void> {
         timestamp: new Date().toISOString(),
       });
     }
+
+    // Ensure the user exists in PostgreSQL before allowing access to protected routes.
+    // If the client has a Firebase token but hasn't synced, interacting with the DB will crash.
+    try {
+      const redis = getRedisClient();
+      const syncKey = `user_synced:${request.user.id}`;
+      const isSynced = await redis.get(syncKey);
+      
+      if (!isSynced) {
+        const pg = await import('../lib/database.js').then(m => m.getPostgresPool());
+        const res = await pg.query('SELECT 1 FROM users WHERE firebase_uid = $1 LIMIT 1', [request.user.id]);
+        
+        if (res.rows.length === 0) {
+          return reply.status(401).send({
+            success: false,
+            error: { code: 'USER_NOT_SYNCED', message: 'User profile not synchronized with database' },
+            timestamp: new Date().toISOString(),
+          });
+        }
+        // Cache the sync status for 24 hours to avoid DB hits on every request
+        await redis.set(syncKey, '1', 'EX', 86400);
+      }
+    } catch (err) {
+      request.log.warn({ err }, 'Failed to verify user sync status');
+    }
   });
 }
 

@@ -112,7 +112,10 @@ function makeResponseHandler(_instance: typeof api) {
       } else if (typeof response.data === 'string' && response.data.length > 0) {
         msg = response.data.slice(0, 200);
       }
-      return Promise.reject(new Error(msg));
+      const err = new Error(msg);
+      // Attach the original response so calling code can read custom error payload
+      (err as any).response = response;
+      return Promise.reject(err);
     }
 
     return response;

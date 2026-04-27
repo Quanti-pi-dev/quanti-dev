@@ -3,11 +3,12 @@
 // Uses react-hook-form + Zod validation and toast notifications.
 
 import { useState, useCallback } from 'react';
-import { View, ScrollView, Alert, ActivityIndicator, Modal, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, ScrollView, ActivityIndicator, Modal, TouchableOpacity, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTheme } from '../../src/theme';
+import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
 import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Header } from '../../src/components/layout/Header';
@@ -16,7 +17,6 @@ import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
 import { Card } from '../../src/components/ui/Card';
 import { Divider } from '../../src/components/ui/Divider';
-import { useToast } from '../../src/contexts/ToastContext';
 import {
   useAdminBadges,
   useCreateBadge,
@@ -33,7 +33,7 @@ const DEFAULT_VALUES: BadgeFormValues = { name: '', description: '', iconUrl: ''
 
 export default function BadgesScreen() {
   const { theme } = useTheme();
-  const { showToast } = useToast();
+  const { showAlert, showToast } = useGlobalUI();
   const { data: badges = [], isLoading } = useAdminBadges();
   const qc = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
@@ -88,7 +88,11 @@ export default function BadgesScreen() {
   }
 
   function handleDelete(badge: AdminBadge) {
-    Alert.alert('Delete Badge', `Delete "${badge.name}"? This cannot be undone.`, [
+    showAlert({
+      title: 'Delete Badge',
+      message: `Delete "${badge.name}"? This cannot be undone.`,
+      type: 'destructive',
+      buttons: [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -98,7 +102,8 @@ export default function BadgesScreen() {
           onError: (err) => showToast((err as Error).message ?? 'Failed to delete badge', 'error'),
         }),
       },
-    ]);
+    ],
+    });
   }
 
   return (

@@ -2,7 +2,6 @@
 // Common constants used across multiple screens.
 // FIX TD1: Extracted from duplicated definitions in subjects.tsx, levels.tsx, tournaments.tsx
 
-import type { SubjectLevel } from '@kd/shared';
 
 // ─── Level System ────────────────────────────────────────────
 

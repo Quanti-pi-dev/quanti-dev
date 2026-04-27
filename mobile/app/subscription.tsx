@@ -5,7 +5,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View, ScrollView, TouchableOpacity,
-  ActivityIndicator, Alert, RefreshControl,
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import RazorpayCheckout from 'react-native-razorpay';
 
 import { useTheme } from '../src/theme';
+import { useGlobalUI } from '../src/contexts/GlobalUIContext';
 import { spacing, radius } from '../src/theme/tokens';
 import { Typography } from '../src/components/ui/Typography';
 import { PricingToggle } from '../src/components/subscription/PricingToggle';
@@ -37,6 +38,7 @@ import type { BillingCycle } from '@kd/shared';
 /** Sticky header with back button and title. Shows 'Not Now' skip when in onboarding context. */
 function ScreenHeader({ onBack, onSkip }: { onBack: () => void; onSkip?: () => void }) {
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   const subscriptionHeadline = useConfig('subscription_headline', 'Upgrade Your Learning');
   const subscriptionSubheadline = useConfig('subscription_subheadline', 'Unlock the full Quanti-pi experience');
   return (
@@ -51,6 +53,9 @@ function ScreenHeader({ onBack, onSkip }: { onBack: () => void; onSkip?: () => v
           <TouchableOpacity
             onPress={onBack}
             activeOpacity={0.7}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
             style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}
           >
             <Ionicons name="chevron-back" size={20} color="rgba(255,255,255,0.8)" />
@@ -58,7 +63,13 @@ function ScreenHeader({ onBack, onSkip }: { onBack: () => void; onSkip?: () => v
           </TouchableOpacity>
 
           {onSkip && (
-            <TouchableOpacity onPress={onSkip} activeOpacity={0.7}>
+            <TouchableOpacity
+              onPress={onSkip}
+              activeOpacity={0.7}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Skip subscription for now"
+            >
               <Typography variant="bodySmall" color="rgba(255,255,255,0.7)">Not Now</Typography>
             </TouchableOpacity>
           )}
@@ -76,10 +87,11 @@ function ScreenHeader({ onBack, onSkip }: { onBack: () => void; onSkip?: () => v
 /** Guarantees row at the bottom */
 function GuaranteesRow() {
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   const items = [
     { icon: 'shield-checkmark-outline' as const, label: 'Secure payments' },
-    { icon: 'refresh-outline' as const,          label: 'Cancel anytime' },
-    { icon: 'lock-closed-outline' as const,      label: 'Encrypted data' },
+    { icon: 'refresh-circle-outline' as const,   label: 'Auto-renews' },
+    { icon: 'close-circle-outline' as const,     label: 'Cancel anytime' },
   ];
   return (
     <Animated.View
@@ -99,6 +111,7 @@ function GuaranteesRow() {
 /** Empty / error state */
 function EmptyState({ onRetry }: { onRetry: () => void }) {
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.lg, padding: spacing['2xl'] }}>
       <Ionicons name="cloud-offline-outline" size={48} color={theme.textTertiary} />
@@ -108,6 +121,8 @@ function EmptyState({ onRetry }: { onRetry: () => void }) {
       <TouchableOpacity
         onPress={onRetry}
         activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel="Retry loading plans"
         style={{
           backgroundColor: theme.primary,
           paddingHorizontal: spacing.xl,
@@ -128,6 +143,7 @@ export default function SubscriptionScreen() {
   const { fromOnboarding } = useLocalSearchParams<{ fromOnboarding?: string }>();
   const isFromOnboarding = fromOnboarding === 'true';
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   const { subscription, isSubscribed, refreshSubscription, setSubscription } = useSubscription();
 
   // Navigate to completion screen (onboarding) or back (normal)
@@ -177,6 +193,12 @@ export default function SubscriptionScreen() {
   // Tier order: Basic (1), Pro (2), Master (3)
   const sorted = [...visiblePlans].sort((a, b) => a.tier - b.tier);
 
+  // ── Only show plans that are an upgrade from the user's current tier ──
+  // Never suggest a lower or equal plan — always sell up.
+  const currentTier = subscription?.plan?.tier ?? 0;
+  const upgradablePlans = sorted.filter((p) => p.tier > currentTier);
+  const isOnHighestPlan = isSubscribed && upgradablePlans.length === 0;
+
   // ─── Checkout ────────────────────────────────────────────
   async function handleSelectPlan(plan: Plan) {
     setSelectedPlan(plan);
@@ -204,49 +226,69 @@ export default function SubscriptionScreen() {
           await refreshSubscription();
         }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert(
-          '🎉 Trial Started!',
-          `Your ${plan.trialDays}-day free trial of ${plan.displayName} is now active.`,
-          [{ text: 'Start Learning', onPress: navigateAfterAction }],
-        );
+        showAlert({
+          title: '🎉 Trial Started!',
+          message: `Your ${plan.trialDays}-day free trial of ${plan.displayName} is now active.`,
+          type: 'info',
+          buttons: [{ text: 'Start Learning', onPress: navigateAfterAction }],
+        });
         return;
       }
 
       // Paid: open native Razorpay checkout modal
-      if (!result.keyId || !result.orderId || result.amountPaise == null) {
-        throw new Error('Checkout response is missing payment details. Please try again.');
+      if (!result.keyId) {
+        throw new Error('Checkout response is missing payment key. Please try again.');
       }
+
+      const isSubscriptionMode = !!result.razorpaySubscriptionId;
 
       const razorpayOptions = {
         key: result.keyId,
-        order_id: result.orderId,
-        amount: result.amountPaise,
+        // Subscription mode: capture a recurring mandate (UPI Autopay / card)
+        // Order mode: one-off payment (legacy / grandfathered users)
+        ...(isSubscriptionMode
+          ? { subscription_id: result.razorpaySubscriptionId! }
+          : { order_id: result.orderId!, amount: result.amountPaise }),
         currency: result.currency ?? 'INR',
         name: 'Quanti-pi',
-        description: `${plan.displayName} ${cycle} plan`,
+        description: isSubscriptionMode
+          ? `${plan.displayName} ${cycle} plan — auto-renews`
+          : `${plan.displayName} ${cycle} plan`,
         theme: { color: '#2563EB' },
       };
 
       // RazorpayCheckout.open() presents a native payment modal.
-      // It resolves with payment details on success, or rejects on
-      // user cancellation / payment failure.
+      // In subscription mode the response contains razorpay_subscription_id.
+      // In order mode the response contains razorpay_order_id.
       const paymentResult = await RazorpayCheckout.open(razorpayOptions);
 
       // Verify payment server-side — use returned summary directly
-      // to bypass potentially stale Redis cache
-      const activatedSummary = await verifyPayment({
-        razorpayOrderId: result.orderId,
-        razorpayPaymentId: paymentResult.razorpay_payment_id,
-        razorpaySignature: paymentResult.razorpay_signature,
-      });
+      // to bypass potentially stale Redis cache.
+      // For subscriptions, the verification uses razorpay_subscription_id.
+      const activatedSummary = await verifyPayment(
+        isSubscriptionMode
+          ? {
+              razorpayOrderId: result.razorpaySubscriptionId!,
+              razorpayPaymentId: (paymentResult as { razorpay_payment_id: string }).razorpay_payment_id,
+              razorpaySignature: (paymentResult as { razorpay_signature: string }).razorpay_signature,
+            }
+          : {
+              razorpayOrderId: (paymentResult as { razorpay_order_id: string }).razorpay_order_id,
+              razorpayPaymentId: (paymentResult as { razorpay_payment_id: string }).razorpay_payment_id,
+              razorpaySignature: (paymentResult as { razorpay_signature: string }).razorpay_signature,
+            },
+      );
 
       setSubscription(activatedSummary);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(
-        '✅ Subscription Active!',
-        `You're now on ${plan.displayName}. Happy learning!`,
-        [{ text: 'Let\'s Go!', onPress: navigateAfterAction }],
-      );
+      showAlert({
+        title: '✅ Subscription Active!',
+        message: isSubscriptionMode
+          ? `You're now on ${plan.displayName}. Your plan will auto-renew ${cycle === 'monthly' ? 'monthly' : 'weekly'} — cancel anytime.`
+          : `You're now on ${plan.displayName}. Happy learning!`,
+        type: 'info',
+        buttons: [{ text: 'Let\'s Go!', onPress: navigateAfterAction }],
+      });
     } catch (err: unknown) {
       // Razorpay SDK rejects with { code, description } on user cancel or failure
       const razorpayErr = err as { code?: number; description?: string };
@@ -257,7 +299,12 @@ export default function SubscriptionScreen() {
       const msg =
         razorpayErr.description ??
         (err instanceof Error ? err.message : 'Something went wrong. Please try again.');
-      Alert.alert('Checkout Failed', msg);
+      showAlert({
+        title: 'Checkout Failed',
+        message: msg,
+        type: 'info',
+        buttons: [{ text: 'OK' }],
+      });
     } finally {
       setCheckingOut(null);
     }
@@ -301,16 +348,59 @@ export default function SubscriptionScreen() {
           </Animated.View>
 
           {/* ── Plan cards ── */}
-          {sorted.length === 0 ? (
+          {isOnHighestPlan ? (
+            /* ── "You're on our best plan" — nothing left to upsell ── */
+            <Animated.View
+              entering={FadeInDown.delay(150).duration(400)}
+              style={{
+                backgroundColor: theme.card,
+                borderRadius: radius['2xl'],
+                borderWidth: 1.5,
+                borderColor: (theme.success ?? '#10B981') + '50',
+                padding: spacing.xl,
+                alignItems: 'center',
+                gap: spacing.lg,
+              }}
+            >
+              <View
+                style={{
+                  width: 64, height: 64, borderRadius: radius.full,
+                  backgroundColor: (theme.success ?? '#10B981') + '18',
+                  alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="diamond" size={28} color={theme.success ?? '#10B981'} />
+              </View>
+              <View style={{ alignItems: 'center', gap: spacing.xs }}>
+                <Typography variant="h4" align="center">
+                  You're on our best plan 🎉
+                </Typography>
+                <Typography variant="body" color={theme.textSecondary} align="center">
+                  {`You already have ${subscription?.plan?.displayName ?? 'the top plan'} — every feature is unlocked. Keep learning!`}
+                </Typography>
+              </View>
+              <TouchableOpacity
+                onPress={() => router.back()}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Go back to learning"
+                style={{
+                  backgroundColor: theme.success ?? '#10B981',
+                  borderRadius: radius.full,
+                  paddingHorizontal: spacing['2xl'],
+                  paddingVertical: spacing.md,
+                }}
+              >
+                <Typography variant="label" color="#FFFFFF">Back to Learning</Typography>
+              </TouchableOpacity>
+            </Animated.View>
+          ) : upgradablePlans.length === 0 ? (
             <EmptyState onRetry={loadPlans} />
           ) : (
             <View style={{ gap: spacing.lg }}>
-              {sorted.map((plan, i) => {
-                const isPopular = plan.tier === 2;
-                const isCurrentPlan =
-                  isSubscribed &&
-                  subscription?.plan?.id === plan.id &&
-                  subscription?.plan?.billingCycle === cycle;
+              {upgradablePlans.map((plan, i) => {
+                // Master always gets the "Most Popular" treatment
+                const isPopular = Number(plan.tier) === 3 || plan.displayName.includes('Master');
 
                 return (
                   <Animated.View
@@ -320,7 +410,7 @@ export default function SubscriptionScreen() {
                     <PlanCard
                       plan={plan}
                       isPopular={isPopular}
-                      isCurrentPlan={isCurrentPlan}
+                      isCurrentPlan={false}
                       onSelect={handleSelectPlan}
                     />
                     {/* Processing overlay for this card */}
@@ -343,8 +433,8 @@ export default function SubscriptionScreen() {
           )}
 
           {/* ── Coupon input (visible after selecting a plan) ── */}
-          {/* FIX U9: Only show after plan is selected to avoid validating against wrong planId */}
-          {!isSubscribed && selectedPlan && (
+          {/* Only show after plan is selected to avoid validating against wrong planId */}
+          {!isOnHighestPlan && selectedPlan && (
             <Animated.View entering={FadeInDown.delay(400).duration(350)}>
               <Typography variant="label" color={theme.textSecondary} style={{ marginBottom: spacing.xs }}>
                 Have a coupon?

@@ -150,10 +150,13 @@ export function useProgressAnalytics(enabled: boolean): ProgressAnalytics {
 
   // ── Topic distribution from level summary ──────────────────
   const topicBreakdownPct = useMemo(() => {
-    const breakdown = levelSummary.slice(0, 5).map(
+    const subjects = levelSummary
+      .slice(0, 5)
+      .filter((s: { correctAnswers: number }) => s.correctAnswers > 0);
+    const breakdown = subjects.map(
       (s: { subjectName: string; correctAnswers: number }, i: number) => ({
         name: s.subjectName,
-        pct: Math.max(1, s.correctAnswers),
+        pct: s.correctAnswers,
         color: TOPIC_COLORS[i % TOPIC_COLORS.length]!,
       }),
     );
@@ -186,7 +189,8 @@ export function useProgressAnalytics(enabled: boolean): ProgressAnalytics {
 
     const now = new Date();
     const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay());
+    // ISO week starts on Monday: (getDay() + 6) % 7 gives Mon=0, ..., Sun=6
+    startOfWeek.setDate(now.getDate() - ((now.getDay() + 6) % 7));
     startOfWeek.setHours(0, 0, 0, 0);
     const startOfLastWeek = new Date(startOfWeek);
     startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);

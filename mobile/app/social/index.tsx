@@ -69,7 +69,7 @@ export default function SocialScreen() {
           borderBottomColor: theme.border,
         }}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => {
             if (router.canGoBack()) {
               router.back();
@@ -77,6 +77,9 @@ export default function SocialScreen() {
               router.replace('/(tabs)/battles');
             }
           }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
         >
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
@@ -102,6 +105,9 @@ export default function SocialScreen() {
           <TouchableOpacity
             key={tab.key}
             onPress={() => setActiveTab(tab.key)}
+            accessibilityRole="tab"
+            accessibilityLabel={tab.label}
+            accessibilityState={{ selected: activeTab === tab.key }}
             style={{
               flex: 1,
               paddingVertical: spacing.sm,
@@ -156,7 +162,11 @@ export default function SocialScreen() {
               }}
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
+              >
                 <Ionicons name="close-circle" size={18} color={theme.textTertiary} />
               </TouchableOpacity>
             )}
@@ -240,6 +250,8 @@ export default function SocialScreen() {
                     pathname: '/battles/create',
                   })
                 }
+                accessibilityRole="button"
+                accessibilityLabel={`Challenge ${item.displayName}`}
                 style={{
                   backgroundColor: theme.primaryMuted,
                   paddingHorizontal: spacing.md,
@@ -354,6 +366,8 @@ export default function SocialScreen() {
               <View style={{ flexDirection: 'row', gap: spacing.xs }}>
                 <TouchableOpacity
                   onPress={() => deleteMutation.mutate(item.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Decline friend request from ${(item as { requesterName?: string }).requesterName ?? 'this user'}`}
                   style={{
                     width: 36,
                     height: 36,
@@ -367,6 +381,8 @@ export default function SocialScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => acceptMutation.mutate(item.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Accept friend request from ${(item as { requesterName?: string }).requesterName ?? 'this user'}`}
                   style={{
                     width: 36,
                     height: 36,
@@ -442,6 +458,9 @@ function SearchResultRow({ item }: { item: { id: string; displayName: string; en
       <TouchableOpacity
         onPress={handleSend}
         disabled={mutation.isPending || sent}
+        accessibilityRole="button"
+        accessibilityLabel={sent ? `Request sent to ${item.displayName}` : `Send friend request to ${item.displayName}`}
+        accessibilityState={{ disabled: mutation.isPending || sent, busy: mutation.isPending }}
         style={{
           backgroundColor: sent ? theme.successMuted : theme.buttonPrimary,
           paddingHorizontal: spacing.md,

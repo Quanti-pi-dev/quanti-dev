@@ -55,6 +55,9 @@ export const StudyNavBar = React.memo(function StudyNavBar({
       <TouchableOpacity
         onPress={handlePrev} disabled={!canGoPrev}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        accessibilityRole="button"
+        accessibilityLabel="Previous card"
+        accessibilityState={{ disabled: !canGoPrev }}
         style={{
           width: 52, height: 52, borderRadius: radius.full,
           backgroundColor: theme.cardAlt, borderWidth: 1.5, borderColor: theme.border,
@@ -72,6 +75,9 @@ export const StudyNavBar = React.memo(function StudyNavBar({
         onPress={handleNext}
         disabled={!nextEnabled}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        accessibilityRole="button"
+        accessibilityLabel={nextEnabled ? 'Next card' : 'Answer this card to continue'}
+        accessibilityState={{ disabled: !nextEnabled }}
         style={{
           width: 52, height: 52, borderRadius: radius.full,
           backgroundColor: nextEnabled ? theme.primary : theme.cardAlt,

@@ -100,6 +100,9 @@ export function Button({
       onPressOut={handlePressOut}
       activeOpacity={1}
       disabled={disabled || loading}
+      accessibilityRole="button"
+      accessibilityLabel={children}
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
       style={[
         animatedStyle,
         {

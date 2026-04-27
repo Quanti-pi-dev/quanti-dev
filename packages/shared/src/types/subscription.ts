@@ -32,6 +32,8 @@ export interface Plan {
   isActive: boolean;
   sortOrder: number;
   createdAt: string;
+  /** Razorpay Plans API ID — populated on first paid checkout, null for free/trial plans. */
+  razorpayPlanId?: string | null;
 }
 
 // ─── Subscriptions ──────────────────────────────────────────
@@ -61,6 +63,10 @@ export interface Subscription {
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+  /** Razorpay Subscriptions API ID (e.g. "sub_XXXX") — present for recurring paid subscriptions. */
+  razorpaySubscriptionId?: string | null;
+  /** Razorpay customer ID — stored for mandate/token lookup on renewals. */
+  razorpayCustomerId?: string | null;
 }
 
 // User-facing subscription summary (includes computed fields)
@@ -73,6 +79,8 @@ export interface SubscriptionSummary {
   cancelAtPeriodEnd: boolean;
   isActive: boolean;
   daysRemaining: number;
+  /** Whether this subscription will auto-renew at period end (has Razorpay mandate). */
+  autoRenews?: boolean;
 }
 
 // ─── Payments ───────────────────────────────────────────────

@@ -4,12 +4,13 @@
 // Uses centralized hooks, Zod form validation, and toast notifications.
 
 import { useState, useMemo, useCallback } from 'react';
-import { View, ScrollView, Alert, ActivityIndicator, Modal, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, ScrollView, ActivityIndicator, Modal, TouchableOpacity, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTheme } from '../../src/theme';
+import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
 import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Header } from '../../src/components/layout/Header';
@@ -18,7 +19,6 @@ import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
 import { Card } from '../../src/components/ui/Card';
 import { Divider } from '../../src/components/ui/Divider';
-import { useToast } from '../../src/contexts/ToastContext';
 import {
   useAdminExams,
   useTogglePublished,
@@ -40,9 +40,9 @@ const DEFAULT_VALUES: ExamFormValues = {
 
 export default function ContentScreen() {
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { showToast } = useToast();
 
   const [page, setPage] = useState(1);
   const { data, isLoading, isError } = useAdminExams(page);
@@ -126,10 +126,11 @@ export default function ContentScreen() {
   }
 
   function confirmDelete(exam: AdminExam) {
-    Alert.alert(
-      'Delete Exam',
-      `Are you sure you want to permanently delete "${exam.title}"? This cannot be undone.`,
-      [
+    showAlert({
+      title: 'Delete Exam',
+      message: `Are you sure you want to permanently delete "${exam.title}"? This cannot be undone.`,
+      type: 'destructive',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
@@ -140,7 +141,7 @@ export default function ContentScreen() {
           }),
         },
       ],
-    );
+    });
   }
 
   const isSaving = createExam.isPending || updateExam.isPending;

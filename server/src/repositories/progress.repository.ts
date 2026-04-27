@@ -263,8 +263,7 @@ class ProgressRepository {
     await this.pg.query(
       `INSERT INTO study_sessions
          (user_id, deck_id, cards_studied, correct_answers, incorrect_answers, avg_response_time_ms, started_at, ended_at)
-       VALUES
-         ((SELECT id FROM users WHERE firebase_uid = $1), $2, $3, $4, $5, $6, $7, $8)`,
+       SELECT id, $2, $3, $4, $5, $6, $7, $8 FROM users WHERE firebase_uid = $1`,
       [
         session.userId,
         session.deckId,

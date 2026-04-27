@@ -8,6 +8,7 @@ import { userRepository } from '../repositories/user.repository.js';
 import { z } from 'zod';
 import { createServiceLogger } from '../lib/logger.js';
 import type { UserProfile } from '@kd/shared';
+import { emailService } from './email.service.js';
 
 const log = createServiceLogger('AuthService');
 
@@ -33,13 +34,22 @@ class AuthService {
     }
 
     // Create new user profile
-    return userRepository.create({
+    const user = await userRepository.create({
       firebaseUid: input.firebaseUid,
       email: input.email,
       displayName: input.displayName || input.email?.split('@')[0] || 'Student',
       avatarUrl: input.avatarUrl,
       role: 'student',
     });
+
+    if (user.email && !user.email.includes('@placeholder.')) {
+      // Don't await to avoid blocking login response
+      emailService.sendWelcomeEmail(user.email, user.displayName).catch(err => {
+        log.error({ err, email: user.email }, 'Failed to trigger welcome email');
+      });
+    }
+
+    return user;
   }
 
   // ─── Get current user profile ────────────────────────

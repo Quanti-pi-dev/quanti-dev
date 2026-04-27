@@ -3,11 +3,12 @@
 // Uses react-hook-form + Zod validation and toast notifications.
 
 import { useState, useCallback } from 'react';
-import { View, ScrollView, Alert, ActivityIndicator, Modal, TouchableOpacity, Switch, RefreshControl } from 'react-native';
+import { View, ScrollView, ActivityIndicator, Modal, TouchableOpacity, Switch, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTheme } from '../../src/theme';
+import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
 import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Header } from '../../src/components/layout/Header';
@@ -16,7 +17,6 @@ import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
 import { Card } from '../../src/components/ui/Card';
 import { Divider } from '../../src/components/ui/Divider';
-import { useToast } from '../../src/contexts/ToastContext';
 import {
   useAdminCoupons,
   useCreateCoupon,
@@ -43,7 +43,7 @@ const DEFAULT_VALUES: CouponFormValues = {
 
 export default function CouponsScreen() {
   const { theme } = useTheme();
-  const { showToast } = useToast();
+  const { showAlert, showToast } = useGlobalUI();
   const { data: coupons = [], isLoading } = useAdminCoupons();
   const qc = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
@@ -98,10 +98,11 @@ export default function CouponsScreen() {
   }
 
   function handleDelete(coupon: Coupon) {
-    Alert.alert(
-      'Delete Coupon',
-      `Delete "${coupon.code}"? This cannot be undone.\n\n${coupon.currentUses > 0 ? '⚠️ This coupon has redemptions — the server will reject deletion. Deactivate it instead.' : ''}`,
-      [
+    showAlert({
+      title: 'Delete Coupon',
+      message: `Delete "${coupon.code}"? This cannot be undone.\n\n${coupon.currentUses > 0 ? '⚠️ This coupon has redemptions — the server will reject deletion. Deactivate it instead.' : ''}`,
+      type: 'destructive',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
@@ -116,7 +117,7 @@ export default function CouponsScreen() {
           }),
         },
       ],
-    );
+    });
   }
 
   function fmtDate(iso: string | null): string {

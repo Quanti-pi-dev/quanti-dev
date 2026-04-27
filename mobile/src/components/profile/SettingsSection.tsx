@@ -4,7 +4,7 @@
 // Extracted from ProfileScreen for memoization.
 
 import React, { useState } from 'react';
-import { View, TouchableOpacity, Switch, Alert, Linking } from 'react-native';
+import { View, TouchableOpacity, Switch, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
@@ -14,6 +14,7 @@ import { Typography } from '../ui/Typography';
 import { Card } from '../ui/Card';
 import { Divider } from '../ui/Divider';
 import { LockedFeatureBanner } from '../subscription/LockedFeature';
+import { useGlobalUI } from '../../contexts/GlobalUIContext';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -68,6 +69,7 @@ export const SettingsSection = React.memo(function SettingsSection({
 }: SettingsSectionProps) {
   const { theme } = useTheme();
   const router = useRouter();
+  const { showToast, showAlert } = useGlobalUI();
   const [notifLoading, setNotifLoading] = useState(false);
 
   const handleNotifToggle = async (value: boolean) => {
@@ -75,7 +77,7 @@ export const SettingsSection = React.memo(function SettingsSection({
     try {
       await onToggleNotifications(value);
     } catch {
-      Alert.alert('Error', 'Failed to update notification preference.');
+      showToast('Failed to update notification preference.', 'error');
     } finally {
       setNotifLoading(false);
     }
@@ -116,7 +118,7 @@ export const SettingsSection = React.memo(function SettingsSection({
           <SettingRow
             icon="language-outline"
             label="Language"
-            onPress={() => Alert.alert('Coming Soon', 'Language selection coming soon.')}
+            onPress={() => showAlert({ title: 'Coming Soon', message: 'Language selection is coming soon.', type: 'info', buttons: [{ text: 'OK' }] })}
           />
           <Divider />
           <LockedFeatureBanner feature="Priority Support — Master plan only" minTier={3} />
@@ -143,13 +145,13 @@ export const SettingsSection = React.memo(function SettingsSection({
           <SettingRow
             icon="help-circle-outline"
             label="Help & Support"
-            onPress={() => Linking.openURL('mailto:support@quanti-pi.com').catch(() => {})}
+            onPress={() => Linking.openURL('mailto:support@quantipi.in').catch(() => { })}
           />
           <Divider />
           <SettingRow
             icon="document-text-outline"
             label="Terms & Privacy"
-            onPress={() => WebBrowser.openBrowserAsync('https://quanti-pi.com/terms')}
+            onPress={() => WebBrowser.openBrowserAsync('https://quantipi.in/terms')}
           />
           <Divider />
           <TouchableOpacity

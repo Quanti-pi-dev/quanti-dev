@@ -3,7 +3,7 @@
 // countdown timer, and SSE-driven score updates.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -12,6 +12,7 @@ import { spacing, radius, shadows } from '../../../src/theme/tokens';
 import { ScreenWrapper } from '../../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../../src/components/ui/Typography';
 import { useAuth } from '../../../src/contexts/AuthContext';
+import { useGlobalUI } from '../../../src/contexts/GlobalUIContext';
 import { useChallengeDetail, useSubmitAnswer } from '../../../src/hooks/useChallenge';
 import { useChallengeSSE } from '../../../src/hooks/useChallengeSSE';
 import { fetchDeckCards } from '../../../src/services/api-contracts';
@@ -19,6 +20,7 @@ import type { Flashcard } from '@kd/shared';
 
 export default function ActiveChallengeScreen() {
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
@@ -118,10 +120,11 @@ export default function ActiveChallengeScreen() {
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: spacing.md, paddingTop: spacing.xs }}>
         <TouchableOpacity
           onPress={() => {
-            Alert.alert(
-              'Forfeit Match?',
-              'You will lose this challenge and any coins wagered.',
-              [
+            showAlert({
+              title: 'Forfeit Match?',
+              message: 'You will lose this challenge and any coins wagered.',
+              type: 'info',
+              buttons: [
                 { text: 'Stay', style: 'cancel' },
                 {
                   text: 'Forfeit',
@@ -129,7 +132,7 @@ export default function ActiveChallengeScreen() {
                   onPress: () => router.replace('/(tabs)/battles' as never),
                 },
               ],
-            );
+            });
           }}
           style={{
             paddingHorizontal: spacing.md,

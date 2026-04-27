@@ -13,7 +13,6 @@ import { ScreenWrapper } from '../../../../src/components/layout/ScreenWrapper';
 import { Header } from '../../../../src/components/layout/Header';
 import { Typography } from '../../../../src/components/ui/Typography';
 import { Skeleton } from '../../../../src/components/ui/Skeleton';
-import { LockedFeature } from '../../../../src/components/subscription/LockedFeature';
 import { LockedFeatureBanner } from '../../../../src/components/subscription/LockedFeature';
 import { useExamSubjects, useExamProgress } from '../../../../src/hooks/useSubjects';
 import { useExamsUsedToday } from '../../../../src/hooks/useExamsUsedToday';
@@ -113,13 +112,24 @@ export default function SubjectsScreen() {
         renderItem={({ item: subject, index }) => {
           const locked = isSubjectLocked(index);
           const highestIdx = progressMap.get(subject.id) ?? -1;
-          const requiredTier = index < 3 ? (1 as const) : (2 as const);
 
-          const card = (
+          return (
             <TouchableOpacity
-              onPress={() => handleSubjectPress(subject, index)}
-              disabled={locked || sessionLimitReached}
+              onPress={locked
+                ? () => router.push('/subscription')
+                : () => handleSubjectPress(subject, index)
+              }
+              disabled={!locked && sessionLimitReached}
               activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !locked && sessionLimitReached }}
+              accessibilityLabel={
+                locked
+                  ? `${subject.name}. Locked — upgrade to access`
+                  : sessionLimitReached
+                  ? `${subject.name}. Daily session limit reached`
+                  : `${subject.name}. Tap to study`
+              }
               style={{
                 backgroundColor: theme.card,
                 borderRadius: radius['2xl'],
@@ -135,22 +145,24 @@ export default function SubjectsScreen() {
                 <View
                   style={{
                     width: 40, height: 40, borderRadius: radius.full,
-                    backgroundColor: (subject.accent ?? theme.primary) + '22',
+                    backgroundColor: locked ? theme.cardAlt : (subject.accent ?? theme.primary) + '22',
                     alignItems: 'center', justifyContent: 'center',
                   }}
                 >
                   <Ionicons
-                    name={(subject.iconName as never) ?? 'book-outline'}
+                    name={locked ? 'lock-closed-outline' : ((subject.iconName as never) ?? 'book-outline')}
                     size={20}
-                    color={subject.accent ?? theme.primary}
+                    color={locked ? theme.textTertiary : (subject.accent ?? theme.primary)}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Typography variant="label">{subject.name}</Typography>
                   {subject.description ? (
                     <Typography variant="caption" color={theme.textTertiary} numberOfLines={1}>
-                      {subject.description}
+                      {locked ? 'Upgrade to unlock' : subject.description}
                     </Typography>
+                  ) : locked ? (
+                    <Typography variant="caption" color={theme.textTertiary}>Upgrade to unlock</Typography>
                   ) : null}
                 </View>
                 {!locked && (
@@ -161,7 +173,7 @@ export default function SubjectsScreen() {
               {/* 6 level bubbles */}
               <View style={{ flexDirection: 'row', gap: spacing.xs }}>
                 {SUBJECT_LEVELS.map((level, lvlIdx) => {
-                  const isUnlocked = lvlIdx <= highestIdx;
+                  const isUnlocked = !locked && lvlIdx <= highestIdx;
                   const colour = LEVEL_COLOURS[lvlIdx] ?? theme.primary;
                   return (
                     <View
@@ -182,16 +194,6 @@ export default function SubjectsScreen() {
               )}
             </TouchableOpacity>
           );
-
-          if (locked) {
-            return (
-              <LockedFeature minTier={requiredTier} label="Upgrade to unlock more subjects">
-                {card}
-              </LockedFeature>
-            );
-          }
-
-          return card;
         }}
         ListFooterComponent={
           (subjects as Subject[]).some((_: Subject, i: number) => isSubjectLocked(i)) ? (

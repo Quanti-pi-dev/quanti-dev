@@ -58,7 +58,7 @@ export const config = {
   // Resend (email delivery) — https://resend.com/docs
   resend: {
     apiKey:   process.env['RESEND_API_KEY']   ?? '',
-    fromEmail: process.env['RESEND_FROM_EMAIL'] ?? 'Quanti-pi <noreply@quanti-pi.com>',
+    fromEmail: process.env['RESEND_FROM_EMAIL'] ?? 'QuantiPi <support@quantipi.in>',
   },
 
   // Firebase Cloud Messaging (push notifications)

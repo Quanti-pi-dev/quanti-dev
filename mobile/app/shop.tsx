@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import {
-  View, TouchableOpacity, Alert, ActivityIndicator,
+  View, TouchableOpacity, ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +27,7 @@ import {
   usePurchaseItem,
 } from '../src/hooks/useGamification';
 import { useStudyStreak } from '../src/hooks/useProgress';
+import { useGlobalUI } from '../src/contexts/GlobalUIContext';
 import type { ShopItem } from '@kd/shared';
 
 type Tab = 'coins' | 'powerups' | 'packs' | 'themes';
@@ -34,6 +35,7 @@ type Tab = 'coins' | 'powerups' | 'packs' | 'themes';
 export default function ShopScreen() {
   const { theme } = useTheme();
   const router = useRouter();
+  const { showAlert, showToast } = useGlobalUI();
   const [activeTab, setActiveTab] = useState<Tab>('coins');
   const [successSheet, setSuccessSheet] = useState<{
     visible: boolean; icon: string; title: string; subtitle?: string;
@@ -71,17 +73,19 @@ export default function ShopScreen() {
     return false;
   }, [unlockedDeckIds, purchasedThemeIds]);
 
-  // ─── Shared purchase handler ──────────────────────────────
+  // ─── Shared purchase handler ─────────────────────────────────────────
   const handleUnlock = useCallback((item: ShopItem) => {
     if (isItemPurchased(item)) {
-      Alert.alert('Already Unlocked', 'You already own this item.');
+      showToast('You already own this item.', 'info');
       return;
     }
     if (coins < item.price) {
-      Alert.alert(
-        'Not Enough Coins',
-        `You need ${item.price} coins to unlock "${item.name}". You have ${coins}.`,
-      );
+      showAlert({
+        title: 'Not Enough Coins',
+        message: `You need ${item.price} coins to unlock "${item.name}". You have ${coins}.`,
+        type: 'warning',
+        buttons: [{ text: 'OK' }],
+      });
       return;
     }
 
@@ -91,40 +95,46 @@ export default function ShopScreen() {
         ? `Buy "${item.name}" for ${item.price} coins?`
         : `Apply the "${item.name}" theme for ${item.price} coins?`;
 
-    Alert.alert('Confirm Purchase', label, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Unlock',
-        onPress: () => {
-          purchaseMutation.mutate(item.id, {
-            onSuccess: (res) => {
-              const icon = res.effect?.type === 'power_up' ? '🛡️'
-                : res.effect?.type === 'theme' ? '🎨' : '✅';
-              const subtitle = res.effect?.type === 'theme'
-                ? 'Theme is now active!'
-                : res.effect?.type === 'flashcard_pack'
-                  ? 'Deck is now in your study feed.'
-                  : res.effect?.type === 'power_up'
-                    ? 'Streak Freeze added to inventory!'
-                    : res.message;
-              setSuccessSheet({
-                visible: true, icon, title: 'Unlocked!',
-                subtitle, coinsSpent: item.price,
-                newBalance: coinBalanceRef.current - item.price,
-              });
-              if (item.category === 'theme') {
-                setPurchasedThemeIds(prev => [...prev, item.id]);
-              }
-            },
-            onError: (err: unknown) => {
-              const msg = err instanceof Error ? err.message : 'Please try again.';
-              Alert.alert('Purchase Failed', msg);
-            },
-          });
+    showAlert({
+      title: 'Confirm Purchase',
+      message: label,
+      type: 'info',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unlock',
+          onPress: () => {
+            purchaseMutation.mutate(item.id, {
+              onSuccess: (res) => {
+                const icon = res.effect?.type === 'power_up' ? '🛡️'
+                  : res.effect?.type === 'theme' ? '🎨' : '✅';
+                const subtitle = res.effect?.type === 'theme'
+                  ? 'Theme is now active!'
+                  : res.effect?.type === 'flashcard_pack'
+                    ? 'Deck is now in your study feed.'
+                    : res.effect?.type === 'power_up'
+                      ? 'Streak Freeze added to inventory!'
+                      : res.message;
+                setSuccessSheet({
+                  visible: true, icon, title: 'Unlocked!',
+                  subtitle, coinsSpent: item.price,
+                  newBalance: coinBalanceRef.current - item.price,
+                });
+                if (item.category === 'theme') {
+                  setPurchasedThemeIds(prev => [...prev, item.id]);
+                }
+              },
+              onError: (err: unknown) => {
+                const msg = err instanceof Error ? err.message : 'Please try again.';
+                showToast(msg, 'error');
+              },
+            });
+          },
         },
-      },
-    ]);
-  }, [coins, isItemPurchased, purchaseMutation, coinBalanceRef]);
+      ],
+    });
+  }, [coins, isItemPurchased, purchaseMutation, coinBalanceRef, showAlert, showToast]);
+
 
   // ─── Coin pack purchase success callback ──────────────────
   const handleCoinPurchaseSuccess = useCallback((
@@ -168,7 +178,12 @@ export default function ShopScreen() {
           ) : (
             <CoinDisplay coins={coins} size="lg" />
           )}
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Ionicons name="chevron-back" size={28} color={theme.textSecondary} />
           </TouchableOpacity>
         </View>
@@ -194,7 +209,13 @@ export default function ShopScreen() {
           padding: 4,
         }}
       >
-        <TouchableOpacity style={tabStyle('coins')} onPress={() => setActiveTab('coins')}>
+        <TouchableOpacity
+          style={tabStyle('coins')}
+          onPress={() => setActiveTab('coins')}
+          accessibilityRole="tab"
+          accessibilityLabel="Coins tab"
+          accessibilityState={{ selected: activeTab === 'coins' }}
+        >
           <Ionicons name="diamond-outline" size={16} color={activeTab === 'coins' ? theme.primary : theme.textTertiary} />
           <Typography
             variant="caption"
@@ -204,7 +225,13 @@ export default function ShopScreen() {
             Coins
           </Typography>
         </TouchableOpacity>
-        <TouchableOpacity style={tabStyle('powerups')} onPress={() => setActiveTab('powerups')}>
+        <TouchableOpacity
+          style={tabStyle('powerups')}
+          onPress={() => setActiveTab('powerups')}
+          accessibilityRole="tab"
+          accessibilityLabel="Power-Ups tab"
+          accessibilityState={{ selected: activeTab === 'powerups' }}
+        >
           <Ionicons name="shield-checkmark-outline" size={16} color={activeTab === 'powerups' ? theme.primary : theme.textTertiary} />
           <Typography
             variant="caption"
@@ -214,7 +241,13 @@ export default function ShopScreen() {
             Power-Ups
           </Typography>
         </TouchableOpacity>
-        <TouchableOpacity style={tabStyle('packs')} onPress={() => setActiveTab('packs')}>
+        <TouchableOpacity
+          style={tabStyle('packs')}
+          onPress={() => setActiveTab('packs')}
+          accessibilityRole="tab"
+          accessibilityLabel="Card Packs tab"
+          accessibilityState={{ selected: activeTab === 'packs' }}
+        >
           <Ionicons name="library-outline" size={16} color={activeTab === 'packs' ? theme.primary : theme.textTertiary} />
           <Typography
             variant="caption"
@@ -224,7 +257,13 @@ export default function ShopScreen() {
             Cards
           </Typography>
         </TouchableOpacity>
-        <TouchableOpacity style={tabStyle('themes')} onPress={() => setActiveTab('themes')}>
+        <TouchableOpacity
+          style={tabStyle('themes')}
+          onPress={() => setActiveTab('themes')}
+          accessibilityRole="tab"
+          accessibilityLabel="Themes tab"
+          accessibilityState={{ selected: activeTab === 'themes' }}
+        >
           <Ionicons name="color-palette-outline" size={16} color={activeTab === 'themes' ? theme.primary : theme.textTertiary} />
           <Typography
             variant="caption"

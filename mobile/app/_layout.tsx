@@ -5,6 +5,7 @@ import '../src/global.css';
 
 import { useEffect, useState, Component, ReactNode } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
+import { BlurView } from 'expo-blur';
 import {
   PlayfairDisplay_400Regular,
   PlayfairDisplay_700Bold,
@@ -25,6 +26,7 @@ import { ThemeProvider } from '../src/theme';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { SubscriptionProvider } from '../src/contexts/SubscriptionContext';
 import { ConfigProvider } from '../src/contexts/ConfigContext';
+import { GlobalUIProvider } from '../src/contexts/GlobalUIContext';
 import { darkTheme, spacing, radius, typography } from '../src/theme/tokens';
 
 SplashScreen.preventAutoHideAsync();
@@ -55,25 +57,49 @@ class ErrorBoundary extends Component<{ children: ReactNode }, EBState> {
   render() {
     if (this.state.hasError) {
       return (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing['2xl'], backgroundColor: darkTheme.background, gap: spacing.base }}>
-          <Text style={{ color: darkTheme.text, fontSize: 20, fontFamily: typography.heading, fontWeight: '700' }}>
-            Something went wrong
-          </Text>
-          <Text style={{ color: darkTheme.textSecondary, textAlign: 'center', fontSize: 14, fontFamily: typography.body }}>
-            {this.state.error?.message ?? 'An unexpected error occurred.'}
-          </Text>
-          <TouchableOpacity
-            onPress={this.handleReset}
-            style={{
-              backgroundColor: darkTheme.primary,
-              paddingHorizontal: spacing.xl,
-              paddingVertical: spacing.md,
-              borderRadius: radius.md,
-              marginTop: spacing.sm,
-            }}
-          >
-            <Text style={{ color: darkTheme.buttonPrimaryText, fontFamily: typography.bodySemiBold, fontSize: 16 }}>Try Again</Text>
-          </TouchableOpacity>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing['2xl'], backgroundColor: darkTheme.background }}>
+          {/* Glassmorphic error card */}
+          <View style={{
+            width: '100%', maxWidth: 360,
+            borderRadius: radius['2xl'],
+            overflow: 'hidden',
+            shadowColor: '#000', shadowOffset: { width: 0, height: 20 },
+            shadowOpacity: 0.5, shadowRadius: 36, elevation: 20,
+          }}>
+            <BlurView intensity={55} tint="dark" style={{
+              borderWidth: 1, borderColor: 'rgba(248, 113, 113, 0.35)',
+              backgroundColor: 'rgba(16, 16, 22, 0.55)',
+              alignItems: 'center', padding: spacing['2xl'], gap: spacing.lg,
+              borderRadius: radius['2xl'],
+            }}>
+              <View style={{ height: 2, width: '100%', backgroundColor: 'rgba(248, 113, 113, 0.4)', marginBottom: spacing.sm }} />
+              <View style={{
+                width: 64, height: 64, borderRadius: 32,
+                backgroundColor: 'rgba(248,113,113,0.18)',
+                borderWidth: 1, borderColor: 'rgba(248,113,113,0.35)',
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Text style={{ fontSize: 28 }}>⚠️</Text>
+              </View>
+              <Text style={{ color: 'rgba(240,237,232,0.96)', fontSize: 20, fontFamily: typography.heading, fontWeight: '700', textAlign: 'center' }}>
+                Something went wrong
+              </Text>
+              <Text style={{ color: 'rgba(184,180,174,0.85)', textAlign: 'center', fontSize: 14, fontFamily: typography.body, lineHeight: 22 }}>
+                {this.state.error?.message ?? 'An unexpected error occurred.'}
+              </Text>
+              <TouchableOpacity
+                onPress={this.handleReset}
+                style={{
+                  backgroundColor: 'rgba(96,165,250,0.18)',
+                  borderWidth: 1, borderColor: 'rgba(96,165,250,0.4)',
+                  paddingHorizontal: spacing.xl, paddingVertical: spacing.md,
+                  borderRadius: radius.xl, marginTop: spacing.sm,
+                }}
+              >
+                <Text style={{ color: '#60A5FA', fontFamily: typography.bodySemiBold, fontSize: 16 }}>Try Again</Text>
+              </TouchableOpacity>
+            </BlurView>
+          </View>
         </View>
       );
     }
@@ -150,11 +176,13 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider>
-            <ErrorBoundary>
-              <AuthProvider>
-                  <RootNavigation />
-              </AuthProvider>
-            </ErrorBoundary>
+            <GlobalUIProvider>
+              <ErrorBoundary>
+                <AuthProvider>
+                    <RootNavigation />
+                </AuthProvider>
+              </ErrorBoundary>
+            </GlobalUIProvider>
           </ThemeProvider>
         </QueryClientProvider>
       </SafeAreaProvider>

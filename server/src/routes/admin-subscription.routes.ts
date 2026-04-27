@@ -169,8 +169,27 @@ export async function adminSubscriptionRoutes(fastify: FastifyInstance): Promise
     if (!sub) return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Subscription not found' }, timestamp: new Date().toISOString() });
 
     if (input.status) {
+      // ─── Cancel Razorpay mandate when admin force-cancels or expires ─────
+      // If the subscription has a live Razorpay mandate (razorpaySubscriptionId)
+      // and the admin is terminating it, we must stop the recurring charge on Razorpay's side.
+      const isTerminating = input.status === 'canceled' || input.status === 'expired';
+      if (isTerminating && sub.razorpaySubscriptionId) {
+        try {
+          // 0 = cancel immediately (admin override, not graceful period-end)
+          await paymentService.cancelRazorpaySubscription(sub.razorpaySubscriptionId, 0);
+          request.log.info(
+            { subscriptionId: sub.id, razorpaySubscriptionId: sub.razorpaySubscriptionId },
+            'Razorpay mandate cancelled by admin',
+          );
+        } catch (err) {
+          // Log but don't block — DB state is source of truth; cron will expire anyway
+          request.log.error({ err, subscriptionId: sub.id }, 'Failed to cancel Razorpay mandate during admin patch');
+        }
+      }
+
       await subscriptionRepository.updateStatus(id, input.status as SubscriptionStatus, {
         cancelAtPeriodEnd: input.cancelAtPeriodEnd,
+        ...(isTerminating ? { canceledAt: new Date() } : {}),
       });
       await subscriptionService.invalidateCache(sub.userId);
     }

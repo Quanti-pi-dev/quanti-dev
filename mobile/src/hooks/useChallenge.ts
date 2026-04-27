@@ -16,6 +16,7 @@ import {
 } from '../services/api-contracts';
 import type { CreateChallengeInput } from '../services/api-contracts';
 import { gamificationKeys } from './useGamification';
+import { useGlobalUI } from '../contexts/GlobalUIContext';
 
 export const challengeKeys = {
   all: ['challenges'] as const,
@@ -80,6 +81,7 @@ export function useChallengeDetailPolling(id: string | null) {
 export function useCreateChallenge() {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const { showAlert } = useGlobalUI();
 
   return useMutation({
     mutationFn: (input: CreateChallengeInput) => createChallenge(input),
@@ -90,8 +92,12 @@ export function useCreateChallenge() {
     },
     // FIX U7/U8: Show user-facing error when challenge creation fails
     onError: (err: Error) => {
-      const { Alert } = require('react-native');
-      Alert.alert('Challenge Failed', err.message || 'Could not create the challenge. Please try again.');
+      showAlert({
+        title: 'Challenge Failed',
+        message: err.message || 'Could not create the challenge. Please try again.',
+        type: 'error',
+        buttons: [{ text: 'OK' }],
+      });
     },
   });
 }

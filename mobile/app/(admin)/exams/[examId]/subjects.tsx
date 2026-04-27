@@ -3,11 +3,12 @@
 // Also create new subjects and auto-attach them.
 
 import { useState } from 'react';
-import { View, ScrollView, Alert, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../../../src/theme';
+import { useGlobalUI } from '../../../../src/contexts/GlobalUIContext';
 import { spacing, radius } from '../../../../src/theme/tokens';
 import { ScreenWrapper } from '../../../../src/components/layout/ScreenWrapper';
 import { Header } from '../../../../src/components/layout/Header';
@@ -33,6 +34,7 @@ const ACCENT_COLOURS = ['#6366F1', '#EC4899', '#F59E0B', '#10B981', '#14B8A6', '
 export default function ExamSubjectsScreen() {
   const { examId, title } = useLocalSearchParams<{ examId: string; title?: string }>();
   const { theme } = useTheme();
+  const { showAlert } = useGlobalUI();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -77,7 +79,11 @@ export default function ExamSubjectsScreen() {
   }
 
   function confirmRemove(subjectId: string, name: string) {
-    Alert.alert('Remove Subject', `Remove "${name}" from this exam?`, [
+    showAlert({
+      title: 'Remove Subject',
+      message: `Remove "${name}" from this exam?`,
+      type: 'destructive',
+      buttons: [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove', style: 'destructive',
@@ -86,7 +92,8 @@ export default function ExamSubjectsScreen() {
           onError: () => showToast('Failed to remove subject', 'error'),
         }),
       },
-    ]);
+    ],
+    });
   }
 
   async function handleCreateAndAttach() {

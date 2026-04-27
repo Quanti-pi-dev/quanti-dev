@@ -22,6 +22,8 @@ export async function fetchMySubscription(): Promise<SubscriptionSummary | null>
 export interface CheckoutResult {
   trial: boolean;
   orderId?: string;
+  /** Present for recurring paid subscriptions — used as subscription_id in Razorpay SDK. */
+  razorpaySubscriptionId?: string | null;
   amountPaise?: number;
   currency?: string;
   keyId?: string;

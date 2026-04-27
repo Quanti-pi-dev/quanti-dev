@@ -95,6 +95,9 @@ function TopicAccordion({
       <TouchableOpacity
         onPress={() => setOpen(v => !v)}
         activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel={`${topic.displayName} topic. ${open ? 'Collapse' : 'Expand'} levels`}
+        accessibilityState={{ expanded: open }}
         style={{
           flexDirection: 'row', alignItems: 'center',
           padding: spacing.lg, gap: spacing.md,
@@ -144,6 +147,17 @@ function TopicAccordion({
                   key={level.level}
                   onPress={() => handleLevelPress(level, levelIndex)}
                   activeOpacity={isLocked ? 1 : 0.75}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: isLocked }}
+                  accessibilityLabel={
+                    tierLocked
+                      ? `${level.level} level. Upgrade required`
+                      : progressLocked
+                      ? `${level.level} level. Complete the previous level first`
+                      : level.isCompleted
+                      ? `${level.level} level. Completed`
+                      : `${level.level} level. ${level.correctAnswers} of ${LEVEL_UNLOCK_THRESHOLD} correct`
+                  }
                   style={{
                     backgroundColor: theme.background,
                     borderRadius: radius.xl,
@@ -170,10 +184,10 @@ function TopicAccordion({
                     >
                       <Ionicons
                         name={(isLocked
-                          ? tierLocked ? 'star-outline' : 'lock-closed-outline'
+                          ? tierLocked ? 'arrow-up-circle-outline' : 'lock-closed-outline'
                           : icon) as never}
                         size={18}
-                        color={isLocked ? theme.textTertiary : colour}
+                        color={isLocked ? (tierLocked ? theme.primary : theme.textTertiary) : colour}
                       />
                     </View>
 

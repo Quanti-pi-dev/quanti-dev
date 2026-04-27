@@ -72,6 +72,9 @@ export function PlanCard({ plan, isPopular, isCurrentPlan, onSelect }: PlanCardP
       ]}
       onPress={handlePress}
       activeOpacity={1}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: isCurrentPlan }}
+      accessibilityLabel={`${plan.displayName} plan. ${isCurrentPlan ? 'This is your current plan.' : `Price is ${formatPrice(plan.pricePaise)} ${formatCycle(plan.billingCycle)}.`}`}
     >
       {/* ── Header row ── */}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: spacing.xs }}>
@@ -135,31 +138,26 @@ export function PlanCard({ plan, isPopular, isCurrentPlan, onSelect }: PlanCardP
           end={{ x: 1, y: 0 }}
           style={{ borderRadius: radius.lg }}
         >
-          <TouchableOpacity
-            onPress={handlePress}
+          <View
             style={{ paddingVertical: spacing.md, alignItems: 'center' }}
-            activeOpacity={0.85}
           >
             <Typography variant="label" color="#FFFFFF">
               {plan.trialDays > 0 ? 'Start Free Trial' : `Choose ${plan.displayName}`}
             </Typography>
-          </TouchableOpacity>
+          </View>
         </LinearGradient>
       ) : (
-        <TouchableOpacity
-          onPress={handlePress}
-          disabled={isCurrentPlan}
+        <View
           style={{
             paddingVertical: spacing.md,
             borderRadius: radius.lg,
             alignItems: 'center',
-            backgroundColor: isCurrentPlan ? theme.cardAlt : theme.primaryMuted,
+            backgroundColor: isCurrentPlan ? theme.cardAlt : theme.primary,
           }}
-          activeOpacity={0.85}
         >
           <Typography
             variant="label"
-            color={isCurrentPlan ? theme.textTertiary : theme.primary}
+            color={isCurrentPlan ? theme.textTertiary : '#FFFFFF'}
           >
             {isCurrentPlan
               ? 'Current Plan'
@@ -167,7 +165,7 @@ export function PlanCard({ plan, isPopular, isCurrentPlan, onSelect }: PlanCardP
               ? 'Start Free Trial'
               : `Choose ${plan.displayName}`}
           </Typography>
-        </TouchableOpacity>
+        </View>
       )}
     </AnimatedTouchable>
   );

@@ -205,7 +205,7 @@ class RewardService {
     try {
       await this.pg.query(
         `INSERT INTO coin_transactions (user_id, amount, reason, reference_id)
-         VALUES ((SELECT id FROM users WHERE firebase_uid = $1), $2, $3, $4)`,
+         SELECT id, $2, $3, $4 FROM users WHERE firebase_uid = $1`,
         [userId, amount, reason, referenceId],
       );
     } catch (err) {

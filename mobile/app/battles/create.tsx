@@ -67,7 +67,7 @@ export default function CreateChallengeScreen() {
           borderBottomColor: theme.border,
         }}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => {
             if (router.canGoBack()) {
               router.back();
@@ -75,6 +75,9 @@ export default function CreateChallengeScreen() {
               router.replace('/(tabs)/battles');
             }
           }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
         >
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
@@ -113,6 +116,9 @@ export default function CreateChallengeScreen() {
                     <TouchableOpacity
                       key={exam.id}
                       onPress={() => { setSelectedExamId(exam.id); setSelectedSubjectId(null); }}
+                      accessibilityRole="radio"
+                      accessibilityLabel={exam.title}
+                      accessibilityState={{ selected: selectedExamId === exam.id }}
                       style={{
                         paddingHorizontal: spacing.base,
                         paddingVertical: spacing.sm,
@@ -151,6 +157,9 @@ export default function CreateChallengeScreen() {
                       <TouchableOpacity
                         key={subject.id}
                         onPress={() => setSelectedSubjectId(subject.id)}
+                        accessibilityRole="radio"
+                        accessibilityLabel={subject.name}
+                        accessibilityState={{ selected: selectedSubjectId === subject.id }}
                         style={{
                           paddingHorizontal: spacing.base,
                           paddingVertical: spacing.sm,
@@ -187,6 +196,9 @@ export default function CreateChallengeScreen() {
                     <TouchableOpacity
                       key={level}
                       onPress={() => setSelectedLevel(level)}
+                      accessibilityRole="radio"
+                      accessibilityLabel={level}
+                      accessibilityState={{ selected: selectedLevel === level }}
                       style={{
                         paddingHorizontal: spacing.base,
                         paddingVertical: spacing.sm,
@@ -226,6 +238,9 @@ export default function CreateChallengeScreen() {
                   <TouchableOpacity
                     key={d.value}
                     onPress={() => setDurationSeconds(d.value)}
+                    accessibilityRole="radio"
+                    accessibilityLabel={d.label}
+                    accessibilityState={{ selected: durationSeconds === d.value }}
                     style={{
                       flex: 1,
                       paddingVertical: spacing.md,
@@ -260,6 +275,9 @@ export default function CreateChallengeScreen() {
                   <TouchableOpacity
                     key={v}
                     onPress={() => setBetAmount(v)}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`${v} coins`}
+                    accessibilityState={{ selected: betAmount === v }}
                     style={{
                       paddingHorizontal: spacing.lg,
                       paddingVertical: spacing.md,
@@ -353,6 +371,8 @@ export default function CreateChallengeScreen() {
                   },
                 })
               }
+              accessibilityRole="button"
+              accessibilityLabel={`Choose opponent. Bet: ${betAmount} coins. Winner takes ${betAmount * 2}.`}
               style={{
                 backgroundColor: theme.buttonPrimary,
                 borderRadius: radius.lg,
@@ -385,6 +405,8 @@ export default function CreateChallengeScreen() {
           {step > 0 && (
             <TouchableOpacity
               onPress={() => setStep(step - 1)}
+              accessibilityRole="button"
+              accessibilityLabel="Previous step"
               style={{
                 flex: 1,
                 paddingVertical: spacing.md,
@@ -401,6 +423,9 @@ export default function CreateChallengeScreen() {
           <TouchableOpacity
             onPress={() => setStep(step + 1)}
             disabled={step === 0 ? !canProceedStep0 : !canProceedStep1}
+            accessibilityRole="button"
+            accessibilityLabel={step === 0 ? 'Next: Set stakes' : 'Next: Review challenge'}
+            accessibilityState={{ disabled: step === 0 ? !canProceedStep0 : !canProceedStep1 }}
             style={{
               flex: 1,
               paddingVertical: spacing.md,

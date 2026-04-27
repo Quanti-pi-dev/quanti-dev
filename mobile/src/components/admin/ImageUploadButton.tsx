@@ -4,7 +4,7 @@
 // Reuses the same presigned-URL pattern from EditProfileModal.
 
 import React, { useState, useCallback } from 'react';
-import { View, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import { useTheme } from '../../theme';
 import { spacing, radius } from '../../theme/tokens';
 import { Typography } from '../ui/Typography';
 import { adminApi } from '../../services/api';
+import { useGlobalUI } from '../../contexts/GlobalUIContext';
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ export function ImageUploadButton({
   placeholder = 'Tap to upload an image',
 }: ImageUploadButtonProps) {
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   const [uploading, setUploading] = useState(false);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
 
@@ -47,10 +49,12 @@ export function ImageUploadButton({
   const handlePick = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(
-        'Permission Required',
-        'Please allow access to your photo library in Settings.',
-      );
+      showAlert({
+        title: 'Permission Required',
+        message: 'Please allow access to your photo library in Settings.',
+        type: 'info',
+        buttons: [{ text: 'OK' }],
+      });
       return;
     }
 
@@ -101,7 +105,7 @@ export function ImageUploadButton({
       onUploaded(cdnUrl);
     } catch {
       setPreviewUri(null);
-      Alert.alert('Upload Failed', 'Could not upload image. Please try again.');
+      showToast('Could not upload image. Please try again.', 'error');
     } finally {
       setUploading(false);
     }

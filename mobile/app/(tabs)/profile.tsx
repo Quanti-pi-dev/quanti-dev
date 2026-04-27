@@ -5,7 +5,7 @@
 //                 BadgeShowcase, SettingsSection, EditProfileModal.
 
 import { useState, useMemo, useCallback } from 'react';
-import { View, ScrollView, Alert } from 'react-native';
+import { View, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
@@ -13,6 +13,7 @@ import { spacing } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { StatTile } from '../../src/components/StatTile';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
 import { useCoinBalance, useUserBadges } from '../../src/hooks/useGamification';
 import { useProgressSummary, useStudyStreak } from '../../src/hooks/useProgress';
 import { usePushNotifications } from '../../src/hooks/usePushNotifications';
@@ -37,6 +38,7 @@ export default function ProfileScreen() {
   const { theme, isDark, toggleTheme } = useTheme();
   const { user, preferences, logout, refreshUser } = useAuth();
   const router = useRouter();
+  const { showAlert, showToast } = useGlobalUI();
   const { registerForPushNotifications } = usePushNotifications();
   const { data: coinData } = useCoinBalance();
   const { data: progressData } = useProgressSummary();
@@ -75,11 +77,16 @@ export default function ProfileScreen() {
 
   // Logout confirmation (FIX U9)
   const handleLogout = useCallback(() => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: () => logout() },
-    ]);
-  }, [logout]);
+    showAlert({
+      title: 'Sign Out',
+      message: 'Are you sure you want to sign out?',
+      type: 'warning',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: () => logout() },
+      ],
+    });
+  }, [logout, showAlert]);
 
   return (
     <ScreenWrapper>
@@ -130,7 +137,7 @@ export default function ProfileScreen() {
               }
               await refreshUser();
             } catch {
-              Alert.alert('Error', 'Failed to update notification settings. Please try again.');
+              showToast('Failed to update notification settings. Please try again.', 'error');
             }
           }}
           onLogout={handleLogout}

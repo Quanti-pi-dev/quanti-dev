@@ -20,6 +20,29 @@ interface RazorpayRefundResponse {
   amount: number;
 }
 
+interface RazorpayPlanResponse {
+  id: string;           // e.g. "plan_XXXX"
+  interval: number;
+  period: string;       // "weekly" | "monthly"
+  item: {
+    name: string;
+    amount: number;
+    currency: string;
+  };
+}
+
+interface RazorpaySubscriptionResponse {
+  id: string;            // e.g. "sub_XXXX"
+  plan_id: string;
+  status: string;
+  total_count: number;
+  paid_count: number;
+  current_start: number; // unix timestamp
+  current_end: number;   // unix timestamp
+  customer_id?: string;
+  short_url?: string;
+}
+
 // ─── Razorpay HTTP helper ─────────────────────────────────────
 
 const RAZORPAY_TIMEOUT_MS = 15_000;
@@ -63,7 +86,7 @@ async function razorpayRequest<T>(
 // ─── Payment Service ─────────────────────────────────────────
 
 class PaymentService {
-  // ─── Create Razorpay order ──────────────────────────────
+  // ─── Create Razorpay order (one-off) ──────────────────────
   async createOrder(amountPaise: number, receiptId: string): Promise<{ orderId: string; amountPaise: number }> {
     const order = await razorpayRequest<RazorpayOrderResponse>('POST', '/orders', {
       amount: amountPaise,
@@ -75,6 +98,64 @@ class PaymentService {
       orderId: order.id,
       amountPaise: order.amount,
     };
+  }
+
+  // ─── Create Razorpay Plan (recurring) ────────────────────
+  // Razorpay Plans represent a reusable billing template. One plan per
+  // (billing_cycle, amount) combination. We create it lazily on first checkout.
+  async createRazorpayPlan(input: {
+    name: string;
+    amountPaise: number;
+    period: 'weekly' | 'monthly';
+    currency?: string;
+  }): Promise<{ razorpayPlanId: string }> {
+    const plan = await razorpayRequest<RazorpayPlanResponse>('POST', '/plans', {
+      period: input.period,
+      interval: 1,
+      item: {
+        name: input.name,
+        amount: input.amountPaise,
+        currency: input.currency ?? 'INR',
+      },
+    });
+    return { razorpayPlanId: plan.id };
+  }
+
+  // ─── Create Razorpay Subscription (recurring billing mandate) ──
+  // This replaces createOrder for paid, recurring subscriptions.
+  // The SDK uses the returned subscription_id to launch the checkout modal
+  // which captures the customer's UPI Autopay / card mandate.
+  async createRazorpaySubscription(input: {
+    razorpayPlanId: string;
+    totalCount: number;   // How many billing cycles (use a large number like 120 for "indefinite")
+    customerId?: string;  // Razorpay customer ID if already known
+    customerNotify?: 0 | 1;
+    subscriptionReceiptId?: string;
+  }): Promise<{ razorpaySubscriptionId: string; shortUrl?: string }> {
+    const sub = await razorpayRequest<RazorpaySubscriptionResponse>('POST', '/subscriptions', {
+      plan_id: input.razorpayPlanId,
+      total_count: input.totalCount,
+      customer_notify: input.customerNotify ?? 1,
+      ...(input.customerId ? { customer_id: input.customerId } : {}),
+    });
+    return {
+      razorpaySubscriptionId: sub.id,
+      shortUrl: sub.short_url,
+    };
+  }
+
+  // ─── Cancel Razorpay Subscription ──────────────────────────
+  // cancelAtCycleEnd=1 means cancel at billing period end (graceful);
+  // cancelAtCycleEnd=0 means cancel immediately.
+  async cancelRazorpaySubscription(
+    razorpaySubscriptionId: string,
+    cancelAtCycleEnd = 1,
+  ): Promise<void> {
+    await razorpayRequest<RazorpaySubscriptionResponse>(
+      'POST',
+      `/subscriptions/${razorpaySubscriptionId}/cancel`,
+      { cancel_at_cycle_end: cancelAtCycleEnd },
+    );
   }
 
   // ─── Verify payment signature ────────────────────────────

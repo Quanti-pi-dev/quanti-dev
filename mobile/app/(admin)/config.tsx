@@ -4,12 +4,13 @@
 
 import { useState, useCallback } from 'react';
 import {
-  View, ScrollView, TouchableOpacity, TextInput, Alert,
+  View, ScrollView, TouchableOpacity, TextInput,
   RefreshControl, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../src/theme';
+import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
 import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Header } from '../../src/components/layout/Header';
@@ -159,6 +160,7 @@ function ConfigRow({
 
 export default function AdminConfigScreen() {
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
@@ -178,11 +180,16 @@ export default function AdminConfigScreen() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-config'] });
       setSavingKey(null);
-      Alert.alert('✅ Saved', 'Config value updated successfully.');
+      showToast('Config value updated successfully.', 'success');
     },
     onError: (err: Error) => {
       setSavingKey(null);
-      Alert.alert('Error', err.message);
+      showAlert({
+        title: 'Error',
+        message: err.message,
+        type: 'info',
+        buttons: [{ text: 'OK' }],
+      });
     },
   });
 
@@ -190,9 +197,14 @@ export default function AdminConfigScreen() {
     mutationFn: (key: string) => deleteConfigKey(key),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-config'] });
-      Alert.alert('Deleted', 'Config key removed.');
+      showToast('Config key removed.', 'success');
     },
-    onError: (err: Error) => Alert.alert('Error', err.message),
+    onError: (err: Error) => showAlert({
+      title: 'Error',
+      message: err.message,
+      type: 'info',
+      buttons: [{ text: 'OK' }],
+    }),
   });
 
   const createMutation = useMutation({
@@ -203,9 +215,14 @@ export default function AdminConfigScreen() {
       setNewKey('');
       setNewValue('');
       setNewDesc('');
-      Alert.alert('✅ Created', 'New config key added.');
+      showToast('New config key added.', 'success');
     },
-    onError: (err: Error) => Alert.alert('Error', err.message),
+    onError: (err: Error) => showAlert({
+      title: 'Error',
+      message: err.message,
+      type: 'info',
+      buttons: [{ text: 'OK' }],
+    }),
   });
 
   const handleSave = useCallback((key: string, value: string) => {
@@ -215,10 +232,15 @@ export default function AdminConfigScreen() {
   }, [saveMutation, configs]);
 
   const handleDelete = useCallback((key: string) => {
-    Alert.alert('Delete Config', `Are you sure you want to delete "${key}"?`, [
+    showAlert({
+      title: 'Delete Config',
+      message: `Are you sure you want to delete "${key}"?`,
+      type: 'destructive',
+      buttons: [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => deleteMutation.mutate(key) },
-    ]);
+    ],
+    });
   }, [deleteMutation]);
 
   const filtered = (configs ?? []).filter(

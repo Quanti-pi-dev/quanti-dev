@@ -16,7 +16,6 @@ import { Typography } from '../../src/components/ui/Typography';
 import { Input } from '../../src/components/ui/Input';
 import { Chip } from '../../src/components/ui/Chip';
 import { Skeleton } from '../../src/components/ui/Skeleton';
-import { LockedFeature } from '../../src/components/subscription/LockedFeature';
 import { DailyLimitBanner } from '../../src/components/subscription/DailyLimitBanner';
 import { TrialPassBanner } from '../../src/components/subscription/TrialPassBanner';
 import { useSubscriptionGate } from '../../src/hooks/useSubscriptionGate';
@@ -45,13 +44,17 @@ function ExamTile({
   exam: Exam; accent: string; onPress: () => void; isLocked: boolean; index: number;
 }) {
   const { theme } = useTheme();
+  const router = useRouter();
   const { animStyle } = useFadeInUp({ delay: Math.min(index * 55, 330) });
 
-  const card = (
+  return (
     <Animated.View style={[{ flex: 1 }, animStyle]}>
       <TouchableOpacity
-        onPress={isLocked ? undefined : onPress}
-        activeOpacity={isLocked ? 1 : 0.75}
+        onPress={isLocked ? () => router.push('/subscription') : onPress}
+        activeOpacity={0.75}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: isLocked }}
+        accessibilityLabel={isLocked ? `${exam.title}. Locked — upgrade to unlock` : exam.title}
         style={{
           flex: 1,
           backgroundColor: theme.card,
@@ -96,21 +99,12 @@ function ExamTile({
         {/* Meta row */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
           <Typography variant="caption" color={theme.textTertiary}>
-            {exam.questionCount > 0 ? `${exam.questionCount} q` : exam.category}
+            {isLocked ? 'Upgrade to unlock' : (exam.questionCount > 0 ? `${exam.questionCount} q` : exam.category)}
           </Typography>
         </View>
       </TouchableOpacity>
     </Animated.View>
   );
-
-  if (isLocked) {
-    return (
-      <LockedFeature minTier={1} label="Upgrade to access all exams" style={{ flex: 1 }}>
-        {card}
-      </LockedFeature>
-    );
-  }
-  return card;
 }
 
 // ─── Screen ──────────────────────────────────────────────────
@@ -164,6 +158,8 @@ export default function StudyScreen() {
         <TouchableOpacity
           onPress={() => router.push('/tournaments')}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Tournaments — compete and win coins"
           style={{
             backgroundColor: '#6366F112',
             borderWidth: 1,

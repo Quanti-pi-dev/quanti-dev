@@ -18,6 +18,7 @@ function rowToPlan(row: Record<string, unknown>): Plan {
     isActive: row.is_active as boolean,
     sortOrder: row.sort_order as number,
     createdAt: (row.created_at as Date).toISOString(),
+    razorpayPlanId: (row.razorpay_plan_id as string | null) ?? null,
   };
 }
 
@@ -30,7 +31,8 @@ class PlanRepository {
   async listActive(): Promise<Plan[]> {
     const result = await this.pool.query(
       `SELECT id, slug, display_name, tier, billing_cycle, price_paise,
-              currency, features, trial_days, is_active, sort_order, created_at
+              currency, features, trial_days, is_active, sort_order, created_at,
+              razorpay_plan_id
        FROM plans
        WHERE is_active = TRUE
        ORDER BY sort_order ASC`,
@@ -42,7 +44,8 @@ class PlanRepository {
   async findById(id: string): Promise<Plan | null> {
     const result = await this.pool.query(
       `SELECT id, slug, display_name, tier, billing_cycle, price_paise,
-              currency, features, trial_days, is_active, sort_order, created_at
+              currency, features, trial_days, is_active, sort_order, created_at,
+              razorpay_plan_id
        FROM plans WHERE id = $1`,
       [id],
     );
@@ -54,7 +57,8 @@ class PlanRepository {
   async findBySlug(slug: string): Promise<Plan | null> {
     const result = await this.pool.query(
       `SELECT id, slug, display_name, tier, billing_cycle, price_paise,
-              currency, features, trial_days, is_active, sort_order, created_at
+              currency, features, trial_days, is_active, sort_order, created_at,
+              razorpay_plan_id
        FROM plans WHERE slug = $1`,
       [slug],
     );
@@ -66,7 +70,8 @@ class PlanRepository {
   async listAll(): Promise<Plan[]> {
     const result = await this.pool.query(
       `SELECT id, slug, display_name, tier, billing_cycle, price_paise,
-              currency, features, trial_days, is_active, sort_order, created_at
+              currency, features, trial_days, is_active, sort_order, created_at,
+              razorpay_plan_id
        FROM plans ORDER BY sort_order ASC`,
     );
     return result.rows.map(rowToPlan);
@@ -120,6 +125,15 @@ class PlanRepository {
     );
     if (result.rows.length === 0) return null;
     return rowToPlan(result.rows[0]);
+  }
+  // ─── Set Razorpay plan ID (lazy, once per plan) ───────
+  // Called during first paid checkout to persist the Razorpay Plans API ID
+  // so future subscriptions can reuse the same plan object.
+  async setRazorpayPlanId(id: string, razorpayPlanId: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE plans SET razorpay_plan_id = $2 WHERE id = $1 AND razorpay_plan_id IS NULL`,
+      [id, razorpayPlanId],
+    );
   }
 }
 

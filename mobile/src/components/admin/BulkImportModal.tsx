@@ -9,7 +9,6 @@ import {
   ScrollView,
   Modal,
   TouchableOpacity,
-  Alert,
   Animated,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
@@ -26,6 +25,7 @@ import {
   ParsedFlashcard,
   ParseResult,
 } from '../../utils/csvParser';
+import { useGlobalUI } from '../../contexts/GlobalUIContext';
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -50,6 +50,7 @@ interface UploadProgress {
 
 export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalProps) {
   const { theme } = useTheme();
+  const { showToast } = useGlobalUI();
 
   const [format, setFormat] = useState<FileFormat>('csv');
   const [fileName, setFileName] = useState<string | null>(null);
@@ -112,7 +113,7 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
       const parsed = format === 'csv' ? parseCSV(content) : parseJSON(content);
       setResult(parsed);
     } catch {
-      Alert.alert('File Error', 'Could not read the selected file. Please try again.');
+      showToast('Could not read the selected file. Please try again.', 'error');
     }
   }, [format]);
 
@@ -137,9 +138,9 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
       });
       setSubmitted(true);
     } catch (err: unknown) {
-      Alert.alert(
-        'Upload Failed',
+      showToast(
         err instanceof Error ? err.message : 'Failed to upload cards. Please try again.',
+        'error',
       );
     } finally {
       setSubmitting(false);

@@ -1,7 +1,7 @@
 // ─── CurrentSubscriptionBanner ────────────────────────────────
 // Shows active plan info at the top of the subscription screen.
 
-import { View, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -10,6 +10,7 @@ import { spacing, radius } from '../../theme/tokens';
 import { Typography } from '../ui/Typography';
 import { cancelSubscription, reactivateSubscription } from '../../services/subscription.service';
 import { useSubscription } from '../../contexts/SubscriptionContext';
+import { useGlobalUI } from '../../contexts/GlobalUIContext';
 import type { SubscriptionSummary } from '@kd/shared';
 
 interface CurrentSubscriptionBannerProps {
@@ -19,6 +20,7 @@ interface CurrentSubscriptionBannerProps {
 export function CurrentSubscriptionBanner({ subscription }: CurrentSubscriptionBannerProps) {
   const { theme } = useTheme();
   const { refreshSubscription } = useSubscription();
+  const { showAlert, showToast } = useGlobalUI();
   const [loading, setLoading] = useState(false);
 
   const isCanceling = subscription.cancelAtPeriodEnd;
@@ -28,10 +30,11 @@ export function CurrentSubscriptionBanner({ subscription }: CurrentSubscriptionB
   });
 
   async function handleCancel() {
-    Alert.alert(
-      'Cancel Subscription',
-      `You'll keep access until ${expiryDate}. Cancel anyway?`,
-      [
+    showAlert({
+      title: 'Cancel Subscription',
+      message: `You'll keep access until ${expiryDate}. Cancel anyway?`,
+      type: 'destructive',
+      buttons: [
         { text: 'Keep Subscription', style: 'cancel' },
         {
           text: 'Cancel', style: 'destructive',
@@ -42,14 +45,14 @@ export function CurrentSubscriptionBanner({ subscription }: CurrentSubscriptionB
               await refreshSubscription();
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             } catch {
-              Alert.alert('Error', 'Could not cancel. Please try again.');
+              showToast('Could not cancel. Please try again.', 'error');
             } finally {
               setLoading(false);
             }
           },
         },
       ],
-    );
+    });
   }
 
   async function handleReactivate() {
@@ -59,7 +62,7 @@ export function CurrentSubscriptionBanner({ subscription }: CurrentSubscriptionB
       await refreshSubscription();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
-      Alert.alert('Error', 'Could not reactivate. Please try again.');
+      showToast('Could not reactivate. Please try again.', 'error');
     } finally {
       setLoading(false);
     }

@@ -9,10 +9,12 @@ import { Typography } from '../ui/Typography';
 interface LineChartProps {
   data: { label: string; value: number }[];
   chartWidth: number;
+  empty?: boolean;
 }
 
-export function LineChart({ data, chartWidth }: LineChartProps) {
+export function LineChart({ data, chartWidth, empty = false }: LineChartProps) {
   const { theme } = useTheme();
+  // Guard: need at least 2 points to draw a line. Parent is responsible for padding.
   if (data.length < 2) return null;
 
   const H = 80;
@@ -30,8 +32,16 @@ export function LineChart({ data, chartWidth }: LineChartProps) {
     value: d.value,
   }));
 
+  const accessibilityLabel = empty
+    ? 'Accuracy trend chart — no data yet'
+    : `Accuracy trend. Latest: ${data[data.length - 1]?.value ?? 0}%`;
+
   return (
-    <View style={{ height: H + 20 }}>
+    <View
+      style={{ height: H + 20, opacity: empty ? 0.22 : 1 }}
+      accessible={true}
+      accessibilityLabel={accessibilityLabel}
+    >
       {/* Grid lines */}
       {[0, 0.5, 1].map((f, gi) => (
         <View

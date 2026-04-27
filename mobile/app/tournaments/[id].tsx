@@ -3,13 +3,14 @@
 
 import { useState, useCallback } from 'react';
 import {
-  View, ScrollView, TouchableOpacity, Alert,
+  View, ScrollView, TouchableOpacity,
   ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/theme';
+import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
 import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Header } from '../../src/components/layout/Header';
@@ -27,6 +28,7 @@ import { TIER_LABELS, formatDate } from '../../src/utils/constants';
 export default function TournamentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { theme } = useTheme();
+  const { showAlert, showToast } = useGlobalUI();
   const router = useRouter();
   // FIX B6: Remove non-null assertions — use safe fallback with enabled guard in hook
   const { data: tournament, isLoading, isError, refetch } = useTournament(id ?? '');
@@ -47,10 +49,11 @@ export default function TournamentDetailScreen() {
       ? `\nEntry fee: ${tournament.entryFeeCoins} coins`
       : '\nFree entry';
 
-    Alert.alert(
-      'Enter Tournament',
-      `Join "${tournament.name}"?${feeMsg}`,
-      [
+    showAlert({
+      title: 'Enter Tournament',
+      message: `Join "${tournament.name}"?${feeMsg}`,
+      type: 'info',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Enter',
@@ -59,17 +62,17 @@ export default function TournamentDetailScreen() {
             try {
               const result = await enterMutation.mutateAsync(tournament._id);
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert('🎉 Entered!', result.message);
+              showToast(result.message, 'success');
             } catch (err) {
               const msg = err instanceof Error ? err.message : 'Could not enter tournament.';
-              Alert.alert('Entry Failed', msg);
+              showToast(msg, 'error');
             } finally {
               setEntering(false);
             }
           },
         },
       ],
-    );
+    });
   }, [tournament, enterMutation]);
 
   const handlePlay = useCallback(() => {
@@ -87,7 +90,17 @@ export default function TournamentDetailScreen() {
         params: { id: tournament.deckId, title: tournament.name, tournamentId: tournament._id },
       });
     } else {
-      Alert.alert('Tournament', 'This tournament does not have a linked exam or deck yet.');
+      showAlert({
+
+        title: 'Tournament',
+
+        message: 'This tournament does not have a linked exam or deck yet.',
+
+        type: 'info',
+
+        buttons: [{ text: 'OK' }],
+
+      });
     }
   }, [tournament, router]);
 
@@ -213,6 +226,8 @@ export default function TournamentDetailScreen() {
               <TouchableOpacity
                 onPress={handlePlay}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Play Tournament"
                 style={{
                   backgroundColor: '#10B981',
                   paddingVertical: spacing.md,
@@ -239,6 +254,13 @@ export default function TournamentDetailScreen() {
                 onPress={handleEnter}
                 disabled={entering || !canAfford}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: entering || !canAfford, busy: entering }}
+                accessibilityLabel={
+                  tournament.entryFeeCoins > 0
+                    ? `Enter Tournament for ${tournament.entryFeeCoins} coins`
+                    : 'Enter Tournament for free'
+                }
                 style={{
                   backgroundColor: canAfford ? theme.primary : theme.cardAlt,
                   paddingVertical: spacing.md,

@@ -86,6 +86,9 @@ export async function subscriptionRoutes(fastify: FastifyInstance): Promise<void
       data: {
         trial: false,
         orderId: result.orderId,
+        // razorpaySubscriptionId is present for auto-debit recurring subscriptions.
+        // When set, the mobile SDK should use subscription_id instead of order_id.
+        razorpaySubscriptionId: result.razorpaySubscriptionId ?? null,
         amountPaise: result.amountPaise,
         currency: 'INR',
         keyId: config.razorpay.keyId,

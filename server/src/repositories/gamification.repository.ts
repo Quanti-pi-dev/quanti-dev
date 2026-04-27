@@ -136,7 +136,7 @@ class GamificationRepository {
     // Record in PostgreSQL
     await this.pg.query(
       `INSERT INTO user_badges (user_id, badge_id)
-       VALUES ((SELECT id FROM users WHERE firebase_uid = $1), $2)
+       SELECT id, $2 FROM users WHERE firebase_uid = $1
        ON CONFLICT (user_id, badge_id) DO NOTHING`,
       [userId, badgeId],
     );
@@ -308,7 +308,7 @@ class GamificationRepository {
       // Record purchase
       await this.pg.query(
         `INSERT INTO user_purchases (user_id, item_id, coins_spent)
-         VALUES ((SELECT id FROM users WHERE firebase_uid = $1), $2, $3)`,
+         SELECT id, $2, $3 FROM users WHERE firebase_uid = $1`,
         [userId, itemId, price],
       );
 
@@ -322,7 +322,7 @@ class GamificationRepository {
         // Permanently unlock the deck for the user (idempotent)
         await this.pg.query(
           `INSERT INTO user_unlocked_decks (user_id, deck_id)
-           VALUES ((SELECT id FROM users WHERE firebase_uid = $1), $2)
+           SELECT id, $2 FROM users WHERE firebase_uid = $1
            ON CONFLICT (user_id, deck_id) DO NOTHING`,
           [userId, deckId],
         );
@@ -331,7 +331,7 @@ class GamificationRepository {
         // Save active theme to user preferences
         await this.pg.query(
           `INSERT INTO user_preferences (user_id, active_theme)
-           VALUES ((SELECT id FROM users WHERE firebase_uid = $1), $2)
+           SELECT id, $2 FROM users WHERE firebase_uid = $1
            ON CONFLICT (user_id)
            DO UPDATE SET active_theme = EXCLUDED.active_theme, updated_at = NOW()`,
           [userId, themeKey],
