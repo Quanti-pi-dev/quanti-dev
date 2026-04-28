@@ -584,7 +584,7 @@ class ProgressRepository {
   }
 
   /** Per-subject strength from Redis level progress, enriched with PG names. */
-  /** Per-subject strength from Redis level progress + user selected subjects */
+  /** Per-subject strength from Redis level progress + standalone sessions + user selected subjects */
   private async getSubjectStrengths(userId: string): Promise<SubjectStrength[]> {
     // 1. Fetch user's selected subjects from preferences
     const prefsResult = await this.pg.query(
@@ -593,23 +593,60 @@ class ProgressRepository {
     );
     const selectedSubjectIds: string[] = prefsResult.rows[0]?.selected_subjects ?? [];
 
-    const trackedMembers = await this.redis.smembers(`level_progress_keys:${userId}`);
+    // 2. Aggregate correct/total per subject
+    const subjectAgg = new Map<string, { correct: number; total: number }>();
     
-    // Parse members and pipeline HGETALL
+    // Initialize with selected subjects (so they always show on the radar)
+    for (const subId of selectedSubjectIds) {
+       subjectAgg.set(subId, { correct: 0, total: 0 });
+    }
+
+    // 3. Process standalone study sessions
+    try {
+      const sessionsResult = await this.pg.query(
+        `SELECT deck_id, SUM(correct_answers) as correct, SUM(cards_studied) as total
+         FROM study_sessions 
+         WHERE user_id = (SELECT id FROM users WHERE firebase_uid = $1)
+         GROUP BY deck_id`,
+        [userId]
+      );
+
+      const deckIds = sessionsResult.rows.map(r => r.deck_id).filter(id => /^[0-9a-fA-F]{24}$/.test(id));
+      const deckToSubject = new Map<string, string>();
+      
+      if (deckIds.length > 0) {
+        const decks = await getMongoDb().collection('decks').find({
+          _id: { $in: deckIds.map(id => new ObjectId(id)) }
+        }).project({ subjectId: 1 }).toArray();
+        
+        for (const deck of decks) {
+          if (deck.subjectId) {
+            deckToSubject.set(deck._id.toString(), deck.subjectId.toString());
+          }
+        }
+      }
+
+      for (const r of sessionsResult.rows) {
+        const subId = deckToSubject.get(r.deck_id);
+        if (subId) {
+          const existing = subjectAgg.get(subId) ?? { correct: 0, total: 0 };
+          existing.correct += Number(r.correct || 0);
+          existing.total += Number(r.total || 0);
+          subjectAgg.set(subId, existing);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to process standalone sessions:', err);
+    }
+
+    // 4. Process Redis Level Progress
+    const trackedMembers = await this.redis.smembers(`level_progress_keys:${userId}`);
     type ParsedKey = { examId: string; subjectId: string; topicSlug: string; level: string };
     const parsed: ParsedKey[] = [];
     for (const m of trackedMembers) {
       const seg = m.split(':');
       if (seg.length !== 4) continue;
       parsed.push({ examId: seg[0]!, subjectId: seg[1]!, topicSlug: seg[2]!, level: seg[3]! });
-    }
-
-    // 2. Aggregate correct/total per subject from Redis
-    const subjectAgg = new Map<string, { correct: number; total: number }>();
-    
-    // Initialize with selected subjects (so they always show on the radar)
-    for (const subId of selectedSubjectIds) {
-       subjectAgg.set(subId, { correct: 0, total: 0 });
     }
 
     if (parsed.length > 0) {
@@ -635,13 +672,12 @@ class ProgressRepository {
 
     if (subjectAgg.size === 0) return [];
 
-    // 3. Enrich with names from MongoDB
+    // 5. Enrich with names from MongoDB
     const subjectIds = [...subjectAgg.keys()];
     const nameMap = new Map<string, string>();
     
     if (subjectIds.length > 0) {
       try {
-        // Only map valid 24-character hex strings to ObjectId
         const validIds = subjectIds.filter(id => /^[0-9a-fA-F]{24}$/.test(id));
         const objectIds = validIds.map(id => new ObjectId(id));
         
