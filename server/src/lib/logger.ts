@@ -11,7 +11,6 @@ import pino from 'pino';
 
 // Read env vars directly to avoid circular dependency with config.ts
 const LOG_LEVEL = process.env['LOG_LEVEL'] ?? 'info';
-const NODE_ENV  = process.env['NODE_ENV']  ?? 'development';
 
 // ─── Pretty Transport Options ───────────────────────────────
 // Applied only outside production; production emits raw NDJSON
@@ -21,7 +20,7 @@ const prettyOptions = {
   target: 'pino-pretty',
   options: {
     colorize:        true,
-    translateTime:   'HH:MM:ss',
+    translateTime:   'SYS:standard',
     ignore:          'pid,hostname',
     // Show the `service` binding after the level badge when present
     messageFormat:   '{msg}',
@@ -35,7 +34,7 @@ const prettyOptions = {
 
 export const logger = pino({
   level: LOG_LEVEL,
-  transport: NODE_ENV !== 'production' ? prettyOptions : undefined,
+  transport: prettyOptions,
   // Redact sensitive fields from structured context
   redact: {
     paths: ['password', 'token', 'secret', 'authorization'],

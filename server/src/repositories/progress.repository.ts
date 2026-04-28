@@ -2,8 +2,8 @@
 // Redis-primary storage for real-time progress tracking.
 // Optional write-behind to PostgreSQL for durable history.
 
-import { getRedisClient } from '../lib/database.js';
-import { getPostgresPool } from '../lib/database.js';
+import { getRedisClient, getPostgresPool, getMongoDb } from '../lib/database.js';
+import { ObjectId } from 'mongodb';
 import type { ProgressRecord, StudyStreak, StudySession, ProgressSummary, DailyActivity, LevelProgress, SubjectLevelSummary, ExamProgress, LevelAnswerResult } from '@kd/shared';
 import type { AdvancedInsights, ChronotypeData, Chronotype, HourlyAccuracy, SpeedAccuracyPoint, SubjectStrength } from '@kd/shared';
 import { SUBJECT_LEVELS, LEVEL_UNLOCK_THRESHOLD } from '@kd/shared';
@@ -635,15 +635,29 @@ class ProgressRepository {
 
     if (subjectAgg.size === 0) return [];
 
-    // 3. Enrich with names from PostgreSQL
+    // 3. Enrich with names from MongoDB
     const subjectIds = [...subjectAgg.keys()];
-    const nameResult = await this.pg.query(
-      `SELECT id, name FROM subjects WHERE id = ANY($1)`,
-      [subjectIds],
-    );
-    const nameMap = new Map<string, string>(
-      nameResult.rows.map((r: { id: string; name: string }) => [r.id, r.name]),
-    );
+    const nameMap = new Map<string, string>();
+    
+    if (subjectIds.length > 0) {
+      try {
+        // Only map valid 24-character hex strings to ObjectId
+        const validIds = subjectIds.filter(id => /^[0-9a-fA-F]{24}$/.test(id));
+        const objectIds = validIds.map(id => new ObjectId(id));
+        
+        const subjects = await getMongoDb()
+          .collection('subjects')
+          .find({ _id: { $in: objectIds } })
+          .project({ name: 1 })
+          .toArray();
+          
+        for (const sub of subjects) {
+          nameMap.set(sub._id.toString(), sub.name);
+        }
+      } catch (err) {
+        console.error('Failed to enrich subject names from Mongo:', err);
+      }
+    }
 
     // Normalize strength scores 0–100
     const entries = [...subjectAgg.entries()].map(([subjectId, agg]) => ({
