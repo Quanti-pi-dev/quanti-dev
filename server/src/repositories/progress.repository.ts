@@ -536,8 +536,8 @@ class ProgressRepository {
       sessionCount: r.session_count,
     }));
 
-    // Find peak hour (highest accuracy with at least 2 sessions for significance)
-    const qualified = hourlyAccuracy.filter(h => h.sessionCount >= 2);
+    // Find peak hour (highest accuracy with at least 1 session)
+    const qualified = hourlyAccuracy.filter(h => h.sessionCount >= 1);
     const peak = qualified.length > 0
       ? qualified.reduce((best, h) => h.accuracy > best.accuracy ? h : best, qualified[0]!)
       : hourlyAccuracy.length > 0
@@ -584,10 +584,17 @@ class ProgressRepository {
   }
 
   /** Per-subject strength from Redis level progress, enriched with PG names. */
+  /** Per-subject strength from Redis level progress + user selected subjects */
   private async getSubjectStrengths(userId: string): Promise<SubjectStrength[]> {
-    const trackedMembers = await this.redis.smembers(`level_progress_keys:${userId}`);
-    if (trackedMembers.length === 0) return [];
+    // 1. Fetch user's selected subjects from preferences
+    const prefsResult = await this.pg.query(
+      `SELECT selected_subjects FROM user_preferences WHERE user_id = (SELECT id FROM users WHERE firebase_uid = $1)`,
+      [userId]
+    );
+    const selectedSubjectIds: string[] = prefsResult.rows[0]?.selected_subjects ?? [];
 
+    const trackedMembers = await this.redis.smembers(`level_progress_keys:${userId}`);
+    
     // Parse members and pipeline HGETALL
     type ParsedKey = { examId: string; subjectId: string; topicSlug: string; level: string };
     const parsed: ParsedKey[] = [];
@@ -596,32 +603,39 @@ class ProgressRepository {
       if (seg.length !== 4) continue;
       parsed.push({ examId: seg[0]!, subjectId: seg[1]!, topicSlug: seg[2]!, level: seg[3]! });
     }
-    if (parsed.length === 0) return [];
 
-    const pipeline = this.redis.pipeline();
-    for (const p of parsed) {
-      pipeline.hgetall(`level_progress:${userId}:${p.examId}:${p.subjectId}:${p.topicSlug}:${p.level}`);
-    }
-    const pipelineResults = await pipeline.exec();
-
-    // Aggregate correct/total per subject
+    // 2. Aggregate correct/total per subject from Redis
     const subjectAgg = new Map<string, { correct: number; total: number }>();
-    for (let i = 0; i < parsed.length; i++) {
-      const p = parsed[i]!;
-      const [err, rawData] = pipelineResults?.[i] ?? [null, {}];
-      const data = (!err && rawData ? rawData : {}) as Record<string, string>;
-      const correct = parseInt(data['correct'] ?? '0', 10);
-      const total = parseInt(data['total'] ?? '0', 10);
+    
+    // Initialize with selected subjects (so they always show on the radar)
+    for (const subId of selectedSubjectIds) {
+       subjectAgg.set(subId, { correct: 0, total: 0 });
+    }
 
-      const existing = subjectAgg.get(p.subjectId) ?? { correct: 0, total: 0 };
-      existing.correct += correct;
-      existing.total += total;
-      subjectAgg.set(p.subjectId, existing);
+    if (parsed.length > 0) {
+      const pipeline = this.redis.pipeline();
+      for (const p of parsed) {
+        pipeline.hgetall(`level_progress:${userId}:${p.examId}:${p.subjectId}:${p.topicSlug}:${p.level}`);
+      }
+      const pipelineResults = await pipeline.exec();
+
+      for (let i = 0; i < parsed.length; i++) {
+        const p = parsed[i]!;
+        const [err, rawData] = pipelineResults?.[i] ?? [null, {}];
+        const data = (!err && rawData ? rawData : {}) as Record<string, string>;
+        const correct = parseInt(data['correct'] ?? '0', 10);
+        const total = parseInt(data['total'] ?? '0', 10);
+
+        const existing = subjectAgg.get(p.subjectId) ?? { correct: 0, total: 0 };
+        existing.correct += correct;
+        existing.total += total;
+        subjectAgg.set(p.subjectId, existing);
+      }
     }
 
     if (subjectAgg.size === 0) return [];
 
-    // Enrich with names from PostgreSQL
+    // 3. Enrich with names from PostgreSQL
     const subjectIds = [...subjectAgg.keys()];
     const nameResult = await this.pg.query(
       `SELECT id, name FROM subjects WHERE id = ANY($1)`,
@@ -645,7 +659,7 @@ class ProgressRepository {
     return entries.map(e => ({
       subjectId: e.subjectId,
       subjectName: e.subjectName,
-      strengthScore: Math.round((e.rawScore / maxScore) * 100),
+      strengthScore: maxScore > 0 ? Math.round((e.rawScore / maxScore) * 100) : 0,
       totalCorrect: e.totalCorrect,
       totalAnswers: e.totalAnswers,
     }));
