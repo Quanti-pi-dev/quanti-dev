@@ -16,9 +16,8 @@ const HEATMAP_WEEKS = 5;
 /** Assumed max cards per subject for mastery bar (6 levels × 20 cards). */
 export const CARDS_PER_SUBJECT = 120;
 
-/** Colors assigned to levels/topics by index. */
+/** Colors assigned to levels by index. */
 export const LEVEL_COLORS = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#14B8A6'];
-export const TOPIC_COLORS = ['#6366F1', '#EC4899', '#F59E0B', '#10B981', '#8B5CF6', '#14B8A6'];
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -34,12 +33,6 @@ interface ChartPoint {
   value: number;
 }
 
-interface TopicBreakdown {
-  name: string;
-  pct: number;
-  color: string;
-}
-
 interface WeeklyComparison {
   thisCards: number;
   thisAcc: number;
@@ -53,7 +46,6 @@ export interface ProgressAnalytics {
   accuracyChartData: ChartPoint[];
   cardsChartData: ChartPoint[];
   heatmap: number[][];
-  topicBreakdownPct: TopicBreakdown[];
   weeklyComparison: WeeklyComparison | null;
 
   // Summary stats
@@ -151,29 +143,6 @@ export function useProgressAnalytics(enabled: boolean): ProgressAnalytics {
     return grid;
   }, [weeklyData]);
 
-  // ── Topic distribution from comprehensive history ────────────
-  const topicBreakdownPct = useMemo(() => {
-    if (!advancedData?.subjectStrengths) return [];
-
-    const subjects = [...advancedData.subjectStrengths]
-      .filter((s) => s.totalCorrect > 0)
-      .sort((a, b) => b.totalCorrect - a.totalCorrect)
-      .slice(0, 5);
-
-    const breakdown = subjects.map(
-      (s, i) => ({
-        name: s.subjectName,
-        pct: s.totalCorrect,
-        color: TOPIC_COLORS[i % TOPIC_COLORS.length]!,
-      }),
-    );
-    const total = breakdown.reduce((acc, t) => acc + t.pct, 0) || 1;
-    return breakdown.map((t) => ({
-      ...t,
-      pct: Math.round((t.pct / total) * 100),
-    }));
-  }, [advancedData]);
-
   // ── Chart summary stats ────────────────────────────────────
   const { totalWeekCards, bestDay, avgAccuracy } = useMemo(
     () => ({
@@ -229,7 +198,6 @@ export function useProgressAnalytics(enabled: boolean): ProgressAnalytics {
     accuracyChartData,
     cardsChartData,
     heatmap,
-    topicBreakdownPct,
     weeklyComparison,
     totalWeekCards,
     bestDay,

@@ -91,7 +91,7 @@ export function ChronotypeCard({ data }: ChronotypeCardProps) {
     return bars;
   }, [data]);
 
-  const maxAcc = Math.max(...chartBars.map((b) => b.accuracy), 1);
+  const maxSessions = Math.max(...chartBars.map((b) => b.sessions), 1);
 
   // Generate insight text
   const peakRange = `${formatHour(data.peakHour)} – ${formatHour((data.peakHour + 3) % 24)}`;
@@ -157,7 +157,7 @@ export function ChronotypeCard({ data }: ChronotypeCardProps) {
           
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 100, gap: 4, borderBottomWidth: 1, borderBottomColor: theme.border + '40', paddingBottom: 4 }}>
             {chartBars.map((bar, index) => {
-              const heightPct = bar.sessions > 0 ? Math.max(12, (bar.accuracy / maxAcc) * 96) : 6;
+              const heightPct = bar.sessions > 0 ? Math.max(12, (bar.sessions / maxSessions) * 96) : 6;
               return (
                 <View key={bar.hour} style={{ flex: 1, alignItems: 'center' }}>
                   <AnimatedBar heightPct={heightPct} isPeak={bar.isPeak} baseColor={cfg.color} delay={index * 20} />

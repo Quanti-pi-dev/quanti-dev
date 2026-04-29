@@ -5,7 +5,7 @@
 import { getRedisClient, getPostgresPool, getMongoDb } from '../lib/database.js';
 import { ObjectId } from 'mongodb';
 import type { ProgressRecord, StudyStreak, StudySession, ProgressSummary, DailyActivity, LevelProgress, SubjectLevelSummary, ExamProgress, LevelAnswerResult } from '@kd/shared';
-import type { AdvancedInsights, ChronotypeData, Chronotype, HourlyAccuracy, SpeedAccuracyPoint, SubjectStrength } from '@kd/shared';
+import type { AdvancedInsights, ChronotypeData, Chronotype, HourlyAccuracy, SpeedAccuracyPoint, SubjectStrength, SubjectTopicDistribution, TopicDistributionEntry } from '@kd/shared';
 import { SUBJECT_LEVELS, LEVEL_UNLOCK_THRESHOLD } from '@kd/shared';
 
 class ProgressRepository {
@@ -507,12 +507,13 @@ class ProgressRepository {
    * 3. Subject Strengths — per-subject strength scores from Redis level data
    */
   async getAdvancedInsights(userId: string): Promise<AdvancedInsights> {
-    const [chronotype, speedAccuracy, subjectStrengths] = await Promise.all([
+    const [chronotype, speedAccuracy, subjectStrengths, topicDistribution] = await Promise.all([
       this.getChronotypeData(userId),
       this.getSpeedAccuracyData(userId),
       this.getSubjectStrengths(userId),
+      this.getTopicDistribution(userId),
     ]);
-    return { chronotype, speedAccuracy, subjectStrengths };
+    return { chronotype, speedAccuracy, subjectStrengths, topicDistribution };
   }
 
   /** Hourly accuracy from study_sessions — which hours produce the best results? */
@@ -712,6 +713,116 @@ class ProgressRepository {
       totalCorrect: e.totalCorrect,
       totalAnswers: e.totalAnswers,
     }));
+  }
+
+  /** Aggregates correct/total answers per (subject → topic) from Redis level progress,
+   * then enriches subject names from MongoDB.
+   * Returns the hierarchical data the sunburst chart needs.
+   */
+  private async getTopicDistribution(userId: string): Promise<SubjectTopicDistribution[]> {
+    // 1. Read all tracked level-progress keys from the O(1) SET
+    const trackedMembers = await this.redis.smembers(`level_progress_keys:${userId}`);
+    if (trackedMembers.length === 0) return [];
+
+    // 2. Parse keys: "examId:subjectId:topicSlug:level"
+    type ParsedKey = { examId: string; subjectId: string; topicSlug: string; level: string };
+    const parsed: ParsedKey[] = [];
+    for (const m of trackedMembers) {
+      const seg = m.split(':');
+      if (seg.length !== 4) continue;
+      parsed.push({ examId: seg[0]!, subjectId: seg[1]!, topicSlug: seg[2]!, level: seg[3]! });
+    }
+    if (parsed.length === 0) return [];
+
+    // 3. Pipeline HGETALL for each level-progress key in one round-trip
+    const pipeline = this.redis.pipeline();
+    for (const p of parsed) {
+      pipeline.hgetall(`level_progress:${userId}:${p.examId}:${p.subjectId}:${p.topicSlug}:${p.level}`);
+    }
+    const pipelineResults = await pipeline.exec();
+
+    // 4. Aggregate: subjectId → { topicSlug → { correct, total } }
+    const subjectMap = new Map<string, Map<string, { correct: number; total: number }>>();
+
+    for (let i = 0; i < parsed.length; i++) {
+      const p = parsed[i]!;
+      const [err, rawData] = pipelineResults?.[i] ?? [null, {}];
+      const data = (!err && rawData ? rawData : {}) as Record<string, string>;
+      const correct = parseInt(data['correct'] ?? '0', 10);
+      const total   = parseInt(data['total']   ?? '0', 10);
+
+      if (!subjectMap.has(p.subjectId)) {
+        subjectMap.set(p.subjectId, new Map());
+      }
+      const topicMap = subjectMap.get(p.subjectId)!;
+      const existing = topicMap.get(p.topicSlug) ?? { correct: 0, total: 0 };
+      existing.correct += correct;
+      existing.total   += total;
+      topicMap.set(p.topicSlug, existing);
+    }
+
+    if (subjectMap.size === 0) return [];
+
+    // 5. Enrich subject names from MongoDB
+    const subjectIds = [...subjectMap.keys()];
+    const validIds = subjectIds.filter(id => /^[0-9a-fA-F]{24}$/.test(id));
+    const nameMap = new Map<string, string>();
+
+    if (validIds.length > 0) {
+      try {
+        const subjects = await getMongoDb()
+          .collection('subjects')
+          .find({ _id: { $in: validIds.map(id => new ObjectId(id)) } })
+          .project({ name: 1 })
+          .toArray();
+        for (const sub of subjects) {
+          nameMap.set(sub._id.toString(), sub.name as string);
+        }
+      } catch (err) {
+        // Non-fatal: fall back to raw IDs as names
+      }
+    }
+
+    // 6. Build hierarchical result
+    const result: SubjectTopicDistribution[] = [];
+
+    for (const [subjectId, topicMap] of subjectMap) {
+      const topics: TopicDistributionEntry[] = [];
+      let subjectCorrect = 0;
+      let subjectTotal   = 0;
+
+      for (const [topicSlug, agg] of topicMap) {
+        // Prettify slug: 'modern-physics' → 'Modern Physics'
+        const topicName = topicSlug
+          .replace(/-/g, ' ')
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+
+        topics.push({
+          topicSlug,
+          topicName,
+          correctAnswers: agg.correct,
+          totalAnswers:   agg.total,
+        });
+        subjectCorrect += agg.correct;
+        subjectTotal   += agg.total;
+      }
+
+      // Sort topics by correctAnswers descending
+      topics.sort((a, b) => b.correctAnswers - a.correctAnswers);
+
+      result.push({
+        subjectId,
+        subjectName: nameMap.get(subjectId) ?? subjectId,
+        correctAnswers: subjectCorrect,
+        totalAnswers:   subjectTotal,
+        topics,
+      });
+    }
+
+    // Sort subjects by correctAnswers descending
+    result.sort((a, b) => b.correctAnswers - a.correctAnswers);
+
+    return result;
   }
 }
 

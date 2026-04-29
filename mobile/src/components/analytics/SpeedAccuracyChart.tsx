@@ -121,7 +121,8 @@ export function SpeedAccuracyChart({ data }: SpeedAccuracyChartProps) {
     struggling: 'Some topics are challenging — that\'s normal. Focus on reviewing flashcards in your weakest subjects.',
   };
 
-  const medianX = isEmpty ? 50 : Math.min((medianMs / maxMs) * 100, 95);
+  // Invert X: 0ms (fast) is 100% right, maxMs (slow) is 0% left
+  const medianX = isEmpty ? 50 : Math.min((1 - (medianMs / maxMs)) * 100, 95);
   const horizY = (1 - 0.65) * 100; // 35%
 
   return (
@@ -223,6 +224,35 @@ export function SpeedAccuracyChart({ data }: SpeedAccuracyChartProps) {
                 opacity: 0.6,
               }}
             />
+
+            {/* Scatter Plot Points */}
+            {!isEmpty && points.map((p, i) => {
+              const x = (1 - (p.avgResponseMs / maxMs)) * 100;
+              const y = (1 - p.accuracy / 100) * 100;
+              const q = QUADRANTS[p.quadrant];
+              return (
+                <View
+                  key={`pt-${i}`}
+                  style={{
+                    position: 'absolute',
+                    left: `${Math.min(Math.max(x, 2), 98)}%`,
+                    top: `${Math.min(Math.max(y, 2), 98)}%`,
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: q.color,
+                    transform: [{ translateX: -5 }, { translateY: -5 }],
+                    shadowColor: q.color,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.8,
+                    shadowRadius: 3,
+                    elevation: 3,
+                    borderWidth: 1.5,
+                    borderColor: theme.card,
+                  }}
+                />
+              );
+            })}
           </View>
 
           {/* Axis labels */}

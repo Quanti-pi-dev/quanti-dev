@@ -36,9 +36,27 @@ export interface SubjectStrength {
   totalAnswers: number;
 }
 
+/** One topic within a subject — represents a leaf node in the sunburst chart. */
+export interface TopicDistributionEntry {
+  topicSlug: string;        // e.g. 'kinematics'
+  topicName: string;        // Display name, e.g. 'Kinematics'
+  correctAnswers: number;
+  totalAnswers: number;
+}
+
+/** One subject containing its topics — one slice of the inner ring. */
+export interface SubjectTopicDistribution {
+  subjectId: string;
+  subjectName: string;
+  correctAnswers: number;   // Sum of all child topics
+  totalAnswers: number;     // Sum of all child topics
+  topics: TopicDistributionEntry[];
+}
+
 /** Full advanced insights payload returned by GET /progress/advanced-insights. */
 export interface AdvancedInsights {
   chronotype: ChronotypeData;
   speedAccuracy: SpeedAccuracyPoint[];
   subjectStrengths: SubjectStrength[];
+  topicDistribution: SubjectTopicDistribution[];
 }

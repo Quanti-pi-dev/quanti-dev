@@ -11,6 +11,7 @@ import { View } from 'react-native';
 import Svg, {
   Polygon,
   Line,
+  Circle,
   Defs,
   LinearGradient,
   Stop,
@@ -256,6 +257,20 @@ export function SubjectRadarChart({ data }: SubjectRadarChartProps) {
                 strokeWidth={isEmpty ? 1 : 2}
                 strokeOpacity={isEmpty ? 0.2 : 0.85}
               />
+
+              {/* ── Data points dots ── */}
+              {!isEmpty &&
+                dataPoints.map((pt, i) => (
+                  <Circle
+                    key={`dot-${i}`}
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={3.5}
+                    fill="#0EA5E9"
+                    stroke={theme.card}
+                    strokeWidth={1.5}
+                  />
+                ))}
 
               {/* ── Perimeter labels: name + % ── */}
               {!isEmpty &&

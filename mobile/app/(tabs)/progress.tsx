@@ -24,6 +24,7 @@ import { SectionHeader, BarChart, LineChart, Heatmap } from '../../src/component
 import { ChronotypeCard } from '../../src/components/analytics/ChronotypeCard';
 import { SpeedAccuracyChart } from '../../src/components/analytics/SpeedAccuracyChart';
 import { SubjectRadarChart } from '../../src/components/analytics/SubjectRadarChart';
+import { TopicSunburstChart } from '../../src/components/analytics/TopicSunburstChart';
 
 import { useSubscriptionGate } from '../../src/hooks/useSubscriptionGate';
 import { useProgressSummary, useStudyStreak, useAdvancedInsights } from '../../src/hooks/useProgress';
@@ -56,7 +57,6 @@ export default function ProgressScreen() {
     accuracyChartData,
     cardsChartData,
     heatmap,
-    topicBreakdownPct,
     weeklyComparison,
     totalWeekCards,
     bestDay,
@@ -410,34 +410,8 @@ export default function ProgressScreen() {
               </View>
             </Card>
 
-            {/* ── Topic Distribution ── */}
-            <Card>
-              <View style={{ gap: spacing.md }}>
-                <SectionHeader title="Topic Distribution" sub="By correct answers" />
-                <View style={{ gap: spacing.sm }}>
-                  {(topicBreakdownPct.length > 0
-                    ? topicBreakdownPct
-                    : [
-                        { name: 'Subject A', pct: 0, color: '#6366F1' },
-                        { name: 'Subject B', pct: 0, color: '#10B981' },
-                        { name: 'Subject C', pct: 0, color: '#F59E0B' },
-                      ]
-                  ).map((t, i) => (
-                    <View key={i} style={{ gap: spacing.xs, opacity: topicBreakdownPct.length === 0 ? 0.35 : 1 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                        <Typography variant="caption" color={theme.textSecondary}>
-                          {t.name}
-                        </Typography>
-                        <Typography variant="caption" color={t.color}>
-                          {t.pct}%
-                        </Typography>
-                      </View>
-                      <ProgressBar progress={t.pct / 100} height={6} color={t.color} />
-                    </View>
-                  ))}
-                </View>
-              </View>
-            </Card>
+            {/* ── Topic Distribution (Sunburst) ── */}
+            <TopicSunburstChart data={advancedData?.topicDistribution ?? []} />
 
             {/* ── Study Activity Heatmap ── */}
             <Card>
