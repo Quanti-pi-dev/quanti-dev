@@ -11,7 +11,6 @@ import { useTheme } from '../../theme';
 import { spacing, radius } from '../../theme/tokens';
 import { Typography } from '../ui/Typography';
 import { Card } from '../ui/Card';
-import { SubscriptionStatusCard } from '../subscription/SubscriptionStatusCard';
 import { useSubscription } from '../../contexts/SubscriptionContext';
 import { useGlobalUI } from '../../contexts/GlobalUIContext';
 import { useQuery } from '@tanstack/react-query';
@@ -56,8 +55,6 @@ export const SubscriptionCard = React.memo(function SubscriptionCard() {
 
   return (
     <>
-      <SubscriptionStatusCard />
-
       {isSubscribed && subscription ? (
         <Card>
           <View style={{ gap: spacing.md }}>

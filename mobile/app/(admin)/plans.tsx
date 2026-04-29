@@ -372,7 +372,7 @@ export default function PlansScreen() {
 
       {/* ── Create / Edit Modal ── */}
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
-        <View style={{ flex: 1, backgroundColor: theme.background }}>
+        <ScreenWrapper style={{ backgroundColor: theme.background }}>
           <View style={{
             flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
             padding: spacing.xl, borderBottomWidth: 1, borderBottomColor: theme.border,
@@ -544,7 +544,7 @@ export default function PlansScreen() {
               {editingPlan ? 'Update Plan' : 'Create Plan'}
             </Button>
           </ScrollView>
-        </View>
+        </ScreenWrapper>
       </Modal>
     </ScreenWrapper>
   );

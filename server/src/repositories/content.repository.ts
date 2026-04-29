@@ -112,6 +112,7 @@ class DeckRepository {
       cardCount: (doc['cardCount'] as number) ?? 0,
       imageUrl: (doc['imageUrl'] as string) ?? null,
       createdBy: doc['createdBy'] as string,
+      tags: (doc['tags'] as string[]) ?? [],
       createdAt: (doc['createdAt'] as Date).toISOString(),
       updatedAt: (doc['updatedAt'] as Date).toISOString(),
     }));

@@ -4,6 +4,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { View, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
@@ -98,6 +99,7 @@ export const EditProfileModal = React.memo(function EditProfileModal({
 }: EditProfileModalProps) {
   const { theme } = useTheme();
   const { showAlert, showToast } = useGlobalUI();
+  const insets = useSafeAreaInsets();
 
   const [editName, setEditName] = useState(name);
   const [editSaving, setEditSaving] = useState(false);
@@ -224,7 +226,7 @@ export const EditProfileModal = React.memo(function EditProfileModal({
         {/* Header */}
         <View style={{
           flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-          padding: spacing.xl, borderBottomWidth: 1, borderBottomColor: theme.border,
+          padding: spacing.xl, paddingTop: Math.max(spacing.xl, insets.top + spacing.md), borderBottomWidth: 1, borderBottomColor: theme.border,
         }}>
           <Typography variant="h4">Edit Profile</Typography>
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>

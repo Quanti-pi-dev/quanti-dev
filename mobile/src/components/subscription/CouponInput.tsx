@@ -97,7 +97,7 @@ export function CouponInput({ planId, onValidated }: CouponInputProps) {
             flex: 1,
             paddingVertical: spacing.md,
             paddingHorizontal: spacing.sm,
-            fontFamily: typography.body,
+            fontWeight: '400',
             fontSize: typography.sm,
             color: theme.text,
           }}

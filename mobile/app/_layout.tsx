@@ -6,18 +6,6 @@ import '../src/global.css';
 import { useEffect, useState, Component, ReactNode } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { BlurView } from 'expo-blur';
-import {
-  PlayfairDisplay_400Regular,
-  PlayfairDisplay_700Bold,
-  useFonts as usePlayfairFonts,
-} from '@expo-google-fonts/playfair-display';
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-  useFonts as useInterFonts,
-} from '@expo-google-fonts/inter';
 import { SplashScreen, Stack } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -27,7 +15,7 @@ import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { SubscriptionProvider } from '../src/contexts/SubscriptionContext';
 import { ConfigProvider } from '../src/contexts/ConfigContext';
 import { GlobalUIProvider } from '../src/contexts/GlobalUIContext';
-import { darkTheme, spacing, radius, typography } from '../src/theme/tokens';
+import { darkTheme, spacing, radius } from '../src/theme/tokens';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -81,10 +69,10 @@ class ErrorBoundary extends Component<{ children: ReactNode }, EBState> {
               }}>
                 <Text style={{ fontSize: 28 }}>⚠️</Text>
               </View>
-              <Text style={{ color: 'rgba(240,237,232,0.96)', fontSize: 20, fontFamily: typography.heading, fontWeight: '700', textAlign: 'center' }}>
+              <Text style={{ color: 'rgba(240,237,232,0.96)', fontSize: 20, fontWeight: '700', textAlign: 'center' }}>
                 Something went wrong
               </Text>
-              <Text style={{ color: 'rgba(184,180,174,0.85)', textAlign: 'center', fontSize: 14, fontFamily: typography.body, lineHeight: 22 }}>
+              <Text style={{ color: 'rgba(184,180,174,0.85)', textAlign: 'center', fontSize: 14, lineHeight: 22 }}>
                 {this.state.error?.message ?? 'An unexpected error occurred.'}
               </Text>
               <TouchableOpacity
@@ -96,7 +84,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, EBState> {
                   borderRadius: radius.xl, marginTop: spacing.sm,
                 }}
               >
-                <Text style={{ color: '#60A5FA', fontFamily: typography.bodySemiBold, fontSize: 16 }}>Try Again</Text>
+                <Text style={{ color: '#60A5FA', fontWeight: '600', fontSize: 16 }}>Try Again</Text>
               </TouchableOpacity>
             </BlurView>
           </View>
@@ -156,20 +144,6 @@ function RootNavigation() {
 export default function RootLayout() {
   // QueryClient inside component lifecycle — prevents state leakage
   const [queryClient] = useState(() => new QueryClient(QUERY_CLIENT_OPTIONS));
-
-  const [playfairLoaded, playfairError] = usePlayfairFonts({ PlayfairDisplay_400Regular, PlayfairDisplay_700Bold });
-  const [interLoaded, interError] = useInterFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
-
-  // 3-second fallback in case fonts never resolve (fails gracefully with system font)
-  const [fontTimeout, setFontTimeout] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setFontTimeout(true), 3000);
-    return () => clearTimeout(t);
-  }, []);
-
-  // Proceed if both fonts loaded, or either errored, or timeout exceeded
-  const fontsReady = (playfairLoaded || !!playfairError) && (interLoaded || !!interError);
-  if (!fontsReady && !fontTimeout) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

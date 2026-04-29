@@ -22,6 +22,7 @@ import type { SocialProvider } from '../../src/components/ui/SocialLoginButton';
 import { useBiometricAuth } from '../../src/hooks/useBiometricAuth';
 import { auth } from '../../src/lib/firebase';
 import { authEmitter } from '../../src/services/authEmitter';
+import { formatFirebaseError } from '../../src/utils/errors';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const LOGO_SOURCE = require('../../assets/adaptive-icon.png');
@@ -49,7 +50,7 @@ export default function LoginScreen() {
 
   useEffect(() => {
     const unsub = authEmitter.on('AUTH_ERROR', (msg?: string) => {
-      setError(msg || 'Authentication failed. Please try again.');
+      setError(msg ? formatFirebaseError({ message: msg }) : 'Authentication failed. Please try again.');
       setIsLoading(false);
       setSocialLoading(null);
     });
@@ -69,7 +70,7 @@ export default function LoginScreen() {
     try {
       await refreshUser();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Biometric sign-in failed.');
+      setError(formatFirebaseError(err));
     } finally {
       setIsLoading(false);
     }
@@ -85,7 +86,7 @@ export default function LoginScreen() {
     try {
       await loginWithPassword(email, password);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Login failed. Please check your credentials.');
+      setError(formatFirebaseError(err));
       setIsLoading(false);
     }
   };
@@ -178,9 +179,21 @@ export default function LoginScreen() {
           />
 
           {error ? (
-            <Typography variant="bodySmall" color={theme.error}>
-              {error}
-            </Typography>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: theme.error + '15',
+              padding: spacing.md,
+              borderRadius: 12,
+              gap: spacing.sm,
+              borderWidth: 1,
+              borderColor: theme.error + '33',
+            }}>
+              <Ionicons name="warning-outline" size={18} color={theme.error} />
+              <Typography variant="caption" color={theme.error} style={{ flex: 1, fontWeight: '500' }}>
+                {error}
+              </Typography>
+            </View>
           ) : null}
 
           {/* Forgot password */}

@@ -332,7 +332,7 @@ export default function ContentScreen() {
 
       {/* ── Create / Edit Modal ── */}
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
-        <View style={{ flex: 1, backgroundColor: theme.background }}>
+        <ScreenWrapper style={{ backgroundColor: theme.background }}>
           <View style={{
             flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
             padding: spacing.xl, borderBottomWidth: 1, borderBottomColor: theme.border,
@@ -365,7 +365,7 @@ export default function ContentScreen() {
               {editingExam ? 'Update Exam' : 'Create Exam'}
             </Button>
           </ScrollView>
-        </View>
+        </ScreenWrapper>
       </Modal>
     </ScreenWrapper>
   );

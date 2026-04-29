@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchProgressSummary, recordCompletion as recordCompletionFn, fetchStudyStreak, fetchAdvancedInsights } from '../services/api-contracts';
+import { fetchProgressSummary, recordCompletion as recordCompletionFn, fetchStudyStreak, fetchAdvancedInsights, fetchRecentSessions } from '../services/api-contracts';
 
 // ─── Query Keys ─────────────────────────────────────────────
 
@@ -50,6 +50,15 @@ export function useAdvancedInsights(enabled = true) {
     queryFn: fetchAdvancedInsights,
     staleTime: 120_000, // 2 min — analytics data changes infrequently
     enabled,
+  });
+}
+
+/** Recent study sessions for the Study Dashboard "Pick Up Where You Left Off" section. */
+export function useRecentSessions(count = 5) {
+  return useQuery({
+    queryKey: [...progressKeys.all, 'recent-sessions', count],
+    queryFn: () => fetchRecentSessions(count),
+    staleTime: 60_000, // 1 min — refreshed after each study session via invalidation
   });
 }
 

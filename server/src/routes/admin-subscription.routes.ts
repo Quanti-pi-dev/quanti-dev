@@ -70,7 +70,7 @@ const createCouponSchema = z.object({
 });
 
 const patchSubscriptionSchema = z.object({
-  status: z.enum(['active', 'past_due', 'canceled', 'expired', 'paused']).optional(),
+  status: z.enum(['pending', 'active', 'past_due', 'canceled', 'expired', 'paused']).optional(),
   cancelAtPeriodEnd: z.boolean().optional(),
 });
 

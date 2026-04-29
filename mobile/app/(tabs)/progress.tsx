@@ -36,7 +36,7 @@ import type { UserBadge } from '@kd/shared';
 export default function ProgressScreen() {
   const { theme } = useTheme();
   const router = useRouter();
-  const { canUseFeature } = useSubscriptionGate();
+  const { canUseFeature, planTier } = useSubscriptionGate();
   const hasAdvancedAnalytics = canUseFeature('advanced_analytics');
   const hasDeepInsights = canUseFeature('deep_insights');
   const hasMasteryRadar = canUseFeature('mastery_radar');
@@ -466,9 +466,12 @@ export default function ProgressScreen() {
               desc: 'Discover your peak learning hours',
               tier: 'Pro' as const,
               unlocked: hasDeepInsights,
-              component: advancedData?.chronotype
-                ? <ChronotypeCard key="chronotype" data={advancedData.chronotype} />
-                : null,
+              component: <ChronotypeCard key="chronotype" data={advancedData?.chronotype ?? {
+                chronotype: 'day_scholar',
+                peakHour: 10,
+                peakAccuracy: 0,
+                hourlyAccuracy: []
+              }} />
             },
             {
               key: 'speed_accuracy',
@@ -477,9 +480,7 @@ export default function ProgressScreen() {
               desc: 'Visualise your recall performance',
               tier: 'Pro' as const,
               unlocked: hasDeepInsights,
-              component: advancedData?.speedAccuracy
-                ? <SpeedAccuracyChart key="speed_accuracy" data={advancedData.speedAccuracy} />
-                : null,
+              component: <SpeedAccuracyChart key="speed_accuracy" data={advancedData?.speedAccuracy ?? []} />
             },
             {
               key: 'mastery_radar',
@@ -488,9 +489,7 @@ export default function ProgressScreen() {
               desc: 'Radar chart across all subjects',
               tier: 'Master' as const,
               unlocked: hasMasteryRadar,
-              component: advancedData?.subjectStrengths
-                ? <SubjectRadarChart key="mastery_radar" data={advancedData.subjectStrengths} />
-                : null,
+              component: <SubjectRadarChart key="mastery_radar" data={advancedData?.subjectStrengths ?? []} />
             },
           ];
 
@@ -519,7 +518,7 @@ export default function ProgressScreen() {
                   accessibilityLabel={
                     lockedFeatures.length === 1
                       ? `Unlock ${lockedFeatures[0]!.label}. Upgrade to ${upgradeTier}.`
-                      : `Unlock ${lockedFeatures.length} more features. Upgrade to ${upgradeTier}.`
+                      : `Unlock ${lockedFeatures.length} more features. View upgrade options.`
                   }
                   style={{
                     backgroundColor: theme.card,
@@ -562,7 +561,7 @@ export default function ProgressScreen() {
                           : `Unlock ${lockedFeatures.length} More Features`}
                       </Typography>
                       <Typography variant="caption" color={theme.textSecondary}>
-                        {`${upgradeTier} plan — upgrade to access`}
+                        {planTier < 2 ? 'Pro plan — upgrade to access' : 'Master plan — upgrade to access'}
                       </Typography>
                     </View>
                   </View>
@@ -610,7 +609,7 @@ export default function ProgressScreen() {
                       }}
                     >
                       <Typography variant="label" color="#FFFFFF">
-                        {`Upgrade to ${upgradeTier} →`}
+                        {planTier < 2 ? 'Upgrade to Pro →' : 'Upgrade to Master →'}
                       </Typography>
                     </View>
                   </View>

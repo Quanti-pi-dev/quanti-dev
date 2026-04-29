@@ -316,7 +316,7 @@ class SubscriptionService {
     const sub = await subscriptionRepository.create({
       userId,
       planId: plan.id,
-      status: 'active', // optimistic; webhook confirms first charge
+      status: 'pending', // waits for webhook or frontend verification to become 'active'
       currentPeriodStart: now,
       currentPeriodEnd: periodEnd,
       couponId: couponId ?? null,

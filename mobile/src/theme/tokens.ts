@@ -251,15 +251,26 @@ export const darkTheme = {
 export type Theme = Record<keyof typeof lightTheme, string>;
 
 // ─── Typography ──────────────────────────────────────────────
+// All fontFamily values are undefined so React Native falls back to the
+// platform's system font (SF Pro on iOS, Roboto on Android).
+// Font weight is expressed via explicit fontWeight values in the weights map.
 
 export const typography = {
-  // Font families
-  heading: 'PlayfairDisplay_700Bold',
-  headingRegular: 'PlayfairDisplay_400Regular',
-  body: 'Inter_400Regular',
-  bodyMedium: 'Inter_500Medium',
-  bodySemiBold: 'Inter_600SemiBold',
-  bodyBold: 'Inter_700Bold',
+  // Font families — undefined = system default
+  heading: undefined,
+  headingRegular: undefined,
+  body: undefined,
+  bodyMedium: undefined,
+  bodySemiBold: undefined,
+  bodyBold: undefined,
+
+  // Font weights (use these wherever the old family names implied a weight)
+  weights: {
+    regular: '400' as const,
+    medium: '500' as const,
+    semiBold: '600' as const,
+    bold: '700' as const,
+  },
 
   // Sizes (pt grid)
   xs: 11,

@@ -129,7 +129,7 @@ export function Button({
           {icon && iconPosition === 'left' && icon}
           <Text
             style={{
-              fontFamily: typography.bodySemiBold,
+              fontWeight: '600',
               fontSize: sz.fontSize,
               color: colors.text,
               letterSpacing: 0.2,

@@ -5,12 +5,14 @@
 //                 BadgeShowcase, SettingsSection, EditProfileModal.
 
 import { useState, useMemo, useCallback } from 'react';
-import { View, ScrollView } from 'react-native';
+import { View, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
-import { spacing } from '../../src/theme/tokens';
+import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
+import { Card } from '../../src/components/ui/Card';
+import { Typography } from '../../src/components/ui/Typography';
 import { StatTile } from '../../src/components/StatTile';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
@@ -121,6 +123,28 @@ export default function ProfileScreen() {
           onHistoryPress={() => router.push('/coins-history')}
           onShopPress={() => router.push('/shop')}
         />
+
+        {/* ── Explore More Exams ── */}
+        <Card pressable onPress={() => router.push('/explore-exams' as never)}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+            <View
+              style={{
+                width: 40, height: 40, borderRadius: radius.md,
+                backgroundColor: theme.primaryMuted,
+                alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="library-outline" size={20} color={theme.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Typography variant="label">Explore more exams</Typography>
+              <Typography variant="caption" color={theme.textTertiary}>
+                Browse the full exam library
+              </Typography>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
+          </View>
+        </Card>
 
         <BadgeShowcase badges={earnedBadges} />
 

@@ -60,7 +60,7 @@ export function BadgeItem({
 
       <Text
         style={{
-          fontFamily: typography.body,
+          fontWeight: '400',
           fontSize: typography.xs,
           color: earned ? theme.text : theme.textTertiary,
           textAlign: 'center',

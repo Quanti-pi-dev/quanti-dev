@@ -104,10 +104,7 @@ export class RouteErrorBoundary extends Component<Props, State> {
             <Typography
               variant="label"
               color={theme.buttonPrimaryText}
-              style={{
-                fontFamily: typography.bodySemiBold,
-                fontSize: typography.base,
-              }}
+              style={{ fontSize: typography.base }}
             >
               Try Again
             </Typography>

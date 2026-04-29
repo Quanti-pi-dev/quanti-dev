@@ -146,7 +146,7 @@ export default function GamifyScreen() {
                 borderColor: theme.primary + '30',
               }}
             >
-              <Typography variant="caption" color={theme.primary} style={{ fontFamily: typography.bodySemiBold }}>
+              <Typography variant="caption" color={theme.primary} style={{ fontWeight: '600' }}>
                 🏅 Your Rank: #{myEntry.rank}
               </Typography>
             </View>
@@ -209,7 +209,7 @@ export default function GamifyScreen() {
 
                   {/* Name */}
                   <View style={{ flex: 1 }}>
-                    <Typography variant="body" style={{ fontFamily: typography.bodySemiBold }}>
+                    <Typography variant="body" style={{ fontWeight: '600' }}>
                       {item.displayName}{isCurrentUser ? ' (You)' : ''}
                     </Typography>
                   </View>

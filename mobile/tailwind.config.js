@@ -31,14 +31,6 @@ module.exports = {
         coin: '#F59E0B',
         'coin-light': '#FEF3C7',
       },
-      fontFamily: {
-        heading: ['PlayfairDisplay_700Bold'],
-        'heading-regular': ['PlayfairDisplay_400Regular'],
-        body: ['Inter_400Regular'],
-        'body-medium': ['Inter_500Medium'],
-        'body-semibold': ['Inter_600SemiBold'],
-        'body-bold': ['Inter_700Bold'],
-      },
       borderRadius: {
         '2xl': '16px',
         '3xl': '24px',

@@ -20,7 +20,7 @@ export function Divider({ label, style }: DividerProps) {
         <View style={{ flex: 1, height: 1, backgroundColor: theme.divider }} />
         <Text
           style={{
-            fontFamily: typography.body,
+            fontWeight: '400',
             fontSize: typography.xs,
             color: theme.textTertiary,
           }}

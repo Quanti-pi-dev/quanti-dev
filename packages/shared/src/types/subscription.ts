@@ -39,6 +39,7 @@ export interface Plan {
 // ─── Subscriptions ──────────────────────────────────────────
 
 export type SubscriptionStatus =
+  | 'pending'
   | 'trialing'
   | 'active'
   | 'past_due'

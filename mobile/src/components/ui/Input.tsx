@@ -93,7 +93,7 @@ export function Input({
       {label && (
         <Text
           style={{
-            fontFamily: typography.bodySemiBold,
+            fontWeight: '600',
             fontSize: typography.sm,
             color: theme.textSecondary,
             marginBottom: 2,
@@ -139,7 +139,7 @@ export function Input({
             placeholderTextColor={theme.textPlaceholder}
             style={{
               flex: 1,
-              fontFamily: typography.body,
+              fontWeight: '400',
               fontSize: typography.base,
               color: theme.text,
               padding: 0,
@@ -157,7 +157,7 @@ export function Input({
       {messageText && (
         <Text
           style={{
-            fontFamily: typography.body,
+            fontWeight: '400',
             fontSize: typography.xs,
             color: messageColor,
             marginTop: 2,

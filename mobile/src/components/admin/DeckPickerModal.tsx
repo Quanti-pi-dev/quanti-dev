@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '../../theme';
@@ -33,6 +34,7 @@ interface DeckPickerModalProps {
 
 export function DeckPickerModal({ visible, onClose, onSelect, selectedDeckId }: DeckPickerModalProps) {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
 
   const { data: decks = [], isLoading } = useQuery<Deck[]>({
@@ -61,7 +63,7 @@ export function DeckPickerModal({ visible, onClose, onSelect, selectedDeckId }: 
         {/* Header */}
         <View style={{
           flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-          padding: spacing.xl, borderBottomWidth: 1, borderBottomColor: theme.border,
+          padding: spacing.xl, paddingTop: Math.max(spacing.xl, insets.top + spacing.md), borderBottomWidth: 1, borderBottomColor: theme.border,
         }}>
           <Typography variant="h4">Select a Deck</Typography>
           <TouchableOpacity onPress={onClose}>

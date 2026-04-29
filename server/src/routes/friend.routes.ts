@@ -63,6 +63,27 @@ export async function friendRoutes(fastify: FastifyInstance): Promise<void> {
     }
   });
 
+  // ─── DELETE /friends/user/:userId — Remove an accepted friend by User ID ─
+  fastify.delete('/friends/user/:userId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { userId } = request.params as { userId: string };
+    try {
+      await friendService.removeFriendByUser(request.user!.id, userId);
+      return reply.send({
+        success: true,
+        data: { message: 'Friendship removed' },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err: unknown) {
+      const error = err as Error & { statusCode?: number };
+      const status = error.statusCode ?? 500;
+      return reply.status(status).send({
+        success: false,
+        error: { code: 'REMOVE_FAILED', message: error.message },
+        timestamp: new Date().toISOString(),
+      });
+    }
+  });
+
   // ─── DELETE /friends/:id — Reject request or remove friend ─
   // M7 fix: Status-based dispatch instead of error-driven control flow
   fastify.delete('/friends/:id', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -99,6 +120,8 @@ export async function friendRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
   });
+
+
 
   // ─── POST /friends/:userId/block — Block a user ───────
   fastify.post('/friends/:userId/block', async (request: FastifyRequest, reply: FastifyReply) => {

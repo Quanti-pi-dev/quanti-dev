@@ -453,6 +453,10 @@ export async function deleteFriendship(friendshipId: string): Promise<void> {
   await api.delete<ApiResponse<{ message: string }>>(`/friends/${friendshipId}`);
 }
 
+export async function removeFriendByUser(userId: string): Promise<void> {
+  await api.delete<ApiResponse<{ message: string }>>(`/friends/user/${userId}`);
+}
+
 export async function blockUser(targetUserId: string): Promise<void> {
   await apiPost<{ message: string }>(`/friends/${targetUserId}/block`);
 }

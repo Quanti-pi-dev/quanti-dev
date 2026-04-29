@@ -15,6 +15,7 @@ import { Typography } from '../../src/components/ui/Typography';
 import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
 import { isValidEmail } from '../../src/utils/validation';
+import { formatFirebaseError } from '../../src/utils/errors';
 
 export default function ForgotPasswordScreen() {
   const { theme } = useTheme();
@@ -32,7 +33,7 @@ export default function ForgotPasswordScreen() {
       await sendPasswordResetEmail(auth, email);
       setSent(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Could not send reset email. Please try again.');
+      setError(formatFirebaseError(err));
     } finally {
       setIsLoading(false);
     }
@@ -77,8 +78,26 @@ export default function ForgotPasswordScreen() {
               autoCapitalize="none"
               autoComplete="email"
               leftIcon={<Ionicons name="mail-outline" size={18} color={theme.textTertiary} />}
-              error={error}
+              error={error.length < 30 ? error : ''}
             />
+
+            {error.length >= 30 ? (
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: theme.error + '15',
+                padding: spacing.md,
+                borderRadius: 12,
+                gap: spacing.sm,
+                borderWidth: 1,
+                borderColor: theme.error + '33',
+              }}>
+                <Ionicons name="warning-outline" size={18} color={theme.error} />
+                <Typography variant="caption" color={theme.error} style={{ flex: 1, fontWeight: '500' }}>
+                  {error}
+                </Typography>
+              </View>
+            ) : null}
 
             <Button fullWidth loading={isLoading} onPress={handleSend} size="lg">
               Send Reset Link

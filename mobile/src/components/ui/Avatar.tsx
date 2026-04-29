@@ -78,7 +78,7 @@ export function Avatar({ uri, name, size = 'md', style }: AvatarProps) {
       ) : (
         <Text
           style={{
-            fontFamily: typography.bodyBold,
+            fontWeight: '700',
             fontSize,
             color: theme.primary,
           }}

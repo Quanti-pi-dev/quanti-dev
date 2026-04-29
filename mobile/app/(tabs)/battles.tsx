@@ -240,7 +240,7 @@ export default function BattlesScreen() {
 
             {/* ── Create Challenge CTA ── */}
             <TouchableOpacity
-              onPress={() => router.push('/battles/create')}
+              onPress={() => router.push('/battles/friend-select')}
               activeOpacity={0.85}
               style={{
                 backgroundColor: theme.card,

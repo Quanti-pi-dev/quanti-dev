@@ -68,7 +68,7 @@ export function RewardCard({
 
       <Text
         style={{
-          fontFamily: typography.bodyBold,
+          fontWeight: '700',
           fontSize: typography.base,
           color: theme.text,
           textAlign: 'center',
@@ -81,7 +81,7 @@ export function RewardCard({
       {description && (
         <Text
           style={{
-            fontFamily: typography.body,
+            fontWeight: '400',
             fontSize: typography.xs,
             color: theme.textTertiary,
             textAlign: 'center',
@@ -97,7 +97,7 @@ export function RewardCard({
         <Ionicons name="ellipse" size={14} color={theme.coin} />
         <Text
           style={{
-            fontFamily: typography.bodyBold,
+            fontWeight: '700',
             fontSize: typography.sm,
             color: theme.coin,
           }}

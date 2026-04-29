@@ -113,6 +113,22 @@ class FriendService {
   }
 
   /**
+   * Remove an accepted friend by target user ID.
+   */
+  async removeFriendByUser(actingFirebaseUid: string, targetPgId: string): Promise<void> {
+    const actingUserId = await challengeRepository.resolveUserId(actingFirebaseUid);
+    if (!actingUserId) throw Object.assign(new Error('User not found'), { statusCode: 404 });
+
+    const friendship = await challengeRepository.findRelationship(actingUserId, targetPgId);
+    if (!friendship) throw Object.assign(new Error('Friendship not found'), { statusCode: 404 });
+    if (friendship.status !== 'accepted') {
+      throw Object.assign(new Error('Friendship is not active'), { statusCode: 409 });
+    }
+
+    await challengeRepository.deleteFriendship(friendship.id);
+  }
+
+  /**
    * Block a user. If an existing friendship exists, it becomes blocked.
    * If no relationship exists, insert a blocked row.
    */
@@ -147,13 +163,13 @@ class FriendService {
     return challengeRepository.listFriends(userId);
   }
 
-  async listPendingReceived(firebaseUid: string): Promise<Friendship[]> {
+  async listPendingReceived(firebaseUid: string): Promise<any[]> {
     const userId = await challengeRepository.resolveUserId(firebaseUid);
     if (!userId) return [];
     return challengeRepository.listPendingReceived(userId);
   }
 
-  async listPendingSent(firebaseUid: string): Promise<Friendship[]> {
+  async listPendingSent(firebaseUid: string): Promise<any[]> {
     const userId = await challengeRepository.resolveUserId(firebaseUid);
     if (!userId) return [];
     return challengeRepository.listPendingSent(userId);

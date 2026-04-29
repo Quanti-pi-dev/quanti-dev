@@ -10,8 +10,10 @@ import {
   sendFriendRequest,
   acceptFriendRequest,
   deleteFriendship,
+  removeFriendByUser,
   blockUser,
 } from '../services/api-contracts';
+import { useGlobalUI } from '../contexts/GlobalUIContext';
 
 export const friendKeys = {
   all: ['friends'] as const,
@@ -72,6 +74,27 @@ export function useDeleteFriendship() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: friendKeys.all });
     },
+  });
+}
+
+export function useRemoveFriend() {
+  const queryClient = useQueryClient();
+  const { showAlert } = useGlobalUI();
+
+  return useMutation({
+    mutationFn: removeFriendByUser,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: friendKeys.all });
+    },
+    onError: (err: any) => {
+      const message = err?.response?.data?.error?.message || err.message || 'Could not remove friend.';
+      showAlert({
+        title: 'Error',
+        message,
+        type: 'error',
+        buttons: [{ text: 'OK' }]
+      });
+    }
   });
 }
 

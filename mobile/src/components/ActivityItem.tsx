@@ -60,7 +60,7 @@ export function ActivityItem({
       <View style={{ flex: 1 }}>
         <Text
           style={{
-            fontFamily: typography.bodySemiBold,
+            fontWeight: '600',
             fontSize: typography.sm,
             color: theme.text,
           }}
@@ -70,7 +70,7 @@ export function ActivityItem({
         </Text>
         <Text
           style={{
-            fontFamily: typography.body,
+            fontWeight: '400',
             fontSize: typography.xs,
             color: theme.textTertiary,
           }}
@@ -83,7 +83,7 @@ export function ActivityItem({
       <View style={{ alignItems: 'flex-end' }}>
         <Text
           style={{
-            fontFamily: typography.bodyBold,
+            fontWeight: '700',
             fontSize: typography.sm,
             color: accuracyColor,
           }}
@@ -92,7 +92,7 @@ export function ActivityItem({
         </Text>
         <Text
           style={{
-            fontFamily: typography.body,
+            fontWeight: '400',
             fontSize: typography.xs,
             color: theme.textTertiary,
           }}

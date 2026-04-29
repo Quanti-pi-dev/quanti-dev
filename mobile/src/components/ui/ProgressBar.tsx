@@ -53,12 +53,12 @@ export function ProgressBar({
       {(showLabel || label) && (
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           {label && (
-            <Text style={{ fontFamily: typography.body, fontSize: typography.xs, color: theme.textTertiary }}>
+            <Text style={{ fontWeight: '400', fontSize: typography.xs, color: theme.textTertiary }}>
               {label}
             </Text>
           )}
           {showLabel && (
-            <Text style={{ fontFamily: typography.bodySemiBold, fontSize: typography.xs, color: theme.textSecondary }}>
+            <Text style={{ fontWeight: '600', fontSize: typography.xs, color: theme.textSecondary }}>
               {pct}%
             </Text>
           )}

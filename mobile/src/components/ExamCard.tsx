@@ -88,7 +88,7 @@ export const ExamCard = ({
       <View style={{ flex: 1, gap: spacing.xs }}>
         <Text
           style={{
-            fontFamily: typography.bodyBold,
+            fontWeight: '700',
             fontSize: typography.base,
             color: theme.text,
           }}
@@ -99,7 +99,7 @@ export const ExamCard = ({
 
         <Text
           style={{
-            fontFamily: typography.body,
+            fontWeight: '400',
             fontSize: typography.xs,
             color: theme.textTertiary,
           }}

@@ -23,6 +23,35 @@ import { Card } from '../ui/Card';
 import { InsightCard } from './InsightCard';
 import type { SubjectStrength } from '@kd/shared';
 
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withDelay, withTiming } from 'react-native-reanimated';
+
+// Animated bar for the subject list
+function AnimatedSubjectBar({ widthPct, color, delay }: { widthPct: number; color: string; delay: number }) {
+  const width = useSharedValue(0);
+  
+  useMemo(() => {
+    width.value = withDelay(delay, withSpring(widthPct, { damping: 15, stiffness: 90 }));
+  }, [widthPct, delay]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    width: `${width.value}%`,
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        {
+          height: '100%',
+          backgroundColor: color,
+          borderRadius: 2,
+          opacity: 0.85,
+        },
+        animStyle,
+      ]}
+    />
+  );
+}
+
 // ─── Helpers ──────────────────────────────────────────────────
 
 /** Convert polar coords to cartesian. Angle 0 = top (–π/2 offset). */
@@ -43,11 +72,11 @@ function toPoints(pts: { x: number; y: number }[]): string {
 
 const GHOST_COUNT = 6;
 const RINGS = 4;
-const SIZE = 260;          // SVG canvas size (square)
+const SIZE = 310;          // Increased canvas size to prevent label clipping
 const CX = SIZE / 2;
 const CY = SIZE / 2;
-const R_MAX = 90;          // max spoke radius — leaves room for labels
-const LABEL_R = R_MAX + 22; // label anchor radius
+const R_MAX = 85;          // Slightly smaller web to leave ample room for labels
+const LABEL_R = R_MAX + 24; // Anchor radius for text labels
 
 // ─── Component ───────────────────────────────────────────────
 
@@ -58,8 +87,23 @@ interface SubjectRadarChartProps {
 export function SubjectRadarChart({ data }: SubjectRadarChartProps) {
   const { theme } = useTheme();
 
-  const subjects = useMemo(() => data.slice(0, 8), [data]);
-  const isEmpty = subjects.length < 3;
+  const subjects = useMemo(() => {
+    const sliced = data.slice(0, 8);
+    if (sliced.length > 0 && sliced.length < 3) {
+      while (sliced.length < 3) {
+        sliced.push({
+          subjectId: `pad-${sliced.length}`,
+          subjectName: 'Pending Topic',
+          strengthScore: 0,
+          totalCorrect: 0,
+          totalAnswers: 0,
+        });
+      }
+    }
+    return sliced;
+  }, [data]);
+
+  const isEmpty = subjects.length === 0;
 
   const weakest = useMemo(
     () =>
@@ -127,6 +171,20 @@ export function SubjectRadarChart({ data }: SubjectRadarChartProps) {
     [n],
   );
 
+  // ── SVG Entrance Animation ──
+  const svgScale = useSharedValue(0.85);
+  const svgOpacity = useSharedValue(0);
+  
+  useMemo(() => {
+    svgOpacity.value = withTiming(1, { duration: 600 });
+    svgScale.value = withSpring(1, { damping: 14, stiffness: 100 });
+  }, []);
+
+  const svgAnimStyle = useAnimatedStyle(() => ({
+    opacity: svgOpacity.value,
+    transform: [{ scale: svgScale.value }],
+  }));
+
   // ── Colors ───────────────────────────────────────────────
   const fillOpacity  = isEmpty ? 0.12 : 0.45;
   const strokeOpacity = isEmpty ? 0.2 : 1;
@@ -148,7 +206,7 @@ export function SubjectRadarChart({ data }: SubjectRadarChartProps) {
           <Typography variant="h4">Subject Mastery Radar</Typography>
 
           {/* ── SVG Radar ── */}
-          <View style={{ alignItems: 'center' }}>
+          <Animated.View style={[{ alignItems: 'center' }, svgAnimStyle]}>
             <Svg width={SIZE} height={SIZE}>
               <Defs>
                 {/* Gradient fill: cyan → deep blue matching the reference */}
@@ -186,6 +244,7 @@ export function SubjectRadarChart({ data }: SubjectRadarChartProps) {
                   stroke={theme.border}
                   strokeWidth={1}
                   strokeOpacity={spokeOpacity}
+                  strokeDasharray="4 4" // Dashed spokes look cleaner
                 />
               ))}
 
@@ -210,7 +269,7 @@ export function SubjectRadarChart({ data }: SubjectRadarChartProps) {
                       <SvgText
                         x={lp.x}
                         y={lp.y - 5}
-                        fontSize={9}
+                        fontSize={10}
                         fill={theme.textSecondary}
                         textAnchor={textAnchor}
                         fontFamily="System"
@@ -220,10 +279,10 @@ export function SubjectRadarChart({ data }: SubjectRadarChartProps) {
                       {/* Percentage — bold + cyan */}
                       <SvgText
                         x={lp.x}
-                        y={lp.y + 8}
-                        fontSize={11}
+                        y={lp.y + 10}
+                        fontSize={12}
                         fontWeight="700"
-                        fill="#7DD3FC"
+                        fill="#0EA5E9" // Slightly deeper cyan for better contrast
                         textAnchor={textAnchor}
                         fontFamily="System"
                       >
@@ -233,11 +292,11 @@ export function SubjectRadarChart({ data }: SubjectRadarChartProps) {
                   );
                 })}
             </Svg>
-          </View>
+          </Animated.View>
 
           {/* ── Subject strength bars (real data only) ── */}
           {!isEmpty && (
-            <View style={{ gap: spacing.sm }}>
+            <View style={{ gap: spacing.sm, marginTop: spacing.xs }}>
               {subjects.map((subject, i) => {
                 const barColors = [
                   '#67E8F9', '#7DD3FC', '#93C5FD', '#6EE7B7',
@@ -245,37 +304,29 @@ export function SubjectRadarChart({ data }: SubjectRadarChartProps) {
                 ];
                 const color = barColors[i % barColors.length]!;
                 return (
-                  <View key={subject.subjectId} style={{ gap: 3 }}>
+                  <View key={subject.subjectId} style={{ gap: 4 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                       <Typography
                         variant="caption"
                         color={theme.textSecondary}
                         numberOfLines={1}
-                        style={{ flex: 1 }}
+                        style={{ flex: 1, fontWeight: '500' }}
                       >
                         {subject.subjectName}
                       </Typography>
-                      <Typography variant="caption" color={color}>
+                      <Typography variant="caption" color={color} style={{ fontWeight: '600' }}>
                         {subject.strengthScore}%
                       </Typography>
                     </View>
                     <View
                       style={{
-                        height: 4,
-                        backgroundColor: theme.border,
-                        borderRadius: 2,
+                        height: 6, // Slightly thicker bar
+                        backgroundColor: theme.border + '50',
+                        borderRadius: 3,
                         overflow: 'hidden',
                       }}
                     >
-                      <View
-                        style={{
-                          height: '100%',
-                          width: `${subject.strengthScore}%`,
-                          backgroundColor: color,
-                          borderRadius: 2,
-                          opacity: 0.85,
-                        }}
-                      />
+                      <AnimatedSubjectBar widthPct={subject.strengthScore} color={color} delay={200 + i * 50} />
                     </View>
                   </View>
                 );
@@ -292,7 +343,7 @@ export function SubjectRadarChart({ data }: SubjectRadarChartProps) {
           title="AI Study Recommendation"
           body={`Your strongest area is ${strongest.subjectName} (${strongest.strengthScore}%). Focus more on ${weakest.subjectName} (${weakest.strengthScore}%) — try reviewing flashcards at a slower pace and re-attempting missed questions.`}
           accentColor="#8B5CF6"
-          delay={400}
+          delay={600}
         />
       )}
     </View>

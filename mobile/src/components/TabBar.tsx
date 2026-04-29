@@ -75,7 +75,7 @@ function TabItem({ route, isFocused, tabConfig, theme, navigation }: TabItemProp
         />
         <Text
           style={{
-            fontFamily: isFocused ? typography.bodySemiBold : typography.body,
+            fontWeight: isFocused ? '600' : '400',
             fontSize: 10,
             color: isFocused ? theme.tabBarActive : theme.tabBarInactive,
           }}

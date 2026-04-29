@@ -61,8 +61,6 @@ export function InsightCard({
           borderRadius: radius['2xl'],
           borderWidth: 1,
           borderColor: accentColor + '30',
-          ...shadows.sm,
-          shadowColor: accentColor,
         }}
       >
         <View style={{ padding: spacing.lg, gap: spacing.sm }}>

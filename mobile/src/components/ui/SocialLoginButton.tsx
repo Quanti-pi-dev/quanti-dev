@@ -129,7 +129,7 @@ export function SocialLoginButton({ provider, onPress, loading = false, disabled
           <Ionicons name={cfg.icon} size={20} color={cfg.text} />
           <Text
             style={{
-              fontFamily: typography.bodySemiBold,
+              fontWeight: '600',
               fontSize: typography.sm,
               color: cfg.text,
               letterSpacing: 0.1,

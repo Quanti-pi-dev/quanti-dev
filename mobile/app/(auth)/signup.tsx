@@ -17,6 +17,7 @@ import { SocialLoginButton } from '../../src/components/ui/SocialLoginButton';
 import { authEmitter } from '../../src/services/authEmitter';
 import type { SocialProvider } from '../../src/components/ui/SocialLoginButton';
 import { isValidEmail } from '../../src/utils/validation';
+import { formatFirebaseError } from '../../src/utils/errors';
 
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -63,7 +64,7 @@ export default function SignupScreen() {
 
   useEffect(() => {
     const unsub = authEmitter.on('AUTH_ERROR', (msg?: string) => {
-      setErrors({ general: msg || 'Authentication failed. Please try again.' });
+      setErrors({ general: msg ? formatFirebaseError({ message: msg }) : 'Authentication failed. Please try again.' });
       setIsLoading(false);
       setSocialLoading(null);
     });
@@ -88,7 +89,7 @@ export default function SignupScreen() {
       // AuthContext will take over, hydrate the profile, and then the layout will redirect.
       // Keeping the spinner active prevents the user from clicking again or thinking it failed.
     } catch (err: unknown) {
-      setErrors({ general: err instanceof Error ? err.message : 'Sign up failed. Please try again.' });
+      setErrors({ general: formatFirebaseError(err) });
       setIsLoading(false);
     }
   };
@@ -218,9 +219,22 @@ export default function SignupScreen() {
           </Button>
 
           {errors.general ? (
-            <Typography variant="bodySmall" color={theme.error} align="center">
-              {errors.general}
-            </Typography>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: theme.error + '15',
+              padding: spacing.md,
+              borderRadius: 12,
+              gap: spacing.sm,
+              borderWidth: 1,
+              borderColor: theme.error + '33',
+              marginTop: spacing.sm,
+            }}>
+              <Ionicons name="warning-outline" size={18} color={theme.error} />
+              <Typography variant="caption" color={theme.error} style={{ flex: 1, fontWeight: '500' }}>
+                {errors.general}
+              </Typography>
+            </View>
           ) : null}
         </View>
 

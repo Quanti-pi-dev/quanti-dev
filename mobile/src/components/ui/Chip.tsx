@@ -58,7 +58,7 @@ export function Chip({ label, active = false, onPress, style }: ChipProps) {
     >
       <Text
         style={{
-          fontFamily: typography.bodyMedium,
+          fontWeight: '500',
           fontSize: typography.sm,
           color: active ? theme.buttonPrimaryText : theme.textSecondary,
         }}

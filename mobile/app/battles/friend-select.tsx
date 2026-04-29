@@ -11,22 +11,13 @@ import { spacing, typography, radius, shadows } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';
 import { useFriends } from '../../src/hooks/useFriend';
-import { useCreateChallenge } from '../../src/hooks/useChallenge';
 import type { UserSummary } from '@kd/shared';
 
 export default function FriendSelectScreen() {
   const { theme } = useTheme();
   const router = useRouter();
-  const params = useLocalSearchParams<{
-    examId: string;
-    subjectId: string;
-    level: string;
-    betAmount: string;
-    durationSeconds: string;
-  }>();
 
   const { data: friends, isLoading } = useFriends();
-  const createMutation = useCreateChallenge();
   const [searchQuery, setSearchQuery] = useState('');
 
   const filtered = (friends ?? []).filter((f) =>
@@ -34,13 +25,9 @@ export default function FriendSelectScreen() {
   );
 
   const handleChallenge = (friend: UserSummary) => {
-    createMutation.mutate({
-      opponentId: friend.id,
-      examId: params.examId!,
-      subjectId: params.subjectId!,
-      level: params.level!,
-      betAmount: parseInt(params.betAmount!, 10),
-      durationSeconds: parseInt(params.durationSeconds!, 10) as 60 | 90 | 120 | 180,
+    router.push({
+      pathname: '/battles/create',
+      params: { opponentId: friend.id, opponentName: friend.displayName },
     });
   };
 
@@ -64,7 +51,7 @@ export default function FriendSelectScreen() {
             if (router.canGoBack()) {
               router.back();
             } else {
-              router.replace('/battles/create'); // If accessed directly, go back to step 1
+              router.replace('/(tabs)/battles');
             }
           }}
         >
@@ -96,7 +83,7 @@ export default function FriendSelectScreen() {
             placeholderTextColor={theme.textPlaceholder}
             style={{
               flex: 1,
-              fontFamily: typography.body,
+              fontWeight: '400',
               fontSize: 14,
               color: theme.text,
             }}
@@ -173,7 +160,6 @@ export default function FriendSelectScreen() {
                 </View>
                 <TouchableOpacity
                   onPress={() => handleChallenge(item)}
-                  disabled={createMutation.isPending}
                   style={{
                     backgroundColor: theme.buttonPrimary,
                     paddingHorizontal: spacing.lg,
@@ -181,13 +167,9 @@ export default function FriendSelectScreen() {
                     borderRadius: radius.md,
                   }}
                 >
-                  {createMutation.isPending ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Typography variant="bodySemiBold" style={{ color: theme.buttonPrimaryText, fontSize: 13 }}>
-                      Challenge ⚔️
-                    </Typography>
-                  )}
+                  <Typography variant="bodySemiBold" style={{ color: theme.buttonPrimaryText, fontSize: 13 }}>
+                    Select →
+                  </Typography>
                 </TouchableOpacity>
               </View>
             </Animated.View>

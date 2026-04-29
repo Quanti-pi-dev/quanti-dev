@@ -3,8 +3,8 @@
 // Uses swipeable Animated.View, no page navigation.
 
 import { useState } from 'react';
-import { View, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, TouchableOpacity, ScrollView, ActivityIndicator, TextInput } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInRight } from 'react-native-reanimated';
 import { useTheme } from '../../src/theme';
@@ -13,20 +13,23 @@ import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';
 import { CoinDisplay } from '../../src/components/CoinDisplay';
 import { useCoinBalance } from '../../src/hooks/useGamification';
+import { useCreateChallenge } from '../../src/hooks/useChallenge';
 import { useExams } from '../../src/hooks/useExams';
 import { useExamSubjects } from '../../src/hooks/useSubjects';
 import { SUBJECT_LEVELS } from '@kd/shared';
 
 const DURATIONS = [
-  { label: '1 min', value: 60 },
-  { label: '1.5 min', value: 90 },
-  { label: '2 min', value: 120 },
-  { label: '3 min', value: 180 },
+  { label: '5 min', value: 300 },
+  { label: '10 min', value: 600 },
+  { label: '15 min', value: 900 },
+  { label: '20 min', value: 1200 },
 ];
 
 export default function CreateChallengeScreen() {
   const { theme } = useTheme();
   const router = useRouter();
+  const params = useLocalSearchParams<{ opponentId?: string; opponentName?: string }>();
+  const createMutation = useCreateChallenge();
   const { data: coins } = useCoinBalance();
 
   // Wizard state
@@ -35,7 +38,9 @@ export default function CreateChallengeScreen() {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [selectedLevel, setSelectedLevel] = useState<string>('Beginner');
   const [betAmount, setBetAmount] = useState(50);
-  const [durationSeconds, setDurationSeconds] = useState(120);
+  const [durationSeconds, setDurationSeconds] = useState(300);
+  const [isCustomDuration, setIsCustomDuration] = useState(false);
+  const [customDurationMinutes, setCustomDurationMinutes] = useState('25');
 
   // Data
   const { data: examsPages, isLoading: examsLoading } = useExams();
@@ -233,28 +238,32 @@ export default function CreateChallengeScreen() {
               <Typography variant="labelMedium" style={{ color: theme.textSecondary }}>
                 MATCH DURATION
               </Typography>
-              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
                 {DURATIONS.map((d) => (
                   <TouchableOpacity
                     key={d.value}
-                    onPress={() => setDurationSeconds(d.value)}
+                    onPress={() => {
+                      setIsCustomDuration(false);
+                      setDurationSeconds(d.value);
+                    }}
                     accessibilityRole="radio"
                     accessibilityLabel={d.label}
-                    accessibilityState={{ selected: durationSeconds === d.value }}
+                    accessibilityState={{ selected: !isCustomDuration && durationSeconds === d.value }}
                     style={{
-                      flex: 1,
+                      flexBasis: '30%',
                       paddingVertical: spacing.md,
                       borderRadius: radius.md,
-                      backgroundColor: durationSeconds === d.value ? theme.primary : theme.card,
+                      backgroundColor: !isCustomDuration && durationSeconds === d.value ? theme.primary : theme.card,
                       borderWidth: 1,
-                      borderColor: durationSeconds === d.value ? theme.primary : theme.border,
+                      borderColor: !isCustomDuration && durationSeconds === d.value ? theme.primary : theme.border,
                       alignItems: 'center',
+                      marginBottom: spacing.sm,
                     }}
                   >
                     <Typography
                       variant="bodySemiBold"
                       style={{
-                        color: durationSeconds === d.value ? theme.buttonPrimaryText : theme.text,
+                        color: !isCustomDuration && durationSeconds === d.value ? theme.buttonPrimaryText : theme.text,
                         fontSize: 13,
                       }}
                     >
@@ -262,7 +271,60 @@ export default function CreateChallengeScreen() {
                     </Typography>
                   </TouchableOpacity>
                 ))}
+                
+                <TouchableOpacity
+                  onPress={() => setIsCustomDuration(true)}
+                  accessibilityRole="radio"
+                  accessibilityLabel="Custom time"
+                  accessibilityState={{ selected: isCustomDuration }}
+                  style={{
+                    flexBasis: '30%',
+                    paddingVertical: spacing.md,
+                    borderRadius: radius.md,
+                    backgroundColor: isCustomDuration ? theme.primary : theme.card,
+                    borderWidth: 1,
+                    borderColor: isCustomDuration ? theme.primary : theme.border,
+                    alignItems: 'center',
+                    marginBottom: spacing.sm,
+                  }}
+                >
+                  <Typography
+                    variant="bodySemiBold"
+                    style={{
+                      color: isCustomDuration ? theme.buttonPrimaryText : theme.text,
+                      fontSize: 13,
+                    }}
+                  >
+                    Custom
+                  </Typography>
+                </TouchableOpacity>
               </View>
+
+              {isCustomDuration && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs }}>
+                  <Typography variant="body" style={{ color: theme.textSecondary }}>Minutes:</Typography>
+                  <TextInput
+                    value={customDurationMinutes}
+                    onChangeText={setCustomDurationMinutes}
+                    keyboardType="numeric"
+                    placeholder="25"
+                    placeholderTextColor={theme.textTertiary}
+                    style={{
+                      backgroundColor: theme.card,
+                      color: theme.text,
+                      borderColor: theme.border,
+                      borderWidth: 1,
+                      borderRadius: radius.md,
+                      paddingHorizontal: spacing.md,
+                      paddingVertical: spacing.sm,
+                      minWidth: 80,
+                      textAlign: 'center',
+                      fontFamily: 'Inter-Medium',
+                      fontSize: 14,
+                    }}
+                  />
+                </View>
+              )}
             </View>
 
             {/* Bet amount */}
@@ -343,10 +405,11 @@ export default function CreateChallengeScreen() {
               <View style={{ height: 1, backgroundColor: theme.divider }} />
 
               {[
+                { label: 'Opponent', value: params.opponentName ?? '—' },
                 { label: 'Exam', value: selectedExam?.title ?? '—' },
                 { label: 'Subject', value: (selectedSubject as { name: string } | undefined)?.name ?? '—' },
                 { label: 'Level', value: selectedLevel },
-                { label: 'Duration', value: `${durationSeconds}s` },
+                { label: 'Duration', value: isCustomDuration ? `${parseInt(customDurationMinutes) || 5} min` : `${durationSeconds / 60} min` },
                 { label: 'Your Bet', value: `🪙 ${betAmount}` },
                 { label: 'Winner Takes', value: `🪙 ${betAmount * 2}` },
               ].map((row) => (
@@ -357,22 +420,25 @@ export default function CreateChallengeScreen() {
               ))}
             </View>
 
-            {/* Choose Opponent button */}
+            {/* Create Challenge button */}
             <TouchableOpacity
-              onPress={() =>
-                router.push({
-                  pathname: '/battles/friend-select',
-                  params: {
+              onPress={() => {
+                if (!params.opponentId) {
+                  router.push('/battles/friend-select');
+                } else {
+                  createMutation.mutate({
+                    opponentId: params.opponentId,
                     examId: selectedExamId!,
                     subjectId: selectedSubjectId!,
                     level: selectedLevel,
-                    betAmount: String(betAmount),
-                    durationSeconds: String(durationSeconds),
-                  },
-                })
-              }
+                    betAmount,
+                    durationSeconds: isCustomDuration ? (parseInt(customDurationMinutes) || 5) * 60 : durationSeconds,
+                  });
+                }
+              }}
+              disabled={createMutation.isPending}
               accessibilityRole="button"
-              accessibilityLabel={`Choose opponent. Bet: ${betAmount} coins. Winner takes ${betAmount * 2}.`}
+              accessibilityLabel={`Send challenge. Bet: ${betAmount} coins. Winner takes ${betAmount * 2}.`}
               style={{
                 backgroundColor: theme.buttonPrimary,
                 borderRadius: radius.lg,
@@ -380,11 +446,16 @@ export default function CreateChallengeScreen() {
                 alignItems: 'center',
                 ...shadows.md,
                 shadowColor: theme.primary,
+                opacity: createMutation.isPending ? 0.7 : 1,
               }}
             >
-              <Typography variant="bodyBold" style={{ color: theme.buttonPrimaryText, fontSize: 16 }}>
-                Choose Opponent →
-              </Typography>
+              {createMutation.isPending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Typography variant="bodyBold" style={{ color: theme.buttonPrimaryText, fontSize: 16 }}>
+                  {params.opponentName ? `Challenge ${params.opponentName} ⚔️` : 'Choose Opponent →'}
+                </Typography>
+              )}
             </TouchableOpacity>
           </Animated.View>
         )}

@@ -19,7 +19,9 @@ import {
   useSendFriendRequest,
   useAcceptFriendRequest,
   useDeleteFriendship,
+  useRemoveFriend,
 } from '../../src/hooks/useFriend';
+import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
 
 type Tab = 'friends' | 'search' | 'requests';
 
@@ -45,6 +47,8 @@ export default function SocialScreen() {
   const sendRequestMutation = useSendFriendRequest();
   const acceptMutation = useAcceptFriendRequest();
   const deleteMutation = useDeleteFriendship();
+  const removeMutation = useRemoveFriend();
+  const { showAlert } = useGlobalUI();
 
   const refreshing = friendsLoading || pendingLoading;
   const onRefresh = useCallback(() => {
@@ -156,7 +160,7 @@ export default function SocialScreen() {
               style={{
                 flex: 1,
                 marginLeft: spacing.sm,
-                fontFamily: typography.body,
+                fontWeight: '400',
                 fontSize: typography.base,
                 color: theme.text,
               }}
@@ -244,23 +248,59 @@ export default function SocialScreen() {
                   ID: {item.enrollmentId}
                 </Typography>
               </View>
-              <TouchableOpacity
-                onPress={() =>
-                  router.push({
-                    pathname: '/battles/create',
-                  })
-                }
-                accessibilityRole="button"
-                accessibilityLabel={`Challenge ${item.displayName}`}
-                style={{
-                  backgroundColor: theme.primaryMuted,
-                  paddingHorizontal: spacing.md,
-                  paddingVertical: spacing.xs,
-                  borderRadius: radius.full,
-                }}
-              >
-                <Ionicons name="flash" size={16} color={theme.primary} />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    showAlert({
+                      title: 'Remove Friend',
+                      message: `Are you sure you want to remove ${item.displayName} from your friends list?`,
+                      type: 'warning',
+                      buttons: [
+                        { text: 'Cancel', style: 'cancel' },
+                        { 
+                          text: 'Remove', 
+                          style: 'destructive', 
+                          onPress: () => removeMutation.mutate(item.id) 
+                        }
+                      ]
+                    });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${item.displayName} from friends`}
+                  disabled={removeMutation.isPending}
+                  style={{
+                    backgroundColor: theme.errorMuted,
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.xs,
+                    borderRadius: radius.full,
+                    opacity: removeMutation.isPending && removeMutation.variables === item.id ? 0.5 : 1,
+                  }}
+                >
+                  {removeMutation.isPending && removeMutation.variables === item.id ? (
+                    <ActivityIndicator size="small" color={theme.error} />
+                  ) : (
+                    <Ionicons name="person-remove" size={16} color={theme.error} />
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() =>
+                    router.push({
+                      pathname: '/battles/create',
+                      params: { opponentId: item.id, opponentName: item.displayName }
+                    })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={`Challenge ${item.displayName}`}
+                  style={{
+                    backgroundColor: theme.primaryMuted,
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.xs,
+                    borderRadius: radius.full,
+                  }}
+                >
+                  <Ionicons name="flash" size={16} color={theme.primary} />
+                </TouchableOpacity>
+              </View>
             </Animated.View>
           )}
         />
@@ -297,9 +337,11 @@ export default function SocialScreen() {
               </View>
             )
           }
-          renderItem={({ item }) => (
-            <SearchResultRow item={item} />
-          )}
+          renderItem={({ item }) => {
+            const isPendingSent = pendingData?.sent?.some((req: any) => req.addresseeId === item.id) ?? false;
+            const isFriend = friends?.some((f: any) => f.id === item.id) ?? false;
+            return <SearchResultRow item={item} isPendingSent={isPendingSent} isFriend={isFriend} />;
+          }}
         />
       )}
 
@@ -405,10 +447,22 @@ export default function SocialScreen() {
 
 // ─── FIX B7 + U3: Per-row component with its own mutation state ──
 
-function SearchResultRow({ item }: { item: { id: string; displayName: string; enrollmentId?: string; avatarUrl?: string | null } }) {
+function SearchResultRow({
+  item,
+  isPendingSent,
+  isFriend
+}: {
+  item: { id: string; displayName: string; enrollmentId?: string; avatarUrl?: string | null };
+  isPendingSent: boolean;
+  isFriend: boolean;
+}) {
   const { theme } = useTheme();
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState(isPendingSent);
   const mutation = useSendFriendRequest();
+
+  useEffect(() => {
+    if (isPendingSent) setSent(true);
+  }, [isPendingSent]);
 
   const handleSend = () => {
     mutation.mutate(item.id, {
@@ -455,31 +509,39 @@ function SearchResultRow({ item }: { item: { id: string; displayName: string; en
           </Typography>
         )}
       </View>
-      <TouchableOpacity
-        onPress={handleSend}
-        disabled={mutation.isPending || sent}
-        accessibilityRole="button"
-        accessibilityLabel={sent ? `Request sent to ${item.displayName}` : `Send friend request to ${item.displayName}`}
-        accessibilityState={{ disabled: mutation.isPending || sent, busy: mutation.isPending }}
-        style={{
-          backgroundColor: sent ? theme.successMuted : theme.buttonPrimary,
-          paddingHorizontal: spacing.md,
-          paddingVertical: spacing.xs,
-          borderRadius: radius.full,
-        }}
-      >
-        {mutation.isPending ? (
-          <ActivityIndicator size="small" color="#fff" />
-        ) : sent ? (
-          <Typography variant="captionBold" style={{ color: theme.success }}>
-            Sent ✓
+      {isFriend ? (
+        <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.xs }}>
+          <Typography variant="captionBold" style={{ color: theme.textSecondary }}>
+            Friends ✓
           </Typography>
-        ) : (
-          <Typography variant="captionBold" style={{ color: theme.buttonPrimaryText }}>
-            Add Friend
-          </Typography>
-        )}
-      </TouchableOpacity>
+        </View>
+      ) : (
+        <TouchableOpacity
+          onPress={handleSend}
+          disabled={mutation.isPending || sent}
+          accessibilityRole="button"
+          accessibilityLabel={sent ? `Request sent to ${item.displayName}` : `Send friend request to ${item.displayName}`}
+          accessibilityState={{ disabled: mutation.isPending || sent, busy: mutation.isPending }}
+          style={{
+            backgroundColor: sent ? theme.successMuted : theme.buttonPrimary,
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.xs,
+            borderRadius: radius.full,
+          }}
+        >
+          {mutation.isPending ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : sent ? (
+            <Typography variant="captionBold" style={{ color: theme.success }}>
+              Requested ✓
+            </Typography>
+          ) : (
+            <Typography variant="captionBold" style={{ color: theme.buttonPrimaryText }}>
+              Add Friend
+            </Typography>
+          )}
+        </TouchableOpacity>
+      )}
     </View>
   );
 }

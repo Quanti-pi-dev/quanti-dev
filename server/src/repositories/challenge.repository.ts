@@ -344,24 +344,34 @@ class ChallengeRepository {
     return result.rows.map(rowToUserSummary);
   }
 
-  async listPendingReceived(userId: string): Promise<Friendship[]> {
+  async listPendingReceived(userId: string): Promise<any[]> {
     const result = await this.pg.query(
-      `SELECT * FROM friendships
-       WHERE addressee_id = $1 AND status = 'pending'
-       ORDER BY created_at DESC`,
+      `SELECT f.*, u.display_name as requester_name
+       FROM friendships f
+       JOIN users u ON u.id = f.requester_id
+       WHERE f.addressee_id = $1 AND f.status = 'pending'
+       ORDER BY f.created_at DESC`,
       [userId],
     );
-    return result.rows.map(rowToFriendship);
+    return result.rows.map(row => ({
+      ...rowToFriendship(row),
+      requesterName: row.requester_name as string,
+    }));
   }
 
-  async listPendingSent(userId: string): Promise<Friendship[]> {
+  async listPendingSent(userId: string): Promise<any[]> {
     const result = await this.pg.query(
-      `SELECT * FROM friendships
-       WHERE requester_id = $1 AND status = 'pending'
-       ORDER BY created_at DESC`,
+      `SELECT f.*, u.display_name as addressee_name
+       FROM friendships f
+       JOIN users u ON u.id = f.addressee_id
+       WHERE f.requester_id = $1 AND f.status = 'pending'
+       ORDER BY f.created_at DESC`,
       [userId],
     );
-    return result.rows.map(rowToFriendship);
+    return result.rows.map(row => ({
+      ...rowToFriendship(row),
+      addresseeName: row.addressee_name as string,
+    }));
   }
 
   async searchUsers(query: string, requestingUserId: string, limit = 20): Promise<UserSummary[]> {

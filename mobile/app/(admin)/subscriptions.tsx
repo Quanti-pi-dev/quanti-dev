@@ -334,7 +334,7 @@ export default function SubscriptionsScreen() {
 
       {/* ── Grant Subscription Modal ── */}
       <Modal visible={grantModalVisible} animationType="slide" presentationStyle="pageSheet">
-        <View style={{ flex: 1, backgroundColor: theme.background }}>
+        <ScreenWrapper style={{ backgroundColor: theme.background }}>
           <View style={{
             flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
             padding: spacing.xl, borderBottomWidth: 1, borderBottomColor: theme.border,
@@ -481,7 +481,7 @@ export default function SubscriptionsScreen() {
               </Button>
             )}
           </ScrollView>
-        </View>
+        </ScreenWrapper>
       </Modal>
     </ScreenWrapper>
   );

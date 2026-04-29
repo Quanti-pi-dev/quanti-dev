@@ -6,7 +6,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { useLevelProgressSummary } from './useGamification';
-import { progressKeys } from './useProgress';
+import { progressKeys, useAdvancedInsights } from './useProgress';
 
 // ─── Constants ────────────────────────────────────────────────
 
@@ -84,6 +84,9 @@ export function useProgressAnalytics(enabled: boolean): ProgressAnalytics {
   // Level summary
   const { data: levelSummary = [] } = useLevelProgressSummary();
 
+  // Advanced insights for comprehensive history
+  const { data: advancedData } = useAdvancedInsights(enabled);
+
   // ── Accuracy chart (last 7 sessions) ───────────────────────
   const accuracyChartData = useMemo(() => {
     const last7 = (weeklyData ?? []).slice(0, 7);
@@ -148,24 +151,28 @@ export function useProgressAnalytics(enabled: boolean): ProgressAnalytics {
     return grid;
   }, [weeklyData]);
 
-  // ── Topic distribution from level summary ──────────────────
+  // ── Topic distribution from comprehensive history ────────────
   const topicBreakdownPct = useMemo(() => {
-    const subjects = levelSummary
-      .slice(0, 5)
-      .filter((s: { correctAnswers: number }) => s.correctAnswers > 0);
+    if (!advancedData?.subjectStrengths) return [];
+
+    const subjects = [...advancedData.subjectStrengths]
+      .filter((s) => s.totalCorrect > 0)
+      .sort((a, b) => b.totalCorrect - a.totalCorrect)
+      .slice(0, 5);
+
     const breakdown = subjects.map(
-      (s: { subjectName: string; correctAnswers: number }, i: number) => ({
+      (s, i) => ({
         name: s.subjectName,
-        pct: s.correctAnswers,
+        pct: s.totalCorrect,
         color: TOPIC_COLORS[i % TOPIC_COLORS.length]!,
       }),
     );
-    const total = breakdown.reduce((acc: number, t: { pct: number }) => acc + t.pct, 0) || 1;
-    return breakdown.map((t: { name: string; pct: number; color: string }) => ({
+    const total = breakdown.reduce((acc, t) => acc + t.pct, 0) || 1;
+    return breakdown.map((t) => ({
       ...t,
       pct: Math.round((t.pct / total) * 100),
     }));
-  }, [levelSummary]);
+  }, [advancedData]);
 
   // ── Chart summary stats ────────────────────────────────────
   const { totalWeekCards, bestDay, avgAccuracy } = useMemo(

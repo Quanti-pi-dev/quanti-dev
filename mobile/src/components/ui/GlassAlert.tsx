@@ -220,7 +220,6 @@ export function GlassAlertModal({ visible, options, onDismiss }: GlassAlertModal
                     <Typography
                       variant="label"
                       color={btnCfg.text}
-                      style={{ fontFamily: typography.bodySemiBold }}
                     >
                       {btn.text}
                     </Typography>

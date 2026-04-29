@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   Animated,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import { File as ExpoFile } from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,6 +52,7 @@ interface UploadProgress {
 export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalProps) {
   const { theme } = useTheme();
   const { showToast } = useGlobalUI();
+  const insets = useSafeAreaInsets();
 
   const [format, setFormat] = useState<FileFormat>('csv');
   const [fileName, setFileName] = useState<string | null>(null);
@@ -155,7 +157,7 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
         {/* ── Header ── */}
         <View style={{
           flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-          padding: spacing.xl, borderBottomWidth: 1, borderBottomColor: theme.border,
+          padding: spacing.xl, paddingTop: Math.max(spacing.xl, insets.top + spacing.md), borderBottomWidth: 1, borderBottomColor: theme.border,
         }}>
           <Typography variant="h4">Bulk Import Cards</Typography>
           <TouchableOpacity onPress={handleClose}>

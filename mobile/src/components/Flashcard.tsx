@@ -177,6 +177,7 @@ export function FlashCard({
 
       {/* Front */}
       <Animated.View
+        pointerEvents={answerState === 'unanswered' ? 'auto' : 'none'}
         style={[
           frontStyle,
           {
@@ -268,6 +269,7 @@ export function FlashCard({
 
       {/* Back */}
       <Animated.View
+        pointerEvents={answerState === 'unanswered' ? 'none' : 'auto'}
         style={[
           backStyle,
           {

@@ -39,7 +39,7 @@ export function Header({ title, showBack = false, onBack, rightAction, style }: 
       ]}
     >
       {/* Left: back button */}
-      <View style={{ width: 40 }}>
+      <View style={{ minWidth: 40, flexShrink: 0 }}>
         {showBack && (
           <TouchableOpacity onPress={handleBack} hitSlop={12}>
             <Ionicons name="arrow-back" size={24} color={theme.text} />
@@ -48,11 +48,12 @@ export function Header({ title, showBack = false, onBack, rightAction, style }: 
       </View>
 
       {/* Center: title */}
-      <View style={{ flex: 1, alignItems: 'center' }}>
+      <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: spacing.sm }}>
         {title && (
           <Text
+            numberOfLines={1}
             style={{
-              fontFamily: typography.heading,
+              fontWeight: '700',
               fontSize: typography.lg,
               color: theme.text,
             }}
@@ -63,7 +64,7 @@ export function Header({ title, showBack = false, onBack, rightAction, style }: 
       </View>
 
       {/* Right: action */}
-      <View style={{ width: 40, alignItems: 'flex-end' }}>
+      <View style={{ minWidth: 40, alignItems: 'flex-end', flexShrink: 0 }}>
         {rightAction}
       </View>
     </View>

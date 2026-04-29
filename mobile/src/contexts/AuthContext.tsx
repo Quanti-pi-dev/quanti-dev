@@ -22,6 +22,7 @@ import { usePushNotifications } from '../hooks/usePushNotifications';
 import { flush as flushOfflineQueue } from '../services/offlineQueue';
 import type { UserPreferences } from '@kd/shared';
 import type { SocialProvider } from '../components/ui/SocialLoginButton';
+import { useQueryClient } from '@tanstack/react-query';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -62,6 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { registerForPushNotifications, unregisterPushToken } = usePushNotifications();
+  const queryClient = useQueryClient();
 
   // ─── Shared profile hydration ──────────────────────────
   // Fetches user profile and preferences from our backend.
@@ -119,15 +121,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsub = authEmitter.on('FORCE_LOGOUT', async () => {
       try {
+        await GoogleSignin.signOut();
+      } catch {}
+      try {
         await signOut(auth);
       } catch {
         // Best-effort
       }
+      queryClient.clear();
       setUser(null);
       setPreferences(null);
     });
     return unsub;
-  }, []);
+  }, [queryClient]);
 
   // ─── Social login (Google, Twitter) ──────────────────────
   const login = useCallback(async (provider?: SocialProvider) => {
@@ -187,10 +193,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Best-effort server logout
     }
+    try {
+      await GoogleSignin.signOut();
+    } catch {}
     await signOut(auth);
+    queryClient.clear();
     setUser(null);
     setPreferences(null);
-  }, [unregisterPushToken]);
+  }, [unregisterPushToken, queryClient]);
 
   const refreshUser = useCallback(async () => {
     try {

@@ -40,7 +40,10 @@ const SUBJECT_ICONS: Array<[RegExp, keyof typeof Ionicons['glyphMap']]> = [
   [/data|analytic|interpret/i,                 'bar-chart-outline'],
   [/reason|logic|critical/i,                   'git-network-outline'],
   [/writing|essay|compos/i,                    'create-outline'],
-  [/science|physics|chem|bio/i,               'flask-outline'],
+  [/physics/i,                                 'planet-outline'],
+  [/chem/i,                                    'flask-outline'],
+  [/bio/i,                                     'leaf-outline'],
+  [/science/i,                                 'telescope-outline'],
   [/history|social|geo/i,                      'earth-outline'],
   [/vocab|word/i,                              'text-outline'],
 ];

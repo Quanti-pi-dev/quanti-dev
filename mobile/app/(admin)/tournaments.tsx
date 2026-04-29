@@ -312,10 +312,10 @@ export default function AdminTournamentsScreen() {
 
       {/* ── Create / Edit Modal ── */}
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
-        <View style={{ flex: 1, backgroundColor: theme.background }}>
+        <ScreenWrapper style={{ backgroundColor: theme.background }}>
           <View style={{
             flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-            padding: spacing.xl, paddingTop: spacing['2xl'],
+            padding: spacing.xl,
           }}>
             <Typography variant="h4">
               {editingId ? 'Edit Tournament' : 'New Tournament'}
@@ -426,7 +426,7 @@ export default function AdminTournamentsScreen() {
               </Button>
             </View>
           </ScrollView>
-        </View>
+        </ScreenWrapper>
       </Modal>
     </ScreenWrapper>
   );
@@ -460,7 +460,7 @@ function FormField({
           borderRadius: radius.lg,
           padding: spacing.md,
           color: theme.text,
-          fontFamily: typography.body,
+          fontWeight: '400',
           fontSize: 14,
           ...(multiline ? { minHeight: 80, textAlignVertical: 'top' as const } : {}),
         }}

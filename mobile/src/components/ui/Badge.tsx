@@ -45,7 +45,7 @@ export function Badge({ label, variant = 'neutral', size = 'md', style }: BadgeP
     >
       <Text
         style={{
-          fontFamily: typography.bodySemiBold,
+          fontWeight: '600',
           fontSize: isSmall ? typography.xs : typography.sm,
           color: colors.text,
           letterSpacing: 0.3,

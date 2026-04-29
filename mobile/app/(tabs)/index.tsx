@@ -28,7 +28,6 @@ import { StatTile } from '../../src/components/StatTile';
 import { ExamCard } from '../../src/components/ExamCard';
 import { ActivityItem } from '../../src/components/ActivityItem';
 import { StreakWidget } from '../../src/components/StreakWidget';
-import { CoinDisplay } from '../../src/components/CoinDisplay';
 import { StudyInsightsCard } from '../../src/components/StudyInsightsCard';
 import { TargetSubjectCard, SUBJECT_ACCENT_PALETTE, getSubjectIcon } from '../../src/components/TargetSubjectCard';
 import { UpNextHeroCard } from '../../src/components/UpNextHeroCard';
@@ -309,20 +308,6 @@ export default function HomeScreen() {
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
             {!isSubscribed && <UpgradePill onPress={goToUpgrade} />}
-            <CoinDisplay coins={coins} />
-            <TouchableOpacity
-              onPress={() => router.push('/shop')}
-              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-              accessibilityRole="button"
-              accessibilityLabel="Open shop and coin wallet"
-              style={{
-                width: 44, height: 44, borderRadius: radius.full,
-                backgroundColor: theme.cardAlt, borderWidth: 1.5, borderColor: theme.border,
-                alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <Ionicons name="cart-outline" size={20} color={theme.text} />
-            </TouchableOpacity>
           </View>
         </View>
 
@@ -486,7 +471,7 @@ export default function HomeScreen() {
                       currentStage={upNextStage}
                       onStart={() =>
                         router.push(
-                          `/exams/${primaryExamId}/subjects?title=${encodeURIComponent(primaryExam?.title ?? '')}` as never,
+                          `/exams/${primaryExamId}/subjects/${upNextSubject.id}/levels?title=${encodeURIComponent(upNextSubject.name)}` as never,
                         )
                       }
                     />
@@ -529,7 +514,7 @@ export default function HomeScreen() {
                         animDelay={360 + idx * 80}
                         onPress={() =>
                           router.push(
-                            `/exams/${primaryExamId}/subjects?title=${encodeURIComponent(primaryExam?.title ?? '')}` as never,
+                            `/exams/${primaryExamId}/subjects/${subject.id}/levels?title=${encodeURIComponent(subject.name)}` as never,
                           )
                         }
                       />

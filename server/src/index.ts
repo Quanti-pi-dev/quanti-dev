@@ -36,11 +36,11 @@ import { withCronLock } from './lib/cron-lock.js';
 
 // ─── Fastify Instance ───────────────────────────────────────
 
-const devTransport = {
+const prettyTransport = {
   target: 'pino-pretty',
   options: {
     colorize:      true,
-    translateTime: 'HH:MM:ss',
+    translateTime: 'SYS:standard',
     ignore:        'pid,hostname,reqId,responseTime,req,res',
     messageFormat: '{msg}',
     customColors:  'fatal:bgRed,error:red,warn:yellow,info:cyan,debug:gray,trace:white',
@@ -55,7 +55,7 @@ const server = Fastify({
   disableRequestLogging: true,
   logger: {
     level: config.logLevel,
-    transport: config.env !== 'production' ? devTransport : undefined,
+    transport: prettyTransport,
   },
   genReqId: () => crypto.randomUUID(),
 });
