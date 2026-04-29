@@ -47,7 +47,6 @@ function TournamentCard({
   coins: number;
 }) {
   const { theme } = useTheme();
-  const { showAlert, showToast } = useGlobalUI();
   const isActive = tournament.status === 'active';
   const isFull = tournament.maxParticipants > 0 && tournament.entryCount >= tournament.maxParticipants;
   const canAfford = coins >= tournament.entryFeeCoins;
@@ -156,7 +155,6 @@ function TournamentCard({
 
 function InfoChip({ icon, label }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string }) {
   const { theme } = useTheme();
-  const { showAlert, showToast } = useGlobalUI();
   return (
     <View style={{
       flexDirection: 'row', alignItems: 'center', gap: 4,

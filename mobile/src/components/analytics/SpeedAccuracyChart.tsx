@@ -31,7 +31,7 @@ function classifyPoint(
   return 'struggling';
 }
 
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withDelay, withTiming, FadeIn, FadeOut } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 // Legend Card Component
 function LegendCard({ quadrant, delay }: { quadrant: QuadrantKey; delay: number }) {
@@ -75,7 +75,7 @@ export function SpeedAccuracyChart({ data }: SpeedAccuracyChartProps) {
   const { theme } = useTheme();
   const [showLegend, setShowLegend] = useState(false);
 
-  const { points, medianMs, dominantQuadrant, quadrantCounts } = useMemo(() => {
+  const { points, medianMs, dominantQuadrant } = useMemo(() => {
     if (data.length === 0) {
       return {
         points: [],

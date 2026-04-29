@@ -60,7 +60,6 @@ function LevelRow({
   subjectName: string; topicName: string; onPress: () => void;
 }) {
   const { theme } = useTheme();
-  const { showAlert, showToast } = useGlobalUI();
   const { data, isLoading } = useAdminLevelCards(subjectId, level, topicSlug);
   const meta = LEVEL_META[level];
   const cardCount = data?.cardCount ?? 0;
@@ -124,7 +123,6 @@ function TopicRow({
   onDelete: (topic: TopicEntry) => void;
 }) {
   const { theme } = useTheme();
-  const { showAlert, showToast } = useGlobalUI();
   const [open, setOpen] = useState(false);
 
   return (
@@ -218,7 +216,6 @@ function TopicFormModal({
   submitting: boolean;
 }) {
   const { theme } = useTheme();
-  const { showAlert, showToast } = useGlobalUI();
   const [displayName, setDisplayName] = useState(editing?.displayName ?? '');
   const [slug, setSlug] = useState(editing?.slug ?? '');
   const [autoSlug, setAutoSlug] = useState(!editing); // auto-generate slug in create mode

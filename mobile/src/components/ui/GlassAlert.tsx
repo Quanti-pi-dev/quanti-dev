@@ -28,7 +28,7 @@ import Animated, {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Typography } from './Typography';
-import { radius, spacing, typography } from '../../theme/tokens';
+import { radius, spacing } from '../../theme/tokens';
 import type { AlertOptions, AlertType } from '../../contexts/GlobalUIContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -120,7 +120,6 @@ export function GlassAlertModal({ visible, options, onDismiss }: GlassAlertModal
       cardOpacity.value = withTiming(0, { duration: 180 });
       cardScale.value = withTiming(0.92, { duration: 180 });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   const backdropStyle = useAnimatedStyle(() => ({

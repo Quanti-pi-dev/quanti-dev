@@ -1,0 +1,619 @@
+{
+  "cards": [
+    {
+      "question": "A body is dropped from a tower of height 80m. How long does it take to reach the ground? (g = 10 m/s²)",
+      "options": [
+        {
+          "id": "A",
+          "text": "2 s"
+        },
+        {
+          "id": "B",
+          "text": "3 s"
+        },
+        {
+          "id": "C",
+          "text": "4 s"
+        },
+        {
+          "id": "D",
+          "text": "5 s"
+        }
+      ],
+      "correctAnswerId": "C",
+      "explanation": "Using h = 1/2 gt². 80 = 1/2 (10) t² => 80 = 5t² => t² = 16 => t = 4 s.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "The area under an acceleration-time graph gives:",
+      "options": [
+        {
+          "id": "A",
+          "text": "Velocity"
+        },
+        {
+          "id": "B",
+          "text": "Change in velocity"
+        },
+        {
+          "id": "C",
+          "text": "Displacement"
+        },
+        {
+          "id": "D",
+          "text": "Change in acceleration"
+        }
+      ],
+      "correctAnswerId": "B",
+      "explanation": "∫ a dt = Δv. The area represents the change in velocity, not the absolute velocity.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A projectile is fired at an angle of 30° to the horizontal with velocity u. Its time of flight is:",
+      "options": [
+        {
+          "id": "A",
+          "text": "u / g"
+        },
+        {
+          "id": "B",
+          "text": "u / 2g"
+        },
+        {
+          "id": "C",
+          "text": "2u / g"
+        },
+        {
+          "id": "D",
+          "text": "u√3 / g"
+        }
+      ],
+      "correctAnswerId": "A",
+      "explanation": "T = 2u sinθ / g. sin(30°) = 1/2. T = 2u(1/2) / g = u / g.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled",
+        "projectile"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "Two cars A and B are moving in the same direction with speeds 40 km/h and 60 km/h respectively. The relative velocity of B w.r.t A is:",
+      "options": [
+        {
+          "id": "A",
+          "text": "20 km/h"
+        },
+        {
+          "id": "B",
+          "text": "100 km/h"
+        },
+        {
+          "id": "C",
+          "text": "-20 km/h"
+        },
+        {
+          "id": "D",
+          "text": "2400 km/h"
+        }
+      ],
+      "correctAnswerId": "A",
+      "explanation": "V_BA = V_B - V_A = 60 - 40 = 20 km/h.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled",
+        "relative-motion"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A balloon is moving upwards at 10 m/s. A stone is dropped from it when it is at a height of 75m. What is the initial velocity of the stone relative to the ground?",
+      "options": [
+        {
+          "id": "A",
+          "text": "0 m/s"
+        },
+        {
+          "id": "B",
+          "text": "10 m/s upwards"
+        },
+        {
+          "id": "C",
+          "text": "10 m/s downwards"
+        },
+        {
+          "id": "D",
+          "text": "75 m/s upwards"
+        }
+      ],
+      "correctAnswerId": "B",
+      "explanation": "The stone acquires the velocity of the balloon at the moment it is dropped. So it is 10 m/s upwards.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "The horizontal range of a projectile is R. What is the maximum height attained if it was projected at 45°?",
+      "options": [
+        {
+          "id": "A",
+          "text": "R"
+        },
+        {
+          "id": "B",
+          "text": "R/2"
+        },
+        {
+          "id": "C",
+          "text": "R/4"
+        },
+        {
+          "id": "D",
+          "text": "2R"
+        }
+      ],
+      "correctAnswerId": "C",
+      "explanation": "R = u²sin(90°)/g = u²/g. Max height H = u²sin²(45°)/2g = u²(1/2)/2g = u²/4g = R/4.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A particle moves such that x = 2t² and y = 4t. The path of the particle is:",
+      "options": [
+        {
+          "id": "A",
+          "text": "Straight line"
+        },
+        {
+          "id": "B",
+          "text": "Parabola"
+        },
+        {
+          "id": "C",
+          "text": "Circle"
+        },
+        {
+          "id": "D",
+          "text": "Ellipse"
+        }
+      ],
+      "correctAnswerId": "B",
+      "explanation": "From y = 4t, we get t = y/4. Substitute in x: x = 2(y/4)² = 2(y²/16) = y²/8. This is the equation of a parabola (y² = 8x).",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "If a particle covers half the circle of radius R in time T, its average velocity is:",
+      "options": [
+        {
+          "id": "A",
+          "text": "πR / T"
+        },
+        {
+          "id": "B",
+          "text": "2R / T"
+        },
+        {
+          "id": "C",
+          "text": "R / T"
+        },
+        {
+          "id": "D",
+          "text": "0"
+        }
+      ],
+      "correctAnswerId": "B",
+      "explanation": "Average velocity = Displacement / Time. Displacement across half a circle is the diameter, 2R. So v_avg = 2R / T.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "Two bullets are fired simultaneously, horizontally and with different speeds from the same place. Which bullet will hit the ground first?",
+      "options": [
+        {
+          "id": "A",
+          "text": "The faster one"
+        },
+        {
+          "id": "B",
+          "text": "The slower one"
+        },
+        {
+          "id": "C",
+          "text": "Both will reach simultaneously"
+        },
+        {
+          "id": "D",
+          "text": "Depends on mass"
+        }
+      ],
+      "correctAnswerId": "C",
+      "explanation": "Vertical motion is independent of horizontal velocity. Since both start with 0 vertical velocity, they hit the ground at the same time: t = sqrt(2h/g).",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A particle is projected horizontally with speed u from height h. The equation of its trajectory is:",
+      "options": [
+        {
+          "id": "A",
+          "text": "y = gx² / (2u²)"
+        },
+        {
+          "id": "B",
+          "text": "y = 2gx² / u²"
+        },
+        {
+          "id": "C",
+          "text": "y = gx / u"
+        },
+        {
+          "id": "D",
+          "text": "y = gx² / u²"
+        }
+      ],
+      "correctAnswerId": "A",
+      "explanation": "x = ut => t = x/u. Vertical drop y = 1/2 gt² = 1/2 g (x/u)² = gx² / (2u²).",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled",
+        "projectile"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A body starts from rest and moves with uniform acceleration. The velocity-displacement graph is a:",
+      "options": [
+        {
+          "id": "A",
+          "text": "Straight line"
+        },
+        {
+          "id": "B",
+          "text": "Parabola"
+        },
+        {
+          "id": "C",
+          "text": "Circle"
+        },
+        {
+          "id": "D",
+          "text": "Curve of the form v ∝ √s"
+        }
+      ],
+      "correctAnswerId": "D",
+      "explanation": "Using v² = u² + 2as. Since u=0, v² = 2as, so v = √(2as). The graph is a parabola (opening along the s-axis), meaning v ∝ √s.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A stone is thrown vertically downwards with velocity u from a height h. The velocity with which it hits the ground is:",
+      "options": [
+        {
+          "id": "A",
+          "text": "√(u² + 2gh)"
+        },
+        {
+          "id": "B",
+          "text": "√(u² - 2gh)"
+        },
+        {
+          "id": "C",
+          "text": "u + √(2gh)"
+        },
+        {
+          "id": "D",
+          "text": "√(2gh)"
+        }
+      ],
+      "correctAnswerId": "A",
+      "explanation": "Using v² = u² + 2as. Here a = g, s = h. So v² = u² + 2gh => v = √(u² + 2gh).",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A person swims directly across a river of width d and velocity v_r. If his speed relative to water is v_s, the drift downstream is:",
+      "options": [
+        {
+          "id": "A",
+          "text": "d (v_r / v_s)"
+        },
+        {
+          "id": "B",
+          "text": "d (v_s / v_r)"
+        },
+        {
+          "id": "C",
+          "text": "d √(v_s² + v_r²)"
+        },
+        {
+          "id": "D",
+          "text": "d"
+        }
+      ],
+      "correctAnswerId": "A",
+      "explanation": "Time to cross = d / v_s. Drift = v_r * time = v_r * (d / v_s) = d (v_r / v_s).",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled",
+        "relative-motion"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A projectile reaches a maximum height H and has a range R. The angle of projection is given by tanθ = ?",
+      "options": [
+        {
+          "id": "A",
+          "text": "4H / R"
+        },
+        {
+          "id": "B",
+          "text": "H / 4R"
+        },
+        {
+          "id": "C",
+          "text": "2H / R"
+        },
+        {
+          "id": "D",
+          "text": "H / 2R"
+        }
+      ],
+      "correctAnswerId": "A",
+      "explanation": "R = u²sin(2θ)/g = 2u²sinθcosθ/g. H = u²sin²θ/2g. H/R = (u²sin²θ/2g) / (2u²sinθcosθ/g) = tanθ / 4. Thus tanθ = 4H/R.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A body is accelerating uniformly. Its velocity increases from 10 m/s to 20 m/s over a distance of 150m. The acceleration is:",
+      "options": [
+        {
+          "id": "A",
+          "text": "1 m/s²"
+        },
+        {
+          "id": "B",
+          "text": "2 m/s²"
+        },
+        {
+          "id": "C",
+          "text": "1.5 m/s²"
+        },
+        {
+          "id": "D",
+          "text": "3 m/s²"
+        }
+      ],
+      "correctAnswerId": "A",
+      "explanation": "v² = u² + 2as. 400 = 100 + 2(a)(150) => 300 = 300a => a = 1 m/s².",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "Velocity is given by v = at + bt². The dimensional formula for b is:",
+      "options": [
+        {
+          "id": "A",
+          "text": "[LT⁻¹]"
+        },
+        {
+          "id": "B",
+          "text": "[LT⁻²]"
+        },
+        {
+          "id": "C",
+          "text": "[LT⁻³]"
+        },
+        {
+          "id": "D",
+          "text": "[L²T⁻²]"
+        }
+      ],
+      "correctAnswerId": "C",
+      "explanation": "According to the principle of homogeneity, the dimensions of bt² must be the same as v [LT⁻¹]. Thus, [b][T²] = [LT⁻¹] => [b] = [LT⁻³].",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled",
+        "dimensions"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "For a given velocity of projection, the horizontal range is the same for two angles of projection. These angles are:",
+      "options": [
+        {
+          "id": "A",
+          "text": "θ and 180°-θ"
+        },
+        {
+          "id": "B",
+          "text": "θ and 90°-θ"
+        },
+        {
+          "id": "C",
+          "text": "θ and 60°-θ"
+        },
+        {
+          "id": "D",
+          "text": "θ and 45°-θ"
+        }
+      ],
+      "correctAnswerId": "B",
+      "explanation": "Range R ∝ sin(2θ). Since sin(2(90°-θ)) = sin(180°-2θ) = sin(2θ), complementary angles give the same range.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A ball is thrown upward with velocity u. It reaches a height h. If it is thrown with velocity 2u, the new maximum height will be:",
+      "options": [
+        {
+          "id": "A",
+          "text": "2h"
+        },
+        {
+          "id": "B",
+          "text": "4h"
+        },
+        {
+          "id": "C",
+          "text": "h"
+        },
+        {
+          "id": "D",
+          "text": "8h"
+        }
+      ],
+      "correctAnswerId": "B",
+      "explanation": "Max height h = u² / 2g. If u becomes 2u, h' = (2u)² / 2g = 4u² / 2g = 4h.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "At the highest point of its trajectory, a projectile has:",
+      "options": [
+        {
+          "id": "A",
+          "text": "Maximum kinetic energy"
+        },
+        {
+          "id": "B",
+          "text": "Minimum kinetic energy"
+        },
+        {
+          "id": "C",
+          "text": "Zero potential energy"
+        },
+        {
+          "id": "D",
+          "text": "Zero velocity"
+        }
+      ],
+      "correctAnswerId": "B",
+      "explanation": "At the highest point, vertical velocity is zero, and horizontal velocity is v_cosθ. The speed is minimum, so kinetic energy is minimum.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled",
+        "energy"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A stone dropped from the top of a tower falls the last half of the height in 1 second. What is the total time of fall?",
+      "options": [
+        {
+          "id": "A",
+          "text": "2 + √2 s"
+        },
+        {
+          "id": "B",
+          "text": "2 - √2 s"
+        },
+        {
+          "id": "C",
+          "text": "2 s"
+        },
+        {
+          "id": "D",
+          "text": "3 s"
+        }
+      ],
+      "correctAnswerId": "A",
+      "explanation": "Total height H = 1/2 g T². Time to fall H/2 is T-1. So H/2 = 1/2 g (T-1)². Dividing the two: 2 = T² / (T-1)² => √2 = T / (T-1) => T√2 - √2 = T => T(√2 - 1) = √2 => T = √2 / (√2 - 1) = √2(√2 + 1) / 1 = 2 + √2 s.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A point moves along a straight line with deceleration proportional to its speed. The distance covered before stopping is proportional to:",
+      "options": [
+        {
+          "id": "A",
+          "text": "Initial velocity"
+        },
+        {
+          "id": "B",
+          "text": "Square of initial velocity"
+        },
+        {
+          "id": "C",
+          "text": "Square root of initial velocity"
+        },
+        {
+          "id": "D",
+          "text": "Independent of initial velocity"
+        }
+      ],
+      "correctAnswerId": "A",
+      "explanation": "a = -kv => v(dv/ds) = -kv => dv/ds = -k => ∫dv = -k∫ds => v - u = -ks. When it stops, v=0, so s = u/k. Thus s is proportional to the initial velocity u.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "skilled"
+      ],
+      "imageUrl": null
+    }
+  ]
+}

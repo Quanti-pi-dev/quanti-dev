@@ -44,7 +44,6 @@ export default function SocialScreen() {
   const { data: pendingData, isLoading: pendingLoading, refetch: refetchPending } = usePendingFriendRequests();
   const { data: searchResults, isLoading: searchLoading, refetch: refetchSearch } = useUserSearch(debouncedQuery);
 
-  const sendRequestMutation = useSendFriendRequest();
   const acceptMutation = useAcceptFriendRequest();
   const deleteMutation = useDeleteFriendship();
   const removeMutation = useRemoveFriend();

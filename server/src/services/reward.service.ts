@@ -99,7 +99,11 @@ class RewardService {
   /**
    * Award +20 coins when the Master level is completed for any subject.
    */
-  async awardForMasterCompletion(userId: string, subjectId: string): Promise<AwardResult> {
+  async awardForMasterCompletion(userId: string, subjectId: string): Promise<AwardResult | null> {
+    const dedupKey = `master_completed:${userId}:${subjectId}`;
+    const added = await this.redis.sadd(dedupKey, '1');
+    if (added === 0) return null; // Already awarded for this subject
+
     const amount = await this.getCoinValue('coin_master_level', DEFAULT_COINS.MASTER_LEVEL);
     return this.award(userId, amount, 'master_level_completed', subjectId);
   }
@@ -118,13 +122,25 @@ class RewardService {
     else if (streak === 30) { amount = await this.getCoinValue('coin_streak_30', DEFAULT_COINS.STREAK_30); reason = 'streak_30'; }
     else return null;
 
+    const dedupKey = `streak_award:${userId}:${streak}`;
+    const added = await this.redis.sadd(dedupKey, '1');
+    if (added === 0) return null; // Already awarded for this milestone
+    await this.redis.expire(dedupKey, 60 * 60 * 24 * 60); // 60 days TTL
+
     return this.award(userId, amount, reason, String(streak));
   }
 
   /**
    * Award +3 coins for a perfect session (100% correct answers).
    */
-  async awardForPerfectSession(userId: string, sessionRef?: string): Promise<AwardResult> {
+  async awardForPerfectSession(userId: string, sessionRef?: string): Promise<AwardResult | null> {
+    if (sessionRef) {
+      const dedupKey = `perfect_session:${userId}:${sessionRef}`;
+      const added = await this.redis.sadd(dedupKey, '1');
+      if (added === 0) return null; // Already awarded for this session
+      await this.redis.expire(dedupKey, 60 * 60 * 24 * 7); // 7 days TTL
+    }
+
     const amount = await this.getCoinValue('coin_perfect_session', DEFAULT_COINS.PERFECT_SESSION);
     return this.award(userId, amount, 'perfect_session', sessionRef ?? null);
   }

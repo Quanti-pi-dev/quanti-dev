@@ -375,9 +375,8 @@ class ProgressRepository {
     let newlyUnlockedLevel: typeof SUBJECT_LEVELS[number] | undefined;
 
     if (correctCount >= LEVEL_UNLOCK_THRESHOLD && nextLevel) {
-      const alreadyUnlocked = await this.redis.sismember(unlockKey, nextLevel);
-      if (!alreadyUnlocked) {
-        await this.redis.sadd(unlockKey, nextLevel);
+      const added = await this.redis.sadd(unlockKey, nextLevel);
+      if (added === 1) {
         justUnlocked = true;
         newlyUnlockedLevel = nextLevel;
       }

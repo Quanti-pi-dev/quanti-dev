@@ -24,7 +24,7 @@ import { SubjectProgressCard } from '../../src/components/study/SubjectProgressC
 import { RecentDeckCard } from '../../src/components/study/RecentDeckCard';
 import { RecommendedDeckCard } from '../../src/components/study/RecommendedDeckCard';
 import { useLevelProgressSummary } from '../../src/hooks/useGamification';
-import { useRecentSessions, useStudyStreak } from '../../src/hooks/useProgress';
+import { useRecentSessions } from '../../src/hooks/useProgress';
 import { useRecommendations } from '../../src/hooks/useAI';
 import { useDecks } from '../../src/hooks/useDecks';
 import { useAuth } from '../../src/contexts/AuthContext';

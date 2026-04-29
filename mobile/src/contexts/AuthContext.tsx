@@ -20,7 +20,7 @@ import { api } from '../services/api';
 import { authEmitter } from '../services/authEmitter';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { flush as flushOfflineQueue } from '../services/offlineQueue';
-import type { UserPreferences } from '@kd/shared';
+import type { UserPreferences, UserProfile } from '@kd/shared';
 import type { SocialProvider } from '../components/ui/SocialLoginButton';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -32,13 +32,7 @@ GoogleSignin.configure({
 
 // ─── Types ──────────────────────────────────────────────────
 
-interface AuthUser {
-  id: string;
-  email: string;
-  displayName: string;
-  avatarUrl: string | null;
-  role: 'student' | 'admin';
-}
+type AuthUser = UserProfile;
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -122,7 +116,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsub = authEmitter.on('FORCE_LOGOUT', async () => {
       try {
         await GoogleSignin.signOut();
-      } catch {}
+      } catch {
+        // Best-effort
+      }
       try {
         await signOut(auth);
       } catch {
@@ -195,7 +191,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     try {
       await GoogleSignin.signOut();
-    } catch {}
+    } catch {
+      // Best-effort
+    }
     await signOut(auth);
     queryClient.clear();
     setUser(null);

@@ -39,6 +39,7 @@ interface SessionSnapshot {
   averageResponseTimeMs: number;
   startedAt: string;
   endedAt: string;
+  isComplete?: boolean;
 }
 
 interface UseStudySessionResult {
@@ -49,7 +50,7 @@ interface UseStudySessionResult {
   /** Number of correct answers. */
   correctCount: number;
   /** Force an immediate flush (e.g. on "Done" button press). */
-  flush: () => void;
+  flush: (isComplete?: boolean) => void;
 }
 
 // ─── Constants ─────────────────────────────────────────────
@@ -79,7 +80,7 @@ export function useStudySession({ deckId, startedAt }: UseStudySessionConfig): U
 
   // ─── Flush logic ──────────────────────────────────────────
 
-  const flushToServer = useCallback(async () => {
+  const flushToServer = useCallback(async (isComplete = false) => {
     const currentDeckId = deckIdRef.current;
     if (!currentDeckId) return;
 
@@ -106,6 +107,7 @@ export function useStudySession({ deckId, startedAt }: UseStudySessionConfig): U
         : 0,
       startedAt,
       endedAt: new Date().toISOString(),
+      isComplete,
     };
 
     try {
@@ -140,7 +142,7 @@ export function useStudySession({ deckId, startedAt }: UseStudySessionConfig): U
       clearTimeout(debounceTimerRef.current);
     }
     debounceTimerRef.current = setTimeout(() => {
-      void flushToServer();
+      void flushToServer(false);
     }, FLUSH_DEBOUNCE_MS);
   }, [flushToServer]);
 

@@ -20,7 +20,7 @@ import type { Flashcard } from '@kd/shared';
 
 export default function ActiveChallengeScreen() {
   const { theme } = useTheme();
-  const { showAlert, showToast } = useGlobalUI();
+  const { showAlert } = useGlobalUI();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();

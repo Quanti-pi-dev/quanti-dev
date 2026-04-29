@@ -253,7 +253,6 @@ export default function HomeScreen() {
   // ─── "Up Next" = first subject with no progress yet ───────
   const upNextSubject = personalizedSubjects?.find((s) => !masteryMap.has(s.id))
     ?? personalizedSubjects?.[0];
-  const upNextExamId = selectedExamIds[0] ?? '';
 
   // ─── Exam names for greeting ───────────────────────────────
   const { data: examsPages, isLoading: examsLoading } = useExams(10);

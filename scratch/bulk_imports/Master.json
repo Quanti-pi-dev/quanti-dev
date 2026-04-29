@@ -1,0 +1,628 @@
+{
+  "cards": [
+    {
+      "question": "A particle is moving in a plane with a constant acceleration a directed towards a fixed point. If its velocity is v and r is the distance from the point, which quantity is conserved?",
+      "options": [
+        {
+          "id": "A",
+          "text": "Energy"
+        },
+        {
+          "id": "B",
+          "text": "Linear Momentum"
+        },
+        {
+          "id": "C",
+          "text": "Angular Momentum"
+        },
+        {
+          "id": "D",
+          "text": "None"
+        }
+      ],
+      "correctAnswerId": "C",
+      "explanation": "Since the force (and acceleration) is always directed towards a fixed point (central force), the torque is zero. Hence, angular momentum is conserved.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master",
+        "central-force"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A flexible chain of length L and mass M rests on a smooth table with a length l hanging over the edge. What is the velocity of the chain when it completely leaves the table?",
+      "options": [
+        {
+          "id": "A",
+          "text": "√[g/L (L² - l²)]"
+        },
+        {
+          "id": "B",
+          "text": "√[g (L - l)]"
+        },
+        {
+          "id": "C",
+          "text": "√[g/L (L - l)²]"
+        },
+        {
+          "id": "D",
+          "text": "√[gL]"
+        }
+      ],
+      "correctAnswerId": "A",
+      "explanation": "Using conservation of energy: Initial PE = -mg(l/2)*(l/L). Final PE = -mg(L/2). Loss in PE = mgL/2 - mgl²/(2L) = Gain in KE = 1/2 mv². v = √[g/L (L² - l²)].",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master",
+        "energy"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A body of mass m is thrown upwards in a medium where the resistive force is kv². The maximum height reached if projected with velocity u is:",
+      "options": [
+        {
+          "id": "A",
+          "text": "m/(2k) ln(1 + ku²/mg)"
+        },
+        {
+          "id": "B",
+          "text": "m/k ln(1 + ku²/mg)"
+        },
+        {
+          "id": "C",
+          "text": "m/(2k) ln(1 - ku²/mg)"
+        },
+        {
+          "id": "D",
+          "text": "u²/(2g)"
+        }
+      ],
+      "correctAnswerId": "A",
+      "explanation": "Net force F = -mg - kv² => ma = -mg - kv². mv(dv/dx) = -mg - kv². dx = -mv dv / (mg+kv²). Integrating from u to 0 gives x = m/(2k) ln(1 + ku²/mg).",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master",
+        "calculus"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A particle moves such that its acceleration is given by a = -ω²x. The time period of this motion is:",
+      "options": [
+        {
+          "id": "A",
+          "text": "2π/ω"
+        },
+        {
+          "id": "B",
+          "text": "π/ω"
+        },
+        {
+          "id": "C",
+          "text": "ω/2π"
+        },
+        {
+          "id": "D",
+          "text": "2πω"
+        }
+      ],
+      "correctAnswerId": "A",
+      "explanation": "This is the standard equation for Simple Harmonic Motion. The angular frequency is ω, so T = 2π/ω.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master",
+        "shm"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A projectile is thrown from the foot of an inclined plane of inclination α. If it hits the plane perpendicularly, the angle of projection θ (with the horizontal) is given by:",
+      "options": [
+        {
+          "id": "A",
+          "text": "tanθ = cotα"
+        },
+        {
+          "id": "B",
+          "text": "tanθ = 2cotα + tanα"
+        },
+        {
+          "id": "C",
+          "text": "tanθ = cotα + 2tanα"
+        },
+        {
+          "id": "D",
+          "text": "tanθ = 2cotα"
+        }
+      ],
+      "correctAnswerId": "B",
+      "explanation": "For hitting perpendicularly, the component of velocity parallel to the incline must be zero at impact. Using components along and perpendicular to the incline leads to the condition cot(θ-α) = 2tanα, which simplifies to tanθ = 2cotα + tanα.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master",
+        "projectile"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "Two cars are moving in a circle of radius R with constant speeds. Car A covers a full circle in T, Car B in 2T. If they start from the same point in the same direction, when will they meet for the first time?",
+      "options": [
+        {
+          "id": "A",
+          "text": "T"
+        },
+        {
+          "id": "B",
+          "text": "2T"
+        },
+        {
+          "id": "C",
+          "text": "3T"
+        },
+        {
+          "id": "D",
+          "text": "4T"
+        }
+      ],
+      "correctAnswerId": "B",
+      "explanation": "Relative angular velocity ω_rel = ω_A - ω_B = 2π/T - 2π/(2T) = π/T. Time to meet = 2π / ω_rel = 2π / (π/T) = 2T.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master",
+        "circular-motion"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A drop of water falls from the roof of a building of height H at regular intervals. When the first drop reaches the ground, the 3rd drop is just leaving the roof. What is the height of the 2nd drop from the ground?",
+      "options": [
+        {
+          "id": "A",
+          "text": "H/2"
+        },
+        {
+          "id": "B",
+          "text": "H/4"
+        },
+        {
+          "id": "C",
+          "text": "3H/4"
+        },
+        {
+          "id": "D",
+          "text": "H/3"
+        }
+      ],
+      "correctAnswerId": "C",
+      "explanation": "Let the interval be t. Time for 1st drop is 2t. H = 1/2 g (2t)² = 2gt². Distance fallen by 2nd drop is 1/2 g (t)² = gt² / 2. Since 2gt² = H, the fall is H/4. Height from ground is H - H/4 = 3H/4.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A boat crosses a river of width W. The velocity of the boat relative to the water is v, and the river velocity is u (u > v). What is the minimum possible drift?",
+      "options": [
+        {
+          "id": "A",
+          "text": "W (u/v)"
+        },
+        {
+          "id": "B",
+          "text": "W (u² - v²)^(1/2) / v"
+        },
+        {
+          "id": "C",
+          "text": "W (u² + v²)^(1/2) / v"
+        },
+        {
+          "id": "D",
+          "text": "W (u/v - 1)"
+        }
+      ],
+      "correctAnswerId": "B",
+      "explanation": "Since u > v, zero drift is impossible. To minimize drift x, set dx/dθ = 0. The minimum drift occurs when sinθ = v/u, and the drift is W √(u²/v² - 1).",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master",
+        "relative-motion"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "If the acceleration of a particle is a = a₀ (1 - t/T), where a₀ and T are constants. The particle starts from rest at t=0. What is its velocity when acceleration is zero?",
+      "options": [
+        {
+          "id": "A",
+          "text": "a₀T"
+        },
+        {
+          "id": "B",
+          "text": "a₀T / 2"
+        },
+        {
+          "id": "C",
+          "text": "a₀T / 3"
+        },
+        {
+          "id": "D",
+          "text": "2a₀T"
+        }
+      ],
+      "correctAnswerId": "B",
+      "explanation": "Acceleration is zero at t = T. v = ∫a dt = a₀ (t - t²/2T). At t = T, v = a₀(T - T/2) = a₀T/2.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A particle is projected with a velocity such that its range on a horizontal plane is twice the greatest height attained. What is the angle of projection?",
+      "options": [
+        {
+          "id": "A",
+          "text": "tan⁻¹(1/2)"
+        },
+        {
+          "id": "B",
+          "text": "tan⁻¹(2)"
+        },
+        {
+          "id": "C",
+          "text": "tan⁻¹(1/4)"
+        },
+        {
+          "id": "D",
+          "text": "tan⁻¹(4)"
+        }
+      ],
+      "correctAnswerId": "B",
+      "explanation": "R = 2H => u²sin(2θ)/g = 2 (u²sin²θ/2g) => 2sinθcosθ = sin²θ => tanθ = 2.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master",
+        "projectile"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A bead is free to slide down a smooth wire stretched between two points A and B in a vertical plane. The time of descent is minimum when the wire is:",
+      "options": [
+        {
+          "id": "A",
+          "text": "A straight line"
+        },
+        {
+          "id": "B",
+          "text": "An arc of a circle"
+        },
+        {
+          "id": "C",
+          "text": "A cycloid"
+        },
+        {
+          "id": "D",
+          "text": "A parabola"
+        }
+      ],
+      "correctAnswerId": "C",
+      "explanation": "This is the classic Brachistochrone problem. The curve of fastest descent between two points in a gravitational field is a cycloid.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master",
+        "brachistochrone"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "The velocity v of a particle as a function of position x is given by v = α/x. The time taken to travel from x=a to x=b is:",
+      "options": [
+        {
+          "id": "A",
+          "text": "(b²-a²) / 2α"
+        },
+        {
+          "id": "B",
+          "text": "(b-a) / α"
+        },
+        {
+          "id": "C",
+          "text": "α ln(b/a)"
+        },
+        {
+          "id": "D",
+          "text": "(b²-a²) / α"
+        }
+      ],
+      "correctAnswerId": "A",
+      "explanation": "v = dx/dt = α/x => x dx = α dt. Integrating from x=a to b gives 1/2 (b² - a²) = α t => t = (b² - a²) / 2α.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master",
+        "calculus"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "An object is thrown vertically with velocity u. A second object is dropped from the maximum height of the first object at the exact moment the first object is thrown. At what height will they meet?",
+      "options": [
+        {
+          "id": "A",
+          "text": "3u² / 8g"
+        },
+        {
+          "id": "B",
+          "text": "u² / 4g"
+        },
+        {
+          "id": "C",
+          "text": "u² / 8g"
+        },
+        {
+          "id": "D",
+          "text": "u² / 2g"
+        }
+      ],
+      "correctAnswerId": "A",
+      "explanation": "Max height H = u²/2g. First object y1 = ut - 1/2 gt². Second object y2 = H - 1/2 gt². They meet when y1 = y2 => ut = H => t = H/u = u/2g. Meeting height y1 = u(u/2g) - 1/2 g (u/2g)² = u²/2g - u²/8g = 3u²/8g.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A particle moves in the xy-plane with velocity v = k(y i + x j). The equation of its trajectory is:",
+      "options": [
+        {
+          "id": "A",
+          "text": "y = x"
+        },
+        {
+          "id": "B",
+          "text": "y² = x² + C"
+        },
+        {
+          "id": "C",
+          "text": "xy = C"
+        },
+        {
+          "id": "D",
+          "text": "y = x² + C"
+        }
+      ],
+      "correctAnswerId": "B",
+      "explanation": "dx/dt = ky, dy/dt = kx. Therefore, dy/dx = (kx) / (ky) = x / y. Separating variables gives y dy = x dx => y²/2 = x²/2 + C' => y² - x² = C.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A wheel of radius R rolls without slipping on a horizontal surface with speed v. The velocity of a point on the rim at an angle θ from the vertical contact point is:",
+      "options": [
+        {
+          "id": "A",
+          "text": "2v sin(θ/2)"
+        },
+        {
+          "id": "B",
+          "text": "v sin(θ/2)"
+        },
+        {
+          "id": "C",
+          "text": "2v cos(θ/2)"
+        },
+        {
+          "id": "D",
+          "text": "v √2"
+        }
+      ],
+      "correctAnswerId": "A",
+      "explanation": "The distance from the instantaneous axis of rotation (contact point) is r = 2R sin(θ/2). The angular velocity is ω = v/R. Velocity V = ω r = (v/R) * 2R sin(θ/2) = 2v sin(θ/2).",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master",
+        "rigid-body"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A target is moving horizontally with a constant velocity v. A gun aimed directly at the target fires a bullet with velocity u. To hit the target, what should be the condition?",
+      "options": [
+        {
+          "id": "A",
+          "text": "u > v"
+        },
+        {
+          "id": "B",
+          "text": "u < v"
+        },
+        {
+          "id": "C",
+          "text": "u = v"
+        },
+        {
+          "id": "D",
+          "text": "Impossible to hit if aimed directly"
+        }
+      ],
+      "correctAnswerId": "D",
+      "explanation": "If the gun is aimed directly at the moving target, by the time the bullet reaches the target's original position, the target will have moved. You must aim ahead of the target.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "The coordinates of a particle are x = a cos(ωt) and y = a sin(ωt). The acceleration vector is:",
+      "options": [
+        {
+          "id": "A",
+          "text": "-ω² r"
+        },
+        {
+          "id": "B",
+          "text": "ω² r"
+        },
+        {
+          "id": "C",
+          "text": "ω r"
+        },
+        {
+          "id": "D",
+          "text": "0"
+        }
+      ],
+      "correctAnswerId": "A",
+      "explanation": "v_x = -aω sin(ωt), a_x = -aω² cos(ωt) = -ω² x. Similarly a_y = -ω² y. Thus a_vec = -ω² (x i + y j) = -ω² r.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master",
+        "circular-motion"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A shell explodes into two fragments of equal mass. If they move with velocities v1 and v2, the velocity of the center of mass is:",
+      "options": [
+        {
+          "id": "A",
+          "text": "0"
+        },
+        {
+          "id": "B",
+          "text": "(v1+v2)/2"
+        },
+        {
+          "id": "C",
+          "text": "v1-v2"
+        },
+        {
+          "id": "D",
+          "text": "sqrt(v1²+v2²)"
+        }
+      ],
+      "correctAnswerId": "B",
+      "explanation": "V_cm = (m1 v1 + m2 v2) / (m1+m2). Since m1=m2=m, V_cm = m(v1+v2) / 2m = (v1+v2)/2.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master",
+        "center-of-mass"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A particle moves such that its velocity varies with time as v = t² - t. What is the total distance covered in the interval t=0 to t=2?",
+      "options": [
+        {
+          "id": "A",
+          "text": "2/3"
+        },
+        {
+          "id": "B",
+          "text": "1"
+        },
+        {
+          "id": "C",
+          "text": "5/6"
+        },
+        {
+          "id": "D",
+          "text": "3/2"
+        }
+      ],
+      "correctAnswerId": "B",
+      "explanation": "Distance is ∫|v|dt. v is negative for 0 < t < 1 and positive for 1 < t < 2. Distance = -∫(0 to 1)(t²-t)dt + ∫(1 to 2)(t²-t)dt. Integral of t²-t is t³/3 - t²/2. From 0 to 1: 1/3 - 1/2 = -1/6. Distance1 = 1/6. From 1 to 2: (8/3 - 2) - (-1/6) = 2/3 + 1/6 = 5/6. Total distance = 1/6 + 5/6 = 1.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master",
+        "calculus"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A rocket is launched vertically. Its velocity v is given by v = u ln(M0/M) - gt. What does M0 represent?",
+      "options": [
+        {
+          "id": "A",
+          "text": "Final mass"
+        },
+        {
+          "id": "B",
+          "text": "Initial mass"
+        },
+        {
+          "id": "C",
+          "text": "Mass of fuel"
+        },
+        {
+          "id": "D",
+          "text": "Mass of payload"
+        }
+      ],
+      "correctAnswerId": "B",
+      "explanation": "This is the Tsiolkovsky rocket equation. M0 is the initial total mass of the rocket including fuel.",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master",
+        "variable-mass"
+      ],
+      "imageUrl": null
+    },
+    {
+      "question": "A car accelerates from rest at a constant rate α for some time, then decelerates at a constant rate β to come to rest. If the total time is T, the maximum velocity attained is:",
+      "options": [
+        {
+          "id": "A",
+          "text": "αβT / (α+β)"
+        },
+        {
+          "id": "B",
+          "text": "αβT / 2(α+β)"
+        },
+        {
+          "id": "C",
+          "text": "T / (α+β)"
+        },
+        {
+          "id": "D",
+          "text": "(α+β)T / αβ"
+        }
+      ],
+      "correctAnswerId": "A",
+      "explanation": "Let v_max be attained at time t1. v_max = α * t1. The deceleration time is t2. v_max = β * t2. T = t1 + t2 = v_max/α + v_max/β = v_max (α+β) / (αβ). Therefore v_max = αβT / (α+β).",
+      "tags": [
+        "physics",
+        "kinematics",
+        "master"
+      ],
+      "imageUrl": null
+    }
+  ]
+}

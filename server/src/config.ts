@@ -87,6 +87,11 @@ const REQUIRED_PRODUCTION_VARS = [
   'POSTGRES_URL',
   'MONGO_URL',
   'REDIS_URL',
+  'R2_ENDPOINT',
+  'R2_ACCESS_KEY_ID',
+  'R2_SECRET_ACCESS_KEY',
+  'R2_BUCKET',
+  'CDN_BASE_URL',
 ] as const;
 
 export function validateConfig(): void {
@@ -95,6 +100,10 @@ export function validateConfig(): void {
     if (!process.env[key]) {
       missing.push(key);
     }
+  }
+
+  if (process.env['NOTIFICATIONS_ENABLED'] === 'true' && !process.env['FCM_SERVICE_ACCOUNT_PATH']) {
+    missing.push('FCM_SERVICE_ACCOUNT_PATH');
   }
 
   if (missing.length > 0) {

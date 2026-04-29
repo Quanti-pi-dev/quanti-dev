@@ -38,7 +38,6 @@ import type { BillingCycle } from '@kd/shared';
 /** Sticky header with back button and title. Shows 'Not Now' skip when in onboarding context. */
 function ScreenHeader({ onBack, onSkip }: { onBack: () => void; onSkip?: () => void }) {
   const { theme } = useTheme();
-  const { showAlert, showToast } = useGlobalUI();
   const subscriptionHeadline = useConfig('subscription_headline', 'Upgrade Your Learning');
   const subscriptionSubheadline = useConfig('subscription_subheadline', 'Unlock the full Quanti-pi experience');
   return (
@@ -87,7 +86,6 @@ function ScreenHeader({ onBack, onSkip }: { onBack: () => void; onSkip?: () => v
 /** Guarantees row at the bottom */
 function GuaranteesRow() {
   const { theme } = useTheme();
-  const { showAlert, showToast } = useGlobalUI();
   const items = [
     { icon: 'shield-checkmark-outline' as const, label: 'Secure payments' },
     { icon: 'refresh-circle-outline' as const,   label: 'Auto-renews' },
@@ -111,7 +109,6 @@ function GuaranteesRow() {
 /** Empty / error state */
 function EmptyState({ onRetry }: { onRetry: () => void }) {
   const { theme } = useTheme();
-  const { showAlert, showToast } = useGlobalUI();
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.lg, padding: spacing['2xl'] }}>
       <Ionicons name="cloud-offline-outline" size={48} color={theme.textTertiary} />
@@ -143,7 +140,7 @@ export default function SubscriptionScreen() {
   const { fromOnboarding } = useLocalSearchParams<{ fromOnboarding?: string }>();
   const isFromOnboarding = fromOnboarding === 'true';
   const { theme } = useTheme();
-  const { showAlert, showToast } = useGlobalUI();
+  const { showAlert } = useGlobalUI();
   const { subscription, isSubscribed, refreshSubscription, setSubscription } = useSubscription();
 
   // Navigate to completion screen (onboarding) or back (normal)

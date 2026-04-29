@@ -22,7 +22,7 @@ import { Skeleton } from '../../src/components/ui/Skeleton';
 
 export default function SubjectSelectionScreen() {
   const router = useRouter();
-  const { categories, examIds, totalSteps: totalStepsParam } = useLocalSearchParams<{
+  const { examIds, totalSteps: totalStepsParam } = useLocalSearchParams<{
     categories: string;
     examIds: string;
     totalSteps: string;
@@ -31,7 +31,6 @@ export default function SubjectSelectionScreen() {
   const { showAlert, showToast } = useGlobalUI();
   const { refreshUser, user } = useAuth();
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
-  const categoryArray = categories?.split(',') ?? [];
 
   // Dynamic step count passed from exam selection screen
   const totalSteps = parseInt(totalStepsParam ?? '3', 10);

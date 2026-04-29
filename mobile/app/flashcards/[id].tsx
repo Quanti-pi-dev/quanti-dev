@@ -247,7 +247,7 @@ export default function FlashcardStudyScreen() {
   // object that would cause infinite re-runs. The ref guard prevents duplicates.
   useEffect(() => {
     if (isComplete) {
-      session.flush();
+      session.flush(true);
       // Submit tournament score if playing in tournament mode
       if (tournamentId && !tournamentScoreSubmittedRef.current) {
         tournamentScoreSubmittedRef.current = true;

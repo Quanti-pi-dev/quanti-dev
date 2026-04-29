@@ -15,6 +15,7 @@ import { CoinDisplay } from '../CoinDisplay';
 
 interface ProfileHeaderProps {
   name: string;
+  enrollmentId?: string;
   email: string;
   avatarUri: string | null;
   isAdmin: boolean;
@@ -26,6 +27,7 @@ interface ProfileHeaderProps {
 
 export const ProfileHeader = React.memo(function ProfileHeader({
   name,
+  enrollmentId,
   email,
   avatarUri,
   isAdmin,
@@ -64,6 +66,11 @@ export const ProfileHeader = React.memo(function ProfileHeader({
           <Avatar uri={avatarUri} name={name} size="lg" />
           <View style={{ flex: 1 }}>
             <Typography variant="h4">{name}</Typography>
+            {!!enrollmentId && (
+              <Typography variant="caption" color={theme.textTertiary}>
+                ID: {enrollmentId}
+              </Typography>
+            )}
             <Typography variant="caption" color={theme.textTertiary}>{email}</Typography>
             <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs }}>
               <Badge label={isAdmin ? 'Admin' : 'Student'} variant={isAdmin ? 'warning' : 'primary'} size="sm" />

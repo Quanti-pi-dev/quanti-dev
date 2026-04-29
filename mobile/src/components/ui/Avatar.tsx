@@ -7,7 +7,7 @@
 import { View, Text, ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme } from '../../theme';
-import { radius, typography } from '../../theme/tokens';
+import { radius } from '../../theme/tokens';
 
 type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 

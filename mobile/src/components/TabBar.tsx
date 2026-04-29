@@ -12,7 +12,7 @@ import Animated, {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme';
-import { radius, spacing, typography, shadows } from '../theme/tokens';
+import { radius, spacing, shadows } from '../theme/tokens';
 
 // ─── Tab Config ───────────────────────────────────────────────
 

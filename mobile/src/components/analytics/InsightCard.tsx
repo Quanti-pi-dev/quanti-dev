@@ -13,7 +13,7 @@ import Animated, {
   withDelay,
 } from 'react-native-reanimated';
 import { useTheme } from '../../theme';
-import { spacing, radius, shadows } from '../../theme/tokens';
+import { spacing, radius } from '../../theme/tokens';
 import { Typography } from '../ui/Typography';
 
 interface InsightCardProps {

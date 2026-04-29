@@ -30,7 +30,7 @@ function AnimatedBar({ heightPct, isPeak, baseColor, delay }: { heightPct: numbe
   const height = useSharedValue(4);
   
   useMemo(() => {
-    if (heightPct > 4) {
+    if (heightPct > 6) {
       height.value = withDelay(delay, withSpring(heightPct, { damping: 14, stiffness: 120 }));
     } else {
       height.value = heightPct;
@@ -41,17 +41,17 @@ function AnimatedBar({ heightPct, isPeak, baseColor, delay }: { heightPct: numbe
     height: height.value,
   }));
 
-  const color = isPeak ? baseColor : theme.border + '60';
+  const color = isPeak ? baseColor : baseColor + '33';
 
   return (
     <Animated.View
       style={[
         {
-          width: '70%',
+          width: '80%',
           backgroundColor: color,
-          borderRadius: 6,
+          borderRadius: 4,
           alignSelf: 'center',
-          ...(isPeak && { shadowColor: baseColor, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 8, elevation: 4 })
+          ...(isPeak && { shadowColor: baseColor, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.6, shadowRadius: 6, elevation: 4 })
         },
         animStyle,
       ]}
@@ -155,9 +155,9 @@ export function ChronotypeCard({ data }: ChronotypeCardProps) {
             <Typography variant="captionBold" color={cfg.color}>Peak: {formatHour(data.peakHour)}</Typography>
           </View>
           
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 100, gap: 2, borderBottomWidth: 1, borderBottomColor: theme.border + '40', paddingBottom: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 100, gap: 4, borderBottomWidth: 1, borderBottomColor: theme.border + '40', paddingBottom: 4 }}>
             {chartBars.map((bar, index) => {
-              const heightPct = bar.accuracy > 0 ? Math.max(6, (bar.accuracy / maxAcc) * 96) : 6;
+              const heightPct = bar.sessions > 0 ? Math.max(12, (bar.accuracy / maxAcc) * 96) : 6;
               return (
                 <View key={bar.hour} style={{ flex: 1, alignItems: 'center' }}>
                   <AnimatedBar heightPct={heightPct} isPeak={bar.isPeak} baseColor={cfg.color} delay={index * 20} />

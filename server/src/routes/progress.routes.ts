@@ -28,6 +28,7 @@ const saveSessionSchema = z.object({
   averageResponseTimeMs: z.number().int().nonnegative(),
   startedAt: z.string().datetime(),
   endedAt: z.string().datetime(),
+  isComplete: z.boolean().optional().default(false),
 });
 
 const levelAnswerSchema = z.object({
@@ -128,9 +129,9 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
 
     await progressRepository.saveSession({ ...input, userId });
 
-    // Award perfect session bonus if 100% accuracy
-    if (input.cardsStudied > 0 && input.correctAnswers === input.cardsStudied) {
-      await rewardService.awardForPerfectSession(userId).catch(() => {});
+    // Award perfect session bonus if 100% accuracy AND completed
+    if (input.isComplete && input.cardsStudied >= 3 && input.correctAnswers === input.cardsStudied) {
+      await rewardService.awardForPerfectSession(userId, input.startedAt).catch(() => {});
     }
 
     return reply.status(201).send({
@@ -206,7 +207,7 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
           !result.justUnlocked
         ) {
           const r = await rewardService.awardForMasterCompletion(userId, input.subjectId);
-          coinsEarned += r.coinsAwarded;
+          if (r) coinsEarned += r.coinsAwarded;
         }
 
         // 4. Streak milestone (fire async — streak update is cheap but not critical path)

@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "605882978892",
+    "project_id": "quanti-pi-492008",
+    "storage_bucket": "quanti-pi-492008.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:605882978892:android:fd172a5402190a76425ae9",
+        "android_client_info": {
+          "package_name": "com.kd.quantipi"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "605882978892-psb9hjnf9lud79fqjnoupio9jsk4rphp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.kd.quantipi",
+            "certificate_hash": "1310940a45788e4ddd66319322fed2796cd0a57a"
+          }
+        },
+        {
+          "client_id": "605882978892-ce4a3hm41v6h5ocrk9ob64psv3vapact.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCyzl2cA3_Ouo8UIs4TbI8VTPSCJqiXDyc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "605882978892-ce4a3hm41v6h5ocrk9ob64psv3vapact.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "605882978892-cpbnqc755tdhjr49tkdpi5o7m13015lj.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.kd.quantipi"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -10,14 +10,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
 import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
-import { spacing, radius, typography } from '../../src/theme/tokens';
+import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Header } from '../../src/components/layout/Header';
 import { Typography } from '../../src/components/ui/Typography';
 import { Card } from '../../src/components/ui/Card';
 import { Button } from '../../src/components/ui/Button';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../src/services/api';
+import { adminApi } from '../../src/services/api';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -46,7 +46,7 @@ function useAdminTournaments() {
   return useQuery({
     queryKey: ['admin', 'tournaments'],
     queryFn: async () => {
-      const { data } = await api.get('/admin/tournaments');
+      const { data } = await adminApi.get('/tournaments');
       return (data?.data ?? []) as Tournament[];
     },
   });
@@ -129,7 +129,7 @@ export default function AdminTournamentsScreen() {
 
   const createMutation = useMutation({
     mutationFn: async (body: Record<string, unknown>) => {
-      const { data } = await api.post('/admin/tournaments', body);
+      const { data } = await adminApi.post('/tournaments', body);
       return data;
     },
     onSuccess: () => {
@@ -140,7 +140,7 @@ export default function AdminTournamentsScreen() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, body }: { id: string; body: Record<string, unknown> }) => {
-      const { data } = await api.put(`/admin/tournaments/${id}`, body);
+      const { data } = await adminApi.put(`/tournaments/${id}`, body);
       return data;
     },
     onSuccess: () => {
@@ -151,7 +151,7 @@ export default function AdminTournamentsScreen() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { data } = await api.delete(`/admin/tournaments/${id}`);
+      const { data } = await adminApi.delete(`/tournaments/${id}`);
       return data;
     },
     onSuccess: () => {

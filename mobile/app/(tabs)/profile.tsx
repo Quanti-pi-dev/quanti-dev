@@ -5,7 +5,7 @@
 //                 BadgeShowcase, SettingsSection, EditProfileModal.
 
 import { useState, useMemo, useCallback } from 'react';
-import { View, ScrollView, TouchableOpacity } from 'react-native';
+import { View, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
@@ -49,6 +49,7 @@ export default function ProfileScreen() {
 
   const name = user?.displayName ?? user?.email?.split('@')[0] ?? 'Student';
   const email = user?.email ?? '';
+  const enrollmentId = user?.enrollmentId ?? '';
   const avatarUri = user?.avatarUrl ?? null;
   const isAdmin = user?.role === 'admin';
   const coins = coinData?.balance ?? 0;
@@ -98,6 +99,7 @@ export default function ProfileScreen() {
       >
         <ProfileHeader
           name={name}
+          enrollmentId={enrollmentId}
           email={email}
           avatarUri={avatarUri}
           isAdmin={isAdmin}

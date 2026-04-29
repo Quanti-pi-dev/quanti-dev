@@ -85,7 +85,6 @@ export function GlassToast({ toast, onDismiss }: GlassToastProps) {
 
     const timer = setTimeout(animateOut, TOAST_DURATION);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({
