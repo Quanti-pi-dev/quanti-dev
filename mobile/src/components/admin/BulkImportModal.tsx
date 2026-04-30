@@ -215,8 +215,8 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
               </Typography>
               <Typography variant="caption" color={theme.textTertiary}>
                 {format === 'csv'
-                  ? 'Headers: question, optionA, optionB, optionC, optionD, correctAnswer, explanation\ncorrectAnswer must be A, B, C, or D.'
-                  : '[{ "question": "...", "options": [{"id": "A", "text": "..."}], "correctAnswerId": "A", "explanation": "..." }]'}
+                  ? 'Required: question, optionA, optionB, optionC, optionD, correctAnswer\nOptional: explanation, source (original|pyq|textbook), sourceYear, sourcePaper, tags'
+                  : '[{ "question": "...", "options": [{"id": "A", "text": "..."}], "correctAnswerId": "A", "explanation": "...",\n  "source": "pyq", "sourceYear": 2022, "sourcePaper": "Paper 1", "tags": ["kinematics"] }]'}
               </Typography>
             </View>
           </Card>
@@ -326,6 +326,29 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
                             </Typography>
                           </View>
                         ))}
+                        {/* PYQ metadata badge */}
+                        {(card.source || card.tags?.length) ? (
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs }}>
+                            {card.source && card.source !== 'original' && (
+                              <View style={{
+                                backgroundColor: card.source === 'pyq' ? '#F59E0B18' : '#6366F118',
+                                borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+                              }}>
+                                <Typography variant="caption" color={card.source === 'pyq' ? '#F59E0B' : '#6366F1'}>
+                                  {card.source === 'pyq' ? `PYQ${card.sourceYear ? ` ${card.sourceYear}` : ''}${card.sourcePaper ? ` · ${card.sourcePaper}` : ''}` : 'Textbook'}
+                                </Typography>
+                              </View>
+                            )}
+                            {card.tags?.map((tag) => (
+                              <View key={tag} style={{
+                                backgroundColor: '#10B98118',
+                                borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+                              }}>
+                                <Typography variant="caption" color="#10B981">{tag}</Typography>
+                              </View>
+                            ))}
+                          </View>
+                        ) : null}
                       </View>
                     </Card>
                   ))}

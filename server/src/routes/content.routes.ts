@@ -5,14 +5,13 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { requireAuth } from '../middleware/rbac.js';
 import { loadSubscription } from '../middleware/feature-gate.js';
-import {
-  examRepository,
-  deckRepository,
-  flashcardRepository,
-  questionRepository,
-  subjectRepository,
-  topicRepository,
-} from '../repositories/content.repository.js';
+import { examRepository } from '../repositories/exam.repository.js';
+import { deckRepository } from '../repositories/deck.repository.js';
+import { flashcardRepository } from '../repositories/flashcard.repository.js';
+import { subjectRepository } from '../repositories/subject.repository.js';
+import { topicRepository } from '../repositories/topic.repository.js';
+// questionRepository remains in legacy content.repository for now (Phase 7 cleanup)
+import { questionRepository } from '../repositories/content.repository.js';
 import { gamificationRepository } from '../repositories/gamification.repository.js';
 import type { PaginationQuery, SubjectLevel } from '@kd/shared';
 import { z } from 'zod';
@@ -47,7 +46,7 @@ function fisherYatesShuffle<T>(array: T[]): T[] {
 }
 
 // ─── Tier-Gate Helper ───────────────────────────────────────
-// Returns a 403 if the user's plan max_level is exceeded.
+// Returns false (and sends 403) if the user's plan max_level is exceeded.
 
 function checkLevelAccess(
   request: FastifyRequest,
@@ -81,7 +80,7 @@ export async function contentRoutes(fastify: FastifyInstance): Promise<void> {
   // Load subscription context for tier-gating card access
   fastify.addHook('preHandler', loadSubscription);
 
-  // ─── GET /exams — List exams ──────────────────────────
+  // ─── GET /exams — List published exams ────────────────
   fastify.get('/exams', async (request: FastifyRequest, reply: FastifyReply) => {
     const query = request.query as PaginationQuery & { category?: string };
     const result = await examRepository.findMany(query);
@@ -116,6 +115,111 @@ export async function contentRoutes(fastify: FastifyInstance): Promise<void> {
     });
   });
 
+  // ─── GET /exams/:id/subjects — Subjects for an exam ───
+  fastify.get('/exams/:id/subjects', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id: examId } = request.params as { id: string };
+
+    const exam = await examRepository.findById(examId);
+    if (!exam) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Exam not found' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const subjects = await subjectRepository.findByExamId(examId);
+
+    return reply.send({
+      success: true,
+      data: subjects,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ─── GET /exams/:examId/subjects/:subjectId/topics ─────
+  // NEW: Exam-scoped topic list (Phase 4)
+  fastify.get('/exams/:examId/subjects/:subjectId/topics', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { examId, subjectId } = request.params as { examId: string; subjectId: string };
+
+    const [exam, subject] = await Promise.all([
+      examRepository.findById(examId),
+      subjectRepository.findById(subjectId),
+    ]);
+
+    if (!exam) return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Exam not found' }, timestamp: new Date().toISOString() });
+    if (!subject) return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Subject not found' }, timestamp: new Date().toISOString() });
+
+    const topics = await topicRepository.findByExamAndSubject(examId, subjectId);
+
+    return reply.send({
+      success: true,
+      data: { examId, subjectId, subjectName: subject.name, topics },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ─── GET /exams/:examId/subjects/:subjectId/topics/:topicSlug/levels/:level/cards ─
+  // NEW: Full hierarchy path endpoint (Phase 4) — replaces legacy /subjects/:id/levels/:level/cards
+  fastify.get(
+    '/exams/:examId/subjects/:subjectId/topics/:topicSlug/levels/:level/cards',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { examId, subjectId, topicSlug, level } = request.params as {
+        examId: string;
+        subjectId: string;
+        topicSlug: string;
+        level: string;
+      };
+      const { ...paginationRaw } = request.query as PaginationQuery;
+
+      // Validate level
+      if (!SUBJECT_LEVELS.includes(level as typeof SUBJECT_LEVELS[number])) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'BAD_REQUEST', message: `Invalid level. Must be one of: ${SUBJECT_LEVELS.join(', ')}` },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Level-gate: enforce subscription tier
+      if (!checkLevelAccess(request, reply, level as SubjectLevel)) return;
+
+      // Resolve deck via the new compound-indexed hierarchy lookup
+      const deck = await deckRepository.findByHierarchy(
+        examId,
+        subjectId,
+        topicSlug,
+        level as typeof SUBJECT_LEVELS[number],
+      );
+
+      if (!deck) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'No deck found for this exam/subject/topic/level' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const result = await flashcardRepository.findByDeckId(deck.id, paginationRaw);
+
+      return reply.send({
+        success: true,
+        data: {
+          deckId: deck.id,
+          deckTitle: deck.title,
+          examId: deck.examId,
+          subjectId: deck.subjectId,
+          topicSlug: deck.topicSlug,
+          level: deck.level,
+          cardCount: deck.cardCount,
+          cards: result.data,
+        },
+        pagination: result.pagination,
+        timestamp: new Date().toISOString(),
+      });
+    },
+  );
+
   // ─── GET /decks — List decks ──────────────────────────
   fastify.get('/decks', async (request: FastifyRequest, reply: FastifyReply) => {
     const parsed = decksQuerySchema.parse(request.query);
@@ -145,7 +249,6 @@ export async function contentRoutes(fastify: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string };
     const query = request.query as PaginationQuery;
 
-    // Verify deck exists
     const deck = await deckRepository.findById(id);
     if (!deck) {
       return reply.status(404).send({
@@ -156,12 +259,10 @@ export async function contentRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     // Level-gate: if deck has a level, enforce subscription tier limit
-    if (deck.level && !checkLevelAccess(request, reply, deck.level)) {
-      return; // 403 already sent by helper
-    }
+    if (deck.level && !checkLevelAccess(request, reply, deck.level)) return;
 
     // Coin-gate: if deck was purchased from the shop, verify the user has unlocked it
-    if (deck.category === 'shop') {
+    if (deck.category === 'shop' || deck.type === 'shop') {
       const unlocked = await gamificationRepository.getUnlockedDeckIds(request.user!.id);
       if (!unlocked.includes(deck.id)) {
         return reply.status(403).send({
@@ -233,29 +334,6 @@ export async function contentRoutes(fastify: FastifyInstance): Promise<void> {
     });
   });
 
-  // ─── GET /exams/:id/subjects — Subjects for an exam ───
-  fastify.get('/exams/:id/subjects', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id: examId } = request.params as { id: string };
-
-    // Verify exam exists
-    const exam = await examRepository.findById(examId);
-    if (!exam) {
-      return reply.status(404).send({
-        success: false,
-        error: { code: 'NOT_FOUND', message: 'Exam not found' },
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    const subjects = await subjectRepository.findByExamId(examId);
-
-    return reply.send({
-      success: true,
-      data: subjects,
-      timestamp: new Date().toISOString(),
-    });
-  });
-
   // ─── GET /subjects — List all subjects ────────────────
   fastify.get('/subjects', async (_request: FastifyRequest, reply: FastifyReply) => {
     const subjects = await subjectRepository.findAll();
@@ -286,16 +364,41 @@ export async function contentRoutes(fastify: FastifyInstance): Promise<void> {
     });
   });
 
-  // ─── GET /subjects/:id/levels/:level/cards ────────────
-  // Resolves the deck for (subjectId, level, topicSlug) and returns flashcards.
-  // Also returns the deckId so the client can use it for session tracking.
+  // ─── GET /subjects/:id/topics — Topics for a subject (legacy) ──
+  // @deprecated Use /exams/:examId/subjects/:subjectId/topics instead.
+  fastify.get('/subjects/:id/topics', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id: subjectId } = request.params as { id: string };
+
+    const subject = await subjectRepository.findById(subjectId);
+    if (!subject) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Subject not found' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const topics = await topicRepository.findBySubjectId(subjectId);
+
+    return reply.send({
+      success: true,
+      data: {
+        subjectId,
+        subjectName: subject.name,
+        topics: topics.map((t) => ({ id: t.id, slug: t.slug, displayName: t.displayName })),
+      },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ─── GET /subjects/:id/levels/:level/cards — Level cards (legacy) ──
+  // @deprecated Use /exams/:examId/subjects/:subjectId/topics/:topicSlug/levels/:level/cards instead.
   fastify.get(
     '/subjects/:id/levels/:level/cards',
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id: subjectId, level } = request.params as { id: string; level: string };
       const { topicSlug, ...paginationRaw } = request.query as PaginationQuery & { topicSlug?: string };
 
-      // Validate level value
       if (!SUBJECT_LEVELS.includes(level as typeof SUBJECT_LEVELS[number])) {
         return reply.status(400).send({
           success: false,
@@ -304,12 +407,8 @@ export async function contentRoutes(fastify: FastifyInstance): Promise<void> {
         });
       }
 
-      // Level-gate: enforce subscription tier limit
-      if (!checkLevelAccess(request, reply, level as SubjectLevel)) {
-        return; // 403 already sent by helper
-      }
+      if (!checkLevelAccess(request, reply, level as SubjectLevel)) return;
 
-      // Resolve the topic-scoped deck
       const deck = await deckRepository.findBySubjectAndLevel(
         subjectId,
         level as typeof SUBJECT_LEVELS[number],
@@ -338,30 +437,4 @@ export async function contentRoutes(fastify: FastifyInstance): Promise<void> {
       });
     },
   );
-
-  // ─── GET /subjects/:id/topics — Topic list for a subject ──
-  fastify.get('/subjects/:id/topics', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id: subjectId } = request.params as { id: string };
-
-    const subject = await subjectRepository.findById(subjectId);
-    if (!subject) {
-      return reply.status(404).send({
-        success: false,
-        error: { code: 'NOT_FOUND', message: 'Subject not found' },
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    const topics = await topicRepository.findBySubjectId(subjectId);
-
-    return reply.send({
-      success: true,
-      data: {
-        subjectId,
-        subjectName: subject.name,
-        topics: topics.map((t) => ({ slug: t.slug, displayName: t.displayName })),
-      },
-      timestamp: new Date().toISOString(),
-    });
-  });
 }

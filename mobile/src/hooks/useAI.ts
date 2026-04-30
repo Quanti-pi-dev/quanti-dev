@@ -1,9 +1,21 @@
-import { useQuery } from '@tanstack/react-query';
-import { fetchInsights, fetchRecommendations } from '../services/api-contracts';
-import type { InsightsResponse } from '../services/api-contracts';
+// ─── useAI Hooks ─────────────────────────────────────────────
+// React Query hooks for AI insights, recommendations, and live card explanations.
 
-export type Recommendation = Awaited<ReturnType<typeof fetchRecommendations>>[number];
-export type LearnInsights = InsightsResponse;
+import { useQuery, useMutation } from '@tanstack/react-query';
+import {
+  fetchInsights,
+  fetchRecommendations,
+  fetchExplainCard,
+  type InsightsResponse,
+  type Recommendation as RecommendationType,
+} from '../services/api-contracts';
+
+// ─── Re-exports for consumers ────────────────────────────────
+
+export type { InsightsResponse };
+export type AIRecommendation = RecommendationType;
+
+// ─── Query Keys ─────────────────────────────────────────────
 
 export const aiKeys = {
   all: ['ai'] as const,
@@ -11,19 +23,51 @@ export const aiKeys = {
   insights: () => [...aiKeys.all, 'insights'] as const,
 };
 
-export function useRecommendations() {
+// ─── Hooks ──────────────────────────────────────────────────
+
+/**
+ * Personalized deck recommendations from study_sessions (accuracy + recency).
+ * enabled flag allows gating behind subscription tier.
+ */
+export function useRecommendations(enabled = true) {
   return useQuery({
     queryKey: aiKeys.recommendations(),
     queryFn: fetchRecommendations,
-    staleTime: 300_000, // 5 min — AI computation is expensive (FIX P4)
+    staleTime: 3 * 60_000,    // 3 minutes
+    gcTime: 10 * 60_000,
+    enabled,
+    retry: 1,
   });
 }
 
-export function useInsights() {
+/**
+ * Gemini-powered study insights.
+ * Includes heuristic data + AI narrative (aiSummary, aiRecommendations) when user
+ * has ≥ 3 study sessions.
+ */
+export function useInsights(enabled = true) {
   return useQuery({
     queryKey: aiKeys.insights(),
     queryFn: fetchInsights,
-    staleTime: 600_000, // 10 min — insights rarely change mid-session (FIX P4)
+    staleTime: 5 * 60_000,    // 5 minutes — Gemini calls are expensive
+    gcTime: 15 * 60_000,
+    enabled,
+    retry: 1,
   });
 }
 
+/**
+ * Mutation for requesting a live Gemini explanation for a specific flashcard.
+ *
+ * Usage:
+ *   const explain = useExplainCard();
+ *   const text = await explain.mutateAsync(card.id);
+ *
+ * The caller should cache the result locally (e.g., in a Map) to avoid
+ * redundant API calls when the user re-opens the deep dive on the same card.
+ */
+export function useExplainCard() {
+  return useMutation<string, Error, string>({
+    mutationFn: (cardId: string) => fetchExplainCard(cardId),
+  });
+}

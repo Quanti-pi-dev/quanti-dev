@@ -298,8 +298,8 @@ function TopicFormModal({
 // ─── Screen ───────────────────────────────────────────────────
 
 export default function SubjectLevelsScreen() {
-  const { subjectId, title, accent } = useLocalSearchParams<{
-    subjectId: string; title?: string; accent?: string;
+  const { subjectId, title, accent, examId } = useLocalSearchParams<{
+    subjectId: string; title?: string; accent?: string; examId?: string;
   }>();
   const { theme } = useTheme();
   const { showAlert, showToast } = useGlobalUI();
@@ -343,7 +343,7 @@ export default function SubjectLevelsScreen() {
     } else {
       // Create
       createTopic.mutate(
-        { subjectId, ...formData },
+        { subjectId, examId: examId ?? '', ...formData },
         {
           onSuccess: () => { setFormVisible(false); showToast('Topic created'); },
           onError: () => showToast('Failed to create topic', 'error'),

@@ -115,6 +115,22 @@ async function run() {
       { question: 'text', tags: 'text' },
       { name: 'flashcards_text_search' }
     );
+    // ── PYQ-specific indexes ─────────────────────────────────
+    // Sparse so non-PYQ cards ('original') don't bloat the index.
+    await db.collection('flashcards').createIndex(
+      { source: 1 },
+      { sparse: true, name: 'flashcards_source' }
+    );
+    // Primary PYQ admin query: filter by source + deckId bucket, sort by year desc
+    await db.collection('flashcards').createIndex(
+      { source: 1, deckId: 1, sourceYear: -1 },
+      { sparse: true, name: 'flashcards_pyq_deck_year' }
+    );
+    // PYQ meta aggregation: distinct years + papers per scope
+    await db.collection('flashcards').createIndex(
+      { source: 1, sourceYear: 1, sourcePaper: 1 },
+      { sparse: true, name: 'flashcards_pyq_year_paper' }
+    );
     console.log('  ✓ flashcards indexes done');
 
     // ─── 6. Analytics Events (AI Service) ─────────────────────

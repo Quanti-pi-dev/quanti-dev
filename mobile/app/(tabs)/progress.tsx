@@ -25,6 +25,7 @@ import { ChronotypeCard } from '../../src/components/analytics/ChronotypeCard';
 import { SpeedAccuracyChart } from '../../src/components/analytics/SpeedAccuracyChart';
 import { SubjectRadarChart } from '../../src/components/analytics/SubjectRadarChart';
 import { TopicSunburstChart } from '../../src/components/analytics/TopicSunburstChart';
+import { AIInsightsCard } from '../../src/components/analytics/AIInsightsCard';
 
 import { useSubscriptionGate } from '../../src/hooks/useSubscriptionGate';
 import { useProgressSummary, useStudyStreak, useAdvancedInsights } from '../../src/hooks/useProgress';
@@ -464,6 +465,15 @@ export default function ProgressScreen() {
               tier: 'Master' as const,
               unlocked: hasMasteryRadar,
               component: <SubjectRadarChart key="mastery_radar" data={advancedData?.subjectStrengths ?? []} />
+            },
+            {
+              key: 'ai_insights',
+              icon: 'sparkles-outline' as const,
+              label: 'Gemini AI Insights',
+              desc: 'Personalised AI study plan & narrative',
+              tier: 'Master' as const,
+              unlocked: hasMasteryRadar,
+              component: <AIInsightsCard key="ai_insights" enabled={hasMasteryRadar} />
             },
           ];
 

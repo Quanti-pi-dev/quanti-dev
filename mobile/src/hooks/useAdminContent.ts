@@ -293,7 +293,8 @@ export function useUpdateLevelCard() {
       subjectId: string; level: string; topicSlug: string; cardId: string;
       updates: Partial<{ question: string; options: { id: string; text: string }[]; correctAnswerId: string; explanation: string | null }>;
     }) => {
-      await adminApi.put(`/subjects/${subjectId}/levels/${level}/cards/${cardId}`, updates);
+      // Updated to use the new clean endpoint
+      await adminApi.put(`/flashcards/${cardId}`, updates);
     },
     onSuccess: (_, { subjectId, level, topicSlug }) => {
       void qc.invalidateQueries({ queryKey: ['admin', 'level-cards', subjectId, level, topicSlug] });
@@ -354,16 +355,16 @@ export function useAdminSubjectTopics(subjectId: string) {
 }
 
 /**
- * Create a new topic for a subject.
+ * Create a new topic for a subject (exam-scoped).
  */
 export function useCreateTopic() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ subjectId, slug, displayName, order }: {
-      subjectId: string; slug: string; displayName: string; order?: number;
+    mutationFn: async ({ subjectId, examId, slug, displayName, order }: {
+      subjectId: string; examId: string; slug: string; displayName: string; order?: number;
     }) => {
       const { data } = await adminApi.post(`/subjects/${subjectId}/topics`, {
-        slug, displayName, order,
+        examId, slug, displayName, order,
       });
       return data.data as TopicEntry;
     },
@@ -410,3 +411,143 @@ export function useDeleteTopic() {
   });
 }
 
+
+/**
+ * Fetch topics for an exam+subject pair (exam-scoped, new hierarchy endpoint).
+ * Prefer this over useAdminSubjectTopics for exam-specific admin screens.
+ */
+export function useAdminExamTopics(examId: string, subjectId: string) {
+  return useQuery<{ subjectName: string; topics: TopicEntry[] }>({
+    queryKey: ['admin', 'exam-topics', examId, subjectId],
+    queryFn: async () => {
+      const { data } = await adminApi.get(`/exams/${examId}/subjects/${subjectId}/topics`);
+      return data.data as { subjectName: string; topics: TopicEntry[] };
+    },
+    enabled: !!examId && !!subjectId,
+    staleTime: 300_000,
+  });
+}
+
+// ─── PYQ Management Hooks ────────────────────────────────────
+
+export interface PYQCard {
+  id: string;
+  deckId: string;
+  question: string;
+  options: { id: string; text: string }[];
+  correctAnswerId: string;
+  explanation: string | null;
+  source: 'pyq';
+  sourceYear: number | null;
+  sourcePaper: string | null;
+  tags: string[];
+  createdAt: string;
+}
+
+export interface PYQPagination {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
+export interface PYQFilters {
+  examId?: string;
+  subjectId?: string;
+  topicSlug?: string;
+  year?: number | null;
+  paper?: string | null;
+  page?: number;
+  pageSize?: number;
+}
+
+/** Paginated list of PYQ flashcards with optional exam/subject/topic/year/paper filters. */
+export function useAdminPYQ(filters: PYQFilters, enabled = true) {
+  return useQuery<{ cards: PYQCard[]; pagination: PYQPagination }>({
+    queryKey: ['admin', 'pyq', filters],
+    queryFn: async () => {
+      const params: Record<string, string> = {};
+      if (filters.examId)    params['examId']    = filters.examId;
+      if (filters.subjectId) params['subjectId'] = filters.subjectId;
+      if (filters.topicSlug) params['topicSlug'] = filters.topicSlug;
+      if (filters.year)      params['year']      = String(filters.year);
+      if (filters.paper)     params['paper']     = filters.paper;
+      if (filters.page)      params['page']      = String(filters.page);
+      if (filters.pageSize)  params['pageSize']  = String(filters.pageSize);
+
+      const { data } = await adminApi.get('/pyq', { params });
+      return data.data as { cards: PYQCard[]; pagination: PYQPagination };
+    },
+    enabled,
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,  // keep previous data while refetching
+  });
+}
+
+/** Returns available years and papers for filter dropdowns, scoped to exam/subject. */
+export function useAdminPYQMeta(examId?: string, subjectId?: string) {
+  return useQuery<{ years: number[]; papers: string[]; total: number }>({
+    queryKey: ['admin', 'pyq-meta', examId, subjectId],
+    queryFn: async () => {
+      const params: Record<string, string> = {};
+      if (examId)    params['examId']    = examId;
+      if (subjectId) params['subjectId'] = subjectId;
+      const { data } = await adminApi.get('/pyq/meta', { params });
+      return data.data as { years: number[]; papers: string[]; total: number };
+    },
+    enabled: !!(examId || subjectId),
+    staleTime: 60_000,
+  });
+}
+
+export interface PYQBulkImportPayload {
+  subjectId: string;
+  topicSlug: string;
+  level: string;
+  sourceYear: number;
+  sourcePaper?: string;
+  examLabel?: string;
+  cards: {
+    question: string;
+    options: { id: string; text: string }[];
+    correctAnswerId: string;
+    explanation?: string | null;
+  }[];
+}
+
+/** Bulk import PYQ cards with request-level year/paper metadata. */
+export function useAdminPYQBulkImport() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    { deckId: string; created: number; requested: number },
+    Error,
+    PYQBulkImportPayload
+  >({
+    mutationFn: async (payload) => {
+      const { data } = await adminApi.post('/pyq/bulk', payload);
+      return data.data as { deckId: string; created: number; requested: number };
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'pyq'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'pyq-meta'] });
+    },
+    onError: (err) => showMutationError('PYQ Bulk Import', err),
+  });
+}
+
+/** Delete a single PYQ card by ID. */
+export function useAdminDeletePYQCard() {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: async (cardId: string) => {
+      await adminApi.delete(`/pyq/${cardId}`);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'pyq'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'pyq-meta'] });
+    },
+    onError: (err) => showMutationError('Delete PYQ Card', err),
+  });
+}

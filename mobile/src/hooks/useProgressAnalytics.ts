@@ -126,7 +126,7 @@ export function useProgressAnalytics(enabled: boolean): ProgressAnalytics {
 
     const grid: number[][] = Array.from({ length: HEATMAP_WEEKS }, () => Array(7).fill(0));
     const now = new Date();
-    const today = now.getDay();
+    const today = (now.getDay() + 6) % 7; // Mon=0 … Sun=6, consistent with the Heatmap renderer
 
     for (let row = HEATMAP_WEEKS - 1; row >= 0; row--) {
       for (let col = 0; col < 7; col++) {

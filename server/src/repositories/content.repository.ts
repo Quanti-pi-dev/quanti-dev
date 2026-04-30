@@ -4,7 +4,7 @@
 import { ObjectId, Filter, Sort, Document } from 'mongodb';
 import { getMongoDb } from '../lib/database.js';
 import { getRedisClient } from '../lib/database.js';
-import type { Exam, Deck, Flashcard, Question, Subject, ExamSubject, SubjectLevel, PaginationQuery } from '@kd/shared';
+import type { Exam, Deck, DeckType, Flashcard, FlashcardSource, Question, Subject, ExamSubject, Topic, SubjectLevel, PaginationQuery } from '@kd/shared';
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@kd/shared';
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -108,6 +108,7 @@ class DeckRepository {
       id: toId(doc as unknown as { _id: ObjectId }),
       title: doc['title'] as string,
       description: doc['description'] as string,
+      type: (doc['type'] as DeckType) ?? (doc['category'] === 'subject' ? 'mastery' : doc['category'] === 'shop' ? 'shop' : 'standalone'),
       category: doc['category'] as string,
       cardCount: (doc['cardCount'] as number) ?? 0,
       imageUrl: (doc['imageUrl'] as string) ?? null,
@@ -150,13 +151,16 @@ class DeckRepository {
       id: toId(doc as unknown as { _id: ObjectId }),
       title: doc['title'] as string,
       description: doc['description'] as string,
+      type: (doc['type'] as DeckType) ?? (doc['category'] === 'subject' ? 'mastery' : doc['category'] === 'shop' ? 'shop' : 'standalone'),
       category: doc['category'] as string,
       cardCount: (doc['cardCount'] as number) ?? 0,
       imageUrl: (doc['imageUrl'] as string) ?? null,
       createdBy: doc['createdBy'] as string,
+      examId: doc['examId'] ? (doc['examId'] as ObjectId).toHexString() : undefined,
       subjectId: doc['subjectId'] ? (doc['subjectId'] as ObjectId).toHexString() : undefined,
+      topicId: doc['topicId'] ? (doc['topicId'] as ObjectId).toHexString() : undefined,
       level: (doc['level'] as SubjectLevel) ?? undefined,
-      topicSlug: (doc['tags'] as string[])?.[0] ?? undefined,
+      topicSlug: (doc['topicSlug'] as string) ?? (doc['tags'] as string[])?.[0] ?? undefined,
       tags: (doc['tags'] as string[]) ?? [],
       createdAt: (doc['createdAt'] as Date).toISOString(),
       updatedAt: (doc['updatedAt'] as Date).toISOString(),
@@ -207,13 +211,16 @@ class DeckRepository {
       id: toId(doc as unknown as { _id: ObjectId }),
       title: doc['title'] as string,
       description: doc['description'] as string,
+      type: (doc['type'] as DeckType) ?? (doc['category'] === 'subject' ? 'mastery' : doc['category'] === 'shop' ? 'shop' : 'standalone'),
       category: doc['category'] as string,
       cardCount: (doc['cardCount'] as number) ?? 0,
       imageUrl: (doc['imageUrl'] as string) ?? null,
       createdBy: doc['createdBy'] as string,
+      examId: doc['examId'] ? (doc['examId'] as ObjectId).toHexString() : undefined,
       subjectId,
+      topicId: doc['topicId'] ? (doc['topicId'] as ObjectId).toHexString() : undefined,
       level,
-      topicSlug: (doc['tags'] as string[])?.[0] ?? topicSlug,
+      topicSlug: (doc['topicSlug'] as string) ?? (doc['tags'] as string[])?.[0] ?? topicSlug,
       tags: (doc['tags'] as string[]) ?? [],
       createdAt: (doc['createdAt'] as Date).toISOString(),
       updatedAt: (doc['updatedAt'] as Date).toISOString(),
@@ -249,6 +256,9 @@ class FlashcardRepository {
       correctAnswerId: doc['correctAnswerId'] as string,
       explanation: (doc['explanation'] as string) ?? null,
       imageUrl: (doc['imageUrl'] as string) ?? null,
+      source: (doc['source'] as FlashcardSource) ?? 'original',
+      sourceYear: (doc['sourceYear'] as number) ?? undefined,
+      sourcePaper: (doc['sourcePaper'] as string) ?? undefined,
       tags: (doc['tags'] as string[]) ?? [],
       createdAt: (doc['createdAt'] as Date).toISOString(),
       updatedAt: (doc['updatedAt'] as Date).toISOString(),
@@ -285,6 +295,9 @@ class FlashcardRepository {
       correctAnswerId: doc['correctAnswerId'] as string,
       explanation: (doc['explanation'] as string) ?? null,
       imageUrl: (doc['imageUrl'] as string) ?? null,
+      source: (doc['source'] as FlashcardSource) ?? 'original',
+      sourceYear: (doc['sourceYear'] as number) ?? undefined,
+      sourcePaper: (doc['sourcePaper'] as string) ?? undefined,
       tags: (doc['tags'] as string[]) ?? [],
       createdAt: (doc['createdAt'] as Date).toISOString(),
       updatedAt: (doc['updatedAt'] as Date).toISOString(),
@@ -314,6 +327,9 @@ class FlashcardRepository {
       correctAnswerId: doc['correctAnswerId'] as string,
       explanation: (doc['explanation'] as string) ?? null,
       imageUrl: (doc['imageUrl'] as string) ?? null,
+      source: (doc['source'] as FlashcardSource) ?? 'original',
+      sourceYear: (doc['sourceYear'] as number) ?? undefined,
+      sourcePaper: (doc['sourcePaper'] as string) ?? undefined,
       tags: (doc['tags'] as string[]) ?? [],
       createdAt: (doc['createdAt'] as Date).toISOString(),
       updatedAt: (doc['updatedAt'] as Date).toISOString(),
@@ -467,15 +483,8 @@ class ExamSubjectRepository {
 
 // ─── Topics ─────────────────────────────────────────────────
 
-export interface TopicDoc {
-  id: string;
-  subjectId: string;
-  slug: string;
-  displayName: string;
-  order: number;
-  createdAt: string;
-  updatedAt: string;
-}
+/** @deprecated Use `Topic` from `@kd/shared` directly. Kept as alias for migration. */
+export type TopicDoc = Topic;
 
 class TopicRepository {
   private get col() {
@@ -498,26 +507,29 @@ class TopicRepository {
     return this.toTopic(doc);
   }
 
-  /** Creates a topic. Enforces unique (subjectId, slug) at the application level. */
+  /** Creates a topic. Enforces unique (examId, subjectId, slug) at the application level. */
   async create(input: {
+    examId: string;
     subjectId: string;
     slug: string;
     displayName: string;
     order?: number;
-  }): Promise<TopicDoc> {
+  }): Promise<Topic> {
     const now = new Date();
+    const examOid = new ObjectId(input.examId);
     const subjectOid = new ObjectId(input.subjectId);
 
-    // Duplicate slug guard
-    const existing = await this.col.findOne({ subjectId: subjectOid, slug: input.slug });
+    // Duplicate slug guard (exam-scoped)
+    const existing = await this.col.findOne({ examId: examOid, subjectId: subjectOid, slug: input.slug });
     if (existing) {
-      throw new Error(`Topic slug "${input.slug}" already exists for this subject`);
+      throw new Error(`Topic slug "${input.slug}" already exists for this exam/subject`);
     }
 
     // Auto-assign order if not provided
-    const order = input.order ?? await this.col.countDocuments({ subjectId: subjectOid });
+    const order = input.order ?? await this.col.countDocuments({ examId: examOid, subjectId: subjectOid });
 
     const result = await this.col.insertOne({
+      examId: examOid,
       subjectId: subjectOid,
       slug: input.slug,
       displayName: input.displayName,
@@ -528,6 +540,7 @@ class TopicRepository {
 
     return this.toTopic({
       _id: result.insertedId,
+      examId: examOid,
       subjectId: subjectOid,
       slug: input.slug,
       displayName: input.displayName,
@@ -540,7 +553,7 @@ class TopicRepository {
   async update(
     id: string,
     updates: Partial<{ slug: string; displayName: string; order: number }>,
-  ): Promise<TopicDoc | null> {
+  ): Promise<Topic | null> {
     const result = await this.col.findOneAndUpdate(
       { _id: new ObjectId(id) },
       { $set: { ...updates, updatedAt: new Date() } },
@@ -554,9 +567,10 @@ class TopicRepository {
     return result.deletedCount > 0;
   }
 
-  private toTopic(doc: Document): TopicDoc {
+  private toTopic(doc: Document): Topic {
     return {
       id: toId(doc as unknown as { _id: ObjectId }),
+      examId: doc['examId'] ? (doc['examId'] as ObjectId).toHexString() : '',
       subjectId: (doc['subjectId'] as ObjectId).toHexString(),
       slug: doc['slug'] as string,
       displayName: doc['displayName'] as string,
@@ -568,6 +582,11 @@ class TopicRepository {
 }
 
 // ─── Singleton Exports ──────────────────────────────────────
+// @deprecated — These exports are retained for backward compatibility.
+// New code should import from the domain-scoped files:
+//   exam.repository.ts, deck.repository.ts, flashcard.repository.ts,
+//   subject.repository.ts, topic.repository.ts
+// The old exports will be removed after Phase 7 (Cleanup).
 
 export const examRepository = new ExamRepository();
 export const deckRepository = new DeckRepository();

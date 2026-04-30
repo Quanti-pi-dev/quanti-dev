@@ -166,6 +166,10 @@ export interface InsightsResponse {
   retentionRate: number;
   weakTopics: string[];
   strongTopics: string[];
+  /** Gemini-generated narrative summary. Null when user has < 3 sessions. */
+  aiSummary: string | null;
+  /** Gemini-generated actionable recommendations (up to 4). */
+  aiRecommendations: string[];
 }
 
 export async function fetchInsights(): Promise<InsightsResponse> {
@@ -184,6 +188,15 @@ export interface Recommendation {
 export async function fetchRecommendations(): Promise<Recommendation[]> {
   const { data } = await api.get<ApiResponse<Recommendation[]>>('/ai/recommendations');
   return (data?.data ?? []) as Recommendation[];
+}
+
+/**
+ * Request a live Gemini-generated explanation for a specific flashcard.
+ * Returns the explanation text. Client should cache per session to avoid redundant calls.
+ */
+export async function fetchExplainCard(cardId: string): Promise<string> {
+  const { data } = await api.post<ApiResponse<{ explanation: string }>>('/ai/explain', { cardId });
+  return data?.data?.explanation ?? '';
 }
 
 // ─── Admin ─────────────────────────────────────────────────

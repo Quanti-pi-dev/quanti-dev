@@ -223,6 +223,7 @@ export default function ExamSubjectsScreen() {
                           const queryParams = new URLSearchParams();
                           queryParams.append('title', subject?.name ?? 'Subject');
                           if (subject?.accent) queryParams.append('accent', subject.accent);
+                          queryParams.append('examId', examId);
                           router.push(`/(admin)/subjects/${es.subjectId}/levels?${queryParams.toString()}` as never);
                         }}
                       >

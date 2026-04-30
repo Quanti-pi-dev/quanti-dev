@@ -1,4 +1,4 @@
-// ─── Content: Exams, Subjects, Decks, Flashcards ───────────
+// ─── Content: Exams, Subjects, Topics, Decks, Flashcards ───
 
 // ─── Subject Levels (fixed, ordered) ────────────────────────
 
@@ -52,19 +52,28 @@ export interface ExamSubject {
   order: number;       // display order within the exam
 }
 
+// ─── Deck Type Discriminator ─────────────────────────────────
+
+export type DeckType = 'mastery' | 'shop' | 'standalone';
+
 export interface Deck {
   id: string;
   title: string;
   description: string;
-  category: string;
+  /** Canonical content type discriminator. */
+  type: DeckType;
+  /** @deprecated Use `type` instead. Kept for backward compat during migration. */
+  category?: string;
   cardCount: number;
   imageUrl: string | null;
   createdBy: string;
-  // ─── Topic-level scoped fields ───────────────────────────────────────
+  // ─── Hierarchy-scoped fields (populated for type='mastery') ────────────
+  examId?: string;     // links deck to a specific exam
   subjectId?: string;
+  topicId?: string;    // FK to topics collection
   level?: SubjectLevel;
   topicSlug?: string;  // e.g. 'kinematics' — identifies the deck's topic within a subject
-  tags?: string[];     // [subjectName, topicSlug, ...examTags, level]
+  tags?: string[];     // kept for search/display, no longer structural
   createdAt: string;
   updatedAt: string;
 }
@@ -74,6 +83,10 @@ export interface FlashcardOption {
   text: string;
 }
 
+// ─── Flashcard Source ────────────────────────────────────────
+
+export type FlashcardSource = 'original' | 'pyq' | 'ai_generated';
+
 export interface Flashcard {
   id: string;
   deckId: string;
@@ -82,6 +95,12 @@ export interface Flashcard {
   correctAnswerId: string;
   explanation: string | null;
   imageUrl: string | null;
+  /** Content origin: platform-created, previous-year-question, or AI-generated. */
+  source: FlashcardSource;
+  /** Year the question appeared (PYQ only). */
+  sourceYear?: number;
+  /** Paper identifier, e.g. 'JEE Mains Shift 1' (PYQ only). */
+  sourcePaper?: string;
   tags: string[];
   createdAt: string;
   updatedAt: string;
@@ -107,4 +126,19 @@ export interface ExamResult {
   totalQuestions: number;
   timeTakenSeconds: number;
   completedAt: string;
+}
+
+// ─── Topic (exam-scoped) ─────────────────────────────────────
+// Each topic is scoped to a specific exam. "Kinematics" under JEE and
+// "Kinematics" under NEET are separate documents.
+
+export interface Topic {
+  id: string;
+  examId: string;      // exam-scoped: unique index on { examId, subjectId, slug }
+  subjectId: string;
+  slug: string;        // kebab-case, e.g. 'kinematics'
+  displayName: string; // human-readable, e.g. 'Kinematics'
+  order: number;
+  createdAt: string;
+  updatedAt: string;
 }

@@ -375,6 +375,7 @@ export default function FlashcardStudyScreen() {
         answer={answered[currentIdx]}
         explanation={card.explanation ?? ''}
         cardIndex={currentIdx}
+        cardId={card.id}
       />
 
       <StudyNavBar

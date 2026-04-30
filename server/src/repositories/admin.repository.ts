@@ -457,10 +457,15 @@ class AdminExamSubjectRepository {
 }
 
 // ─── Exports ────────────────────────────────────────────────
-
+// @deprecated adminExamRepository → use exam.repository.ts
 export const adminExamRepository = new AdminExamRepository();
+// @deprecated adminDeckRepository → use deck.repository.ts
 export const adminDeckRepository = new AdminDeckRepository();
+// @deprecated adminFlashcardRepository → use flashcard.repository.ts
 export const adminFlashcardRepository = new AdminFlashcardRepository();
+// ACTIVE — still used by admin-shop.routes.ts
 export const adminBadgeRepository = new AdminBadgeRepository();
+// ACTIVE — still used by admin-shop.routes.ts
 export const adminShopItemRepository = new AdminShopItemRepository();
+// @deprecated adminExamSubjectRepository → use subject.repository.ts (examSubjectRepository)
 export const adminExamSubjectRepository = new AdminExamSubjectRepository();

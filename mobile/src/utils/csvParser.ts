@@ -1,13 +1,22 @@
 // ─── CSV / JSON → Flashcard Parser ──────────────────────────
 // Converts admin-uploaded CSV or JSON text into the flashcard
-// payload expected by POST /admin/subjects/:id/levels/:level/cards
-// and POST /admin/flashcards/bulk.
+// payload expected by POST /admin/subjects/:id/levels/:level/cards/bulk.
+//
+// Supports optional PYQ metadata fields (source, sourceYear, sourcePaper, tags)
+// matching the FlashcardSource schema in @kd/shared.
+
+export type FlashcardSource = 'original' | 'pyq' | 'textbook';
 
 export interface ParsedFlashcard {
   question: string;
   options: { id: string; text: string }[];
   correctAnswerId: string;
   explanation: string | null;
+  // ── Optional PYQ / source metadata ──
+  source?: FlashcardSource;
+  sourceYear?: number | null;
+  sourcePaper?: string | null;
+  tags?: string[];
 }
 
 export interface ParseResult {
@@ -16,11 +25,17 @@ export interface ParseResult {
 }
 
 // ─── CSV Parser ──────────────────────────────────────────────
-// Expected CSV headers (case-insensitive):
-//   question, optionA, optionB, optionC, optionD, correctAnswer, explanation
+// Required headers (case-insensitive):
+//   question, optionA, optionB, optionC, optionD, correctAnswer
 //
-// correctAnswer must be one of: A, B, C, D
-// explanation is optional — blank cells are fine.
+// Optional headers:
+//   explanation, source, sourceYear, sourcePaper, tags
+//
+// - correctAnswer must be one of: A, B, C, D
+// - source must be: original | pyq | textbook  (default: original)
+// - sourceYear: integer (e.g. 2022)
+// - sourcePaper: free text (e.g. "Paper 1")
+// - tags: comma-separated (e.g. "kinematics,motion")
 
 function splitCSVRow(line: string): string[] {
   const result: string[] = [];
@@ -47,6 +62,8 @@ function splitCSVRow(line: string): string[] {
   return result;
 }
 
+const VALID_SOURCES: FlashcardSource[] = ['original', 'pyq', 'textbook'];
+
 export function parseCSV(text: string): ParseResult {
   const errors: string[] = [];
   const cards: ParsedFlashcard[] = [];
@@ -58,36 +75,27 @@ export function parseCSV(text: string): ParseResult {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]!;
     if (ch === '"') {
-      // Handle escaped double-quote ("") — keep quotes toggled correctly
       if (inQuotes && i + 1 < text.length && text[i + 1] === '"') {
         current += '""';
-        i++; // skip the second quote
+        i++;
       } else {
         inQuotes = !inQuotes;
       }
       current += ch;
     } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
-      // Skip the \n in a \r\n pair
-      if (ch === '\r' && i + 1 < text.length && text[i + 1] === '\n') {
-        i++;
-      }
-      if (current.trim().length > 0) {
-        rows.push(current);
-      }
+      if (ch === '\r' && i + 1 < text.length && text[i + 1] === '\n') i++;
+      if (current.trim().length > 0) rows.push(current);
       current = '';
     } else {
       current += ch;
     }
   }
-  if (current.trim().length > 0) {
-    rows.push(current);
-  }
+  if (current.trim().length > 0) rows.push(current);
 
   if (rows.length < 2) {
     return { cards: [], errors: ['CSV must have a header row and at least one data row.'] };
   }
 
-  // Validate headers
   const headers = splitCSVRow(rows[0] ?? '').map((h) => h.toLowerCase().replace(/\s+/g, ''));
   const required = ['question', 'optiona', 'optionb', 'optionc', 'optiond', 'correctanswer'];
   const missing = required.filter((r) => !headers.includes(r));
@@ -95,23 +103,34 @@ export function parseCSV(text: string): ParseResult {
     return { cards: [], errors: [`Missing required CSV columns: ${missing.join(', ')}`] };
   }
 
-  const qi = headers.indexOf('question');
-  const ai = headers.indexOf('optiona');
-  const bi = headers.indexOf('optionb');
-  const ci = headers.indexOf('optionc');
-  const di = headers.indexOf('optiond');
+  const qi       = headers.indexOf('question');
+  const ai       = headers.indexOf('optiona');
+  const bi       = headers.indexOf('optionb');
+  const ci       = headers.indexOf('optionc');
+  const di       = headers.indexOf('optiond');
   const correctI = headers.indexOf('correctanswer');
-  const explI = headers.indexOf('explanation');
+  const explI    = headers.indexOf('explanation');
+  // Optional metadata columns
+  const sourceI  = headers.indexOf('source');
+  const yearI    = headers.indexOf('sourceyear');
+  const paperI   = headers.indexOf('sourcepaper');
+  const tagsI    = headers.indexOf('tags');
 
   for (let row = 1; row < rows.length; row++) {
     const cols = splitCSVRow(rows[row]!);
-    const question = cols[qi]?.trim() ?? '';
-    const optA = cols[ai]?.trim() ?? '';
-    const optB = cols[bi]?.trim() ?? '';
-    const optC = cols[ci]?.trim() ?? '';
-    const optD = cols[di]?.trim() ?? '';
-    const correct = (cols[correctI]?.trim() ?? '').toUpperCase();
-    const explanation = explI >= 0 ? cols[explI]?.trim() ?? '' : '';
+    const question   = cols[qi]?.trim() ?? '';
+    const optA       = cols[ai]?.trim() ?? '';
+    const optB       = cols[bi]?.trim() ?? '';
+    const optC       = cols[ci]?.trim() ?? '';
+    const optD       = cols[di]?.trim() ?? '';
+    const correct    = (cols[correctI]?.trim() ?? '').toUpperCase();
+    const explanation = explI >= 0 ? (cols[explI]?.trim() ?? '') : '';
+
+    // Optional metadata
+    const rawSource  = sourceI >= 0 ? (cols[sourceI]?.trim().toLowerCase() ?? '') : '';
+    const rawYear    = yearI >= 0 ? (cols[yearI]?.trim() ?? '') : '';
+    const rawPaper   = paperI >= 0 ? (cols[paperI]?.trim() ?? '') : '';
+    const rawTags    = tagsI >= 0 ? (cols[tagsI]?.trim() ?? '') : '';
 
     if (!question) {
       errors.push(`Row ${row + 1}: Question is empty — skipped.`);
@@ -132,18 +151,35 @@ export function parseCSV(text: string): ParseResult {
     if (optC) options.push({ id: 'C', text: optC });
     if (optD) options.push({ id: 'D', text: optD });
 
-    // Verify that the selected correct option is actually filled
-    const hasCorrectOption = options.some((o) => o.id === correct);
-    if (!hasCorrectOption) {
+    if (!options.some((o) => o.id === correct)) {
       errors.push(`Row ${row + 1}: correctAnswer "${correct}" references an empty option — skipped.`);
       continue;
     }
+
+    // Validate optional source
+    let source: FlashcardSource | undefined;
+    if (rawSource) {
+      if (VALID_SOURCES.includes(rawSource as FlashcardSource)) {
+        source = rawSource as FlashcardSource;
+      } else {
+        errors.push(`Row ${row + 1}: Invalid source "${rawSource}" — using "original".`);
+        source = 'original';
+      }
+    }
+
+    const sourceYear = rawYear ? parseInt(rawYear, 10) || null : null;
+    const sourcePaper = rawPaper || null;
+    const tags = rawTags ? rawTags.split(',').map((t) => t.trim()).filter(Boolean) : undefined;
 
     cards.push({
       question,
       options,
       correctAnswerId: correct,
       explanation: explanation || null,
+      ...(source && { source }),
+      ...(sourceYear && { sourceYear }),
+      ...(sourcePaper && { sourcePaper }),
+      ...(tags && tags.length > 0 && { tags }),
     });
   }
 
@@ -151,13 +187,17 @@ export function parseCSV(text: string): ParseResult {
 }
 
 // ─── JSON Parser ─────────────────────────────────────────────
-// Expected structure: an array of objects:
+// Expected structure: array of objects:
 // [
 //   {
 //     "question": "...",
 //     "options": [{ "id": "A", "text": "..." }, ...],
 //     "correctAnswerId": "A",
-//     "explanation": "..."          // optional
+//     "explanation": "...",        // optional
+//     "source": "pyq",             // optional: original | pyq | textbook
+//     "sourceYear": 2022,          // optional, integer
+//     "sourcePaper": "Paper 1",    // optional
+//     "tags": ["kinematics"]       // optional
 //   }
 // ]
 
@@ -186,16 +226,20 @@ export function parseJSON(text: string): ParseResult {
     }
 
     const record = item as Record<string, unknown>;
-    const q = record.question;
-    const opts = record.options;
-    const correct = record.correctAnswerId;
-    const expl = record.explanation ?? null;
+    const q       = record['question'];
+    const opts    = record['options'];
+    const correct = record['correctAnswerId'];
+    const expl    = record['explanation'] ?? null;
+    // Optional metadata
+    const rawSource  = record['source'];
+    const rawYear    = record['sourceYear'];
+    const rawPaper   = record['sourcePaper'];
+    const rawTags    = record['tags'];
 
     if (typeof q !== 'string' || !q.trim()) {
       errors.push(`${prefix}: Missing or empty "question" field — skipped.`);
       continue;
     }
-
     if (!Array.isArray(opts) || opts.length < 2) {
       errors.push(`${prefix}: "options" must be an array with at least 2 entries — skipped.`);
       continue;
@@ -218,11 +262,32 @@ export function parseJSON(text: string): ParseResult {
       continue;
     }
 
+    // Validate optional source
+    let source: FlashcardSource | undefined;
+    if (rawSource !== undefined && rawSource !== null) {
+      if (VALID_SOURCES.includes(rawSource as FlashcardSource)) {
+        source = rawSource as FlashcardSource;
+      } else {
+        errors.push(`${prefix}: Invalid source "${rawSource}" — using "original".`);
+        source = 'original';
+      }
+    }
+
+    const sourceYear = typeof rawYear === 'number' ? rawYear : null;
+    const sourcePaper = typeof rawPaper === 'string' && rawPaper.trim() ? rawPaper.trim() : null;
+    const tags = Array.isArray(rawTags)
+      ? (rawTags as unknown[]).filter((t): t is string => typeof t === 'string')
+      : undefined;
+
     cards.push({
       question: q.trim(),
       options: validOptions,
       correctAnswerId: correct,
       explanation: typeof expl === 'string' && expl.trim() ? expl.trim() : null,
+      ...(source && { source }),
+      ...(sourceYear && { sourceYear }),
+      ...(sourcePaper && { sourcePaper }),
+      ...(tags && tags.length > 0 && { tags }),
     });
   }
 

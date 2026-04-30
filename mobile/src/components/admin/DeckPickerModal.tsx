@@ -18,7 +18,7 @@ import { spacing, radius } from '../../theme/tokens';
 import { Typography } from '../ui/Typography';
 import { Input } from '../ui/Input';
 import { Card } from '../ui/Card';
-import { api } from '../../services/api';
+import { adminApi } from '../../services/api';
 import type { Deck } from '@kd/shared';
 
 // ─── Types ───────────────────────────────────────────────────
@@ -40,7 +40,8 @@ export function DeckPickerModal({ visible, onClose, onSelect, selectedDeckId }: 
   const { data: decks = [], isLoading } = useQuery<Deck[]>({
     queryKey: ['admin', 'deck-picker'],
     queryFn: async () => {
-      const { data } = await api.get('/decks', { params: { pageSize: 200 } });
+      // Use adminApi so unpublished decks are also visible
+      const { data } = await adminApi.get('/decks', { params: { pageSize: 200 } });
       return (data?.data ?? []) as Deck[];
     },
     enabled: visible,
@@ -53,6 +54,7 @@ export function DeckPickerModal({ visible, onClose, onSelect, selectedDeckId }: 
     return (decks ?? []).filter(
       (d) =>
         d.title.toLowerCase().includes(q) ||
+        d.topicSlug?.toLowerCase().includes(q) ||
         d.category?.toLowerCase().includes(q),
     );
   }, [decks, search]);

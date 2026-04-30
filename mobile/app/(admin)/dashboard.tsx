@@ -143,6 +143,17 @@ export default function AdminDashboard() {
             </View>
           </Card>
 
+          <Card pressable onPress={() => router.push('/(admin)/pyq' as never)} variant="outlined">
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+              <Icon name="library-outline" size={22} color="#F59E0B" />
+              <View style={{ flex: 1 }}>
+                <Typography variant="label">PYQ Manager</Typography>
+                <Typography variant="caption" color={theme.textTertiary}>Import and manage previous year questions by exam, year & paper</Typography>
+              </View>
+              <Icon name="chevron-forward" size={18} color={theme.textTertiary} />
+            </View>
+          </Card>
+
           <Card pressable onPress={() => router.push('/(admin)/plans' as never)} variant="outlined">
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
               <Icon name="card-outline" size={22} color="#8B5CF6" />
