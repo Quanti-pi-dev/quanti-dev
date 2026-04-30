@@ -18,6 +18,29 @@ async function run() {
     const db = client.db(config.mongo.dbName);
     console.log(`✅ Connected to database: ${db.databaseName}\n`);
 
+    // ─── Cleanup Legacy Indexes ───────────────────────────────
+    console.log('🧹 Cleaning up legacy migration indexes...');
+    const legacyIndexes = [
+      { coll: 'decks', name: 'idx_deck_hierarchy' },
+      { coll: 'decks', name: 'idx_deck_subject_level' },
+      { coll: 'topics', name: 'idx_topic_exam_subject_slug' },
+      { coll: 'exam_subjects', name: 'idx_exam_subject_unique' },
+      { coll: 'flashcards', name: 'idx_flashcard_deck_order' },
+      { coll: 'flashcards', name: 'idx_flashcard_deck_source_order' },
+      { coll: 'flashcards', name: 'idx_flashcard_source' },
+      { coll: 'flashcards', name: 'idx_flashcard_pyq_deck_year' },
+      { coll: 'flashcards', name: 'idx_flashcard_pyq_year_paper' },
+    ];
+    for (const { coll, name } of legacyIndexes) {
+      try {
+        await db.collection(coll).dropIndex(name);
+        console.log(`  ✓ Dropped ${name} from ${coll}`);
+      } catch (e) {
+        // Ignore if it doesn't exist
+      }
+    }
+    console.log();
+
     // ─── 1. Exams ─────────────────────────────────────────────
     console.log('📋 Creating indexes for exams...');
     await db.collection('exams').createIndex(
