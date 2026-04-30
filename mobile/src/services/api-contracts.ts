@@ -255,7 +255,8 @@ export interface LevelProgressSummaryItem {
   subjectName: string;
   highestLevel: string;
   levelIndex: number; // 0=Beginner … 5=Master
-  correctAnswers: number;
+  correctAnswers: number; // total correct across ALL levels for this subject
+  totalAnswers: number;   // total attempts across ALL levels for this subject
 }
 
 export async function fetchLevelProgressSummary(): Promise<LevelProgressSummaryItem[]> {

@@ -3,7 +3,7 @@
 // selections (selectedExams + selectedSubjects).
 // Falls back to generic "Explore Exams" for unonboarded users.
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { View, ScrollView, TouchableOpacity } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -24,13 +24,14 @@ import { Typography } from '../../src/components/ui/Typography';
 import { Button } from '../../src/components/ui/Button';
 import { Divider } from '../../src/components/ui/Divider';
 import { Skeleton } from '../../src/components/ui/Skeleton';
-import { StatTile } from '../../src/components/StatTile';
 import { ExamCard } from '../../src/components/ExamCard';
 import { ActivityItem } from '../../src/components/ActivityItem';
-import { StreakWidget } from '../../src/components/StreakWidget';
 import { StudyInsightsCard } from '../../src/components/StudyInsightsCard';
 import { TargetSubjectCard, SUBJECT_ACCENT_PALETTE, getSubjectIcon } from '../../src/components/TargetSubjectCard';
 import { UpNextHeroCard } from '../../src/components/UpNextHeroCard';
+
+import { WeeklyHeatmap } from '../../src/components/WeeklyHeatmap';
+import { CoinDisplay } from '../../src/components/CoinDisplay';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useSubscriptionGate } from '../../src/hooks/useSubscriptionGate';
 import { useSubscription } from '../../src/contexts/SubscriptionContext';
@@ -43,18 +44,19 @@ import { api } from '../../src/services/api';
 import type { Subject } from '@kd/shared';
 
 const FREE_EXAM_PREVIEW = 3;
+const RECENT_ACTIVITY_LIMIT = 3;
 
 // ─── Greeting ────────────────────────────────────────────────
-function getGreeting(name: string, streakDays?: number) {
+function getGreeting(name: string) {
   const first = name.split(' ')[0];
-  if (streakDays && streakDays >= 7) return `🔥 ${streakDays}-day streak, ${first}!`;
-  if (streakDays && streakDays >= 3) return `Keep it up, ${first}! ${streakDays} days 💪`;
   const hour = new Date().getHours();
   const time = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
-  return `Good ${time}, ${first} 👋`;
+  return `Good ${time}, ${first}`;
 }
 
-function getSubtitle(examName?: string) {
+function getSubtitle(examName?: string, streak?: number) {
+  if (streak && streak >= 7) return `🔥 ${streak}-day streak — keep it going!`;
+  if (streak && streak >= 3) return `${streak} days strong 💪`;
   if (examName) return `Ready to conquer ${examName}?`;
   return 'Ready to study today?';
 }
@@ -87,7 +89,7 @@ function UpgradePill({ onPress }: { onPress: () => void }) {
       accessibilityLabel="Upgrade your subscription"
       style={{
         flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
-        paddingHorizontal: spacing.sm, paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.sm, paddingVertical: spacing.xs + 2,
         borderRadius: radius.full,
         backgroundColor: theme.primaryMuted, borderWidth: 1, borderColor: theme.primary + '33',
         overflow: 'hidden',
@@ -105,8 +107,8 @@ function UpgradePill({ onPress }: { onPress: () => void }) {
         ]}
         pointerEvents="none"
       />
-      <Ionicons name="rocket-outline" size={13} color={theme.primary} />
-      <Typography variant="captionBold" color={theme.primary}>Upgrade</Typography>
+      <Ionicons name="rocket-outline" size={12} color={theme.primary} />
+      <Typography variant="captionBold" color={theme.primary}>PRO</Typography>
     </TouchableOpacity>
   );
 }
@@ -114,11 +116,11 @@ function UpgradePill({ onPress }: { onPress: () => void }) {
 // ─── Staggered fade-in wrapper ────────────────────────────────
 function FadeInView({ delay = 0, children }: { delay?: number; children: React.ReactNode }) {
   const opacity = useSharedValue(0);
-  const translateY = useSharedValue(16);
+  const translateY = useSharedValue(14);
 
   useEffect(() => {
-    opacity.value = withDelay(delay, withTiming(1, { duration: 400 }));
-    translateY.value = withDelay(delay, withSpring(0, { stiffness: 120, damping: 18 }));
+    opacity.value = withDelay(delay, withTiming(1, { duration: 350 }));
+    translateY.value = withDelay(delay, withSpring(0, { stiffness: 140, damping: 20 }));
   }, [delay]);
 
   const style = useAnimatedStyle(() => ({
@@ -129,60 +131,21 @@ function FadeInView({ delay = 0, children }: { delay?: number; children: React.R
   return <Animated.View style={style}>{children}</Animated.View>;
 }
 
-// ─── Daily Goals Mini-Strip ───────────────────────────────────
-interface GoalItem {
-  icon: keyof typeof Ionicons['glyphMap'];
-  label: string;
-  done: boolean;
-  color: string;
-}
+// ─── Weekly heatmap helper ────────────────────────────────────
+function getWeekStudyData(lastStudyDate?: string): { studiedDays: boolean[]; todayIndex: number } {
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0=Sun
+  const todayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Convert to 0=Mon
 
-function DailyGoalStrip({ goals }: { goals: GoalItem[] }) {
-  const { theme } = useTheme();
-  return (
-    <View style={{ gap: spacing.sm }}>
-      <Typography variant="label" color={theme.textTertiary}>Today's Goals</Typography>
-      <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-        {goals.map((g) => (
-          <View
-            key={g.label}
-            style={{
-              flex: 1,
-              backgroundColor: g.done ? g.color + '18' : theme.cardAlt,
-              borderRadius: radius.xl,
-              borderWidth: 1.5,
-              borderColor: g.done ? g.color + '44' : theme.border,
-              padding: spacing.md,
-              alignItems: 'center',
-              gap: spacing.xs,
-            }}
-          >
-            <View
-              style={{
-                width: 36, height: 36, borderRadius: radius.full,
-                backgroundColor: g.done ? g.color + '28' : theme.border + '44',
-                alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              {g.done ? (
-                <Ionicons name="checkmark-circle" size={20} color={g.color} />
-              ) : (
-                <Ionicons name={g.icon} size={18} color={theme.textTertiary} />
-              )}
-            </View>
-            <Typography
-              variant="caption"
-              align="center"
-              color={g.done ? g.color : theme.textTertiary}
-              style={{ lineHeight: 13 }}
-            >
-              {g.label}
-            </Typography>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
+  // For now, mark today as studied if lastStudyDate is today
+  const todayStr = now.toISOString().split('T')[0];
+  const studiedToday = lastStudyDate === todayStr;
+
+  // Build array — we only reliably know about today from the streak hook
+  const studiedDays = Array(7).fill(false);
+  if (studiedToday) studiedDays[todayIndex] = true;
+
+  return { studiedDays, todayIndex };
 }
 
 // ─── Screen ───────────────────────────────────────────────────
@@ -213,7 +176,6 @@ export default function HomeScreen() {
   const { data: personalizedSubjects, isLoading: subjectsLoading } = useQuery<Subject[]>({
     queryKey: ['home-personalized-subjects', selectedSubjectIds.join(',')],
     queryFn: async () => {
-      // Fetch subjects from all selected exams and deduplicate
       const requests = selectedExamIds.map((id) => api.get(`/exams/${id}/subjects`));
       const responses = await Promise.all(requests);
       const map = new Map<string, Subject>();
@@ -226,14 +188,13 @@ export default function HomeScreen() {
           }
         }
       }
-      // Preserve onboarding order
       return selectedSubjectIds.map((id) => map.get(id)).filter((s): s is Subject => !!s);
     },
     enabled: isOnboarded && selectedExamIds.length > 0,
     staleTime: 5 * 60 * 1000,
   });
 
-  // ─── Mastery data: levelIndex (0–5) per subject ───────────
+  // ─── Mastery data: correctAnswers + levelIndex per subject ───
   const { data: levelProgress } = useQuery({
     queryKey: ['home-level-progress-summary'],
     queryFn: fetchLevelProgressSummary,
@@ -241,12 +202,13 @@ export default function HomeScreen() {
     enabled: isOnboarded,
   });
 
-  // Build a subjectId → progress (0–1) map from the level index (0=Beginner…5=Master)
-  const masteryMap = new Map<string, number>();
+  const masteryMap = new Map<string, { correctAnswers: number; levelIndex: number }>();
   if (levelProgress) {
     for (const item of levelProgress) {
-      // levelIndex 0–5 → 0–1 fraction
-      masteryMap.set(item.subjectId, item.levelIndex / 5);
+      masteryMap.set(item.subjectId, {
+        correctAnswers: item.correctAnswers,
+        levelIndex: item.levelIndex,
+      });
     }
   }
 
@@ -265,32 +227,29 @@ export default function HomeScreen() {
   const { data: progressData } = useProgressSummary();
   const { data: activityData } = useQuery({
     queryKey: ['progress-history-home'],
-    queryFn: () => fetchRecentSessions(5),
+    queryFn: () => fetchRecentSessions(RECENT_ACTIVITY_LIMIT),
     staleTime: 60_000,
   });
 
   const coins = coinData?.balance ?? 0;
   const streak = streakData?.currentStreak ?? 0;
   const solved = progressData?.totalCardsCompleted ?? 0;
-  const accuracy = progressData?.overallAccuracy != null
-    ? `${Math.round(progressData.overallAccuracy)}%`
-    : '—';
-
-  const lastSession = activityData?.[0];
   const studiedToday = streakData?.lastStudyDate === new Date().toISOString().split('T')[0];
 
-  // ─── Daily goals ─────────────────────────────────────────
-  const dailyGoals: GoalItem[] = [
-    { icon: 'book-outline',      label: 'Study session', done: studiedToday,      color: '#6366F1' },
-    { icon: 'flame-outline',     label: 'Keep streak',   done: studiedToday,      color: '#EF4444' },
-    { icon: 'trophy-outline',    label: 'Earn 10 coins',  done: coins > 0,         color: '#F59E0B' },
-  ];
+  const lastSession = activityData?.[0];
+
+  // ─── Weekly heatmap data ─────────────────────────────────
+  const weekData = useMemo(
+    () => getWeekStudyData(streakData?.lastStudyDate),
+    [streakData?.lastStudyDate],
+  );
+
 
   return (
     <ScreenWrapper>
       <ScrollView showsVerticalScrollIndicator={false}>
 
-        {/* ─── Top bar ─── */}
+        {/* ━━━ Header ━━━ */}
         <View
           style={{
             flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -299,20 +258,21 @@ export default function HomeScreen() {
         >
           <View style={{ flex: 1, paddingRight: spacing.sm }}>
             <Typography variant="h3" numberOfLines={1}>
-              {getGreeting(displayName, streak)}
+              {getGreeting(displayName)}
             </Typography>
-            <Typography variant="caption" color={theme.textTertiary}>
-              {getSubtitle(primaryExam?.title)}
+            <Typography variant="caption" color={theme.textTertiary} style={{ marginTop: 2 }}>
+              {getSubtitle(primaryExam?.title, streak)}
             </Typography>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+            <CoinDisplay coins={coins} size="sm" />
             {!isSubscribed && <UpgradePill onPress={goToUpgrade} />}
           </View>
         </View>
 
-        <View style={{ paddingHorizontal: spacing.xl, gap: spacing.xl, paddingBottom: spacing['3xl'] }}>
+        <View style={{ paddingHorizontal: spacing.xl, gap: spacing.lg, paddingBottom: spacing['3xl'] }}>
 
-          {/* ─── Trial Expiry Banner ─── */}
+          {/* ━━━ Trial Expiry Banner ━━━ */}
           {trialExpired && (
             <FadeInView delay={0}>
               <TouchableOpacity
@@ -340,76 +300,39 @@ export default function HomeScreen() {
             </FadeInView>
           )}
 
-          {/* ─── Streak ─── */}
-          <FadeInView delay={60}>
-            <StreakWidget streak={streak} freezes={streakData?.streakFreezes} />
-          </FadeInView>
-
-          {/* ─── Study Insights ─── */}
-          <FadeInView delay={120}>
-            <StudyInsightsCard data={{
-              streak,
-              freezes: streakData?.streakFreezes ?? 0,
-              accuracy: progressData?.overallAccuracy ?? null,
-              studiedToday: streakData?.lastStudyDate === new Date().toISOString().split('T')[0],
-            }} />
-          </FadeInView>
-
-          {/* ─── Daily Goals ─── */}
-          <FadeInView delay={160}>
-            <DailyGoalStrip goals={dailyGoals} />
-          </FadeInView>
-
-          {/* ─── Stats Grid ─── */}
-          <FadeInView delay={200}>
-            <View style={{ gap: spacing.sm }}>
-              <Typography variant="label" color={theme.textTertiary}>Your stats</Typography>
-              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                <StatTile label="Solved" value={String(solved)} color={theme.statSolved} />
-                <StatTile label="Accuracy" value={accuracy} color={theme.statAccuracy} />
-              </View>
-              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                <StatTile label="Coins" value={coins.toLocaleString()} color={theme.statCoins} />
-                <StatTile label="Streak" value={`${streak}d`} color={theme.statStreak} />
-              </View>
-            </View>
-          </FadeInView>
-
-          {/* ─── Resume CTA ─── */}
+          {/* ━━━ Resume CTA — most actionable item ━━━ */}
           {lastSession && (
-            <FadeInView delay={240}>
+            <FadeInView delay={60}>
               {isSubscribed ? (
-                <View
+                <TouchableOpacity
+                  onPress={() => router.push(`/flashcards/${lastSession.deckId}`)}
+                  activeOpacity={0.9}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Resume studying ${lastSession.deckTitle}`}
                   style={{
                     backgroundColor: theme.primary, borderRadius: radius['2xl'],
-                    padding: spacing.xl, gap: spacing.sm,
+                    padding: spacing.lg, gap: spacing.sm,
+                    flexDirection: 'row', alignItems: 'center',
                   }}
                 >
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <View style={{ gap: spacing.xs, flex: 1 }}>
-                      <Typography variant="overline" color="rgba(255,255,255,0.7)">Continue where you left off</Typography>
-                      <Typography variant="h4" color={theme.buttonPrimaryText}>{lastSession.deckTitle}</Typography>
-                      <Typography variant="caption" color="rgba(255,255,255,0.7)">
-                        {lastSession.cardsStudied} cards · {Math.round((lastSession.correctAnswers / Math.max(lastSession.cardsStudied, 1)) * 100)}% correct
-                      </Typography>
-                    </View>
-                    <View
-                      style={{
-                        width: 52, height: 52, borderRadius: radius.full,
-                        backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center',
-                      }}
-                    >
-                      <Ionicons name="play" size={22} color={theme.buttonPrimaryText} />
-                    </View>
+                  <View style={{ flex: 1, gap: spacing.xs }}>
+                    <Typography variant="overline" color="rgba(255,255,255,0.65)">Continue</Typography>
+                    <Typography variant="h4" color="#FFFFFF" numberOfLines={1} style={{ fontWeight: '700' }}>
+                      {lastSession.deckTitle}
+                    </Typography>
+                    <Typography variant="caption" color="rgba(255,255,255,0.7)">
+                      {lastSession.cardsStudied} cards · {Math.round((lastSession.correctAnswers / Math.max(lastSession.cardsStudied, 1)) * 100)}% correct
+                    </Typography>
                   </View>
-                  <Button
-                    variant="ghost" size="sm"
-                    onPress={() => router.push(`/flashcards/${lastSession.deckId}`)}
-                    style={{ backgroundColor: 'rgba(255,255,255,0.2)', alignSelf: 'flex-start' }}
+                  <View
+                    style={{
+                      width: 48, height: 48, borderRadius: radius.full,
+                      backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center',
+                    }}
                   >
-                    Resume Study
-                  </Button>
-                </View>
+                    <Ionicons name="play" size={20} color="#FFFFFF" />
+                  </View>
+                </TouchableOpacity>
               ) : (
                 <TouchableOpacity
                   onPress={goToUpgrade}
@@ -426,17 +349,17 @@ export default function HomeScreen() {
                 >
                   <View
                     style={{
-                      width: 44, height: 44, borderRadius: radius.full,
+                      width: 40, height: 40, borderRadius: radius.full,
                       backgroundColor: theme.primaryMuted, borderWidth: 1, borderColor: theme.primary + '44',
                       alignItems: 'center', justifyContent: 'center',
                     }}
                   >
-                    <Ionicons name="lock-closed" size={18} color={theme.primary} />
+                    <Ionicons name="lock-closed" size={16} color={theme.primary} />
                   </View>
-                  <View style={{ flex: 1, gap: spacing.xs }}>
+                  <View style={{ flex: 1, gap: 2 }}>
                     <Typography variant="label" color={theme.primary}>Resume Studying</Typography>
                     <Typography variant="caption" color={theme.textSecondary}>
-                      Upgrade to Basic to pick up where you left off
+                      Upgrade to pick up where you left off
                     </Typography>
                   </View>
                   <Ionicons name="chevron-forward" size={16} color={theme.primary} />
@@ -445,17 +368,37 @@ export default function HomeScreen() {
             </FadeInView>
           )}
 
+
+          {/* ━━━ Weekly Heatmap ━━━ */}
+          <FadeInView delay={180}>
+            <WeeklyHeatmap
+              studiedDays={weekData.studiedDays}
+              todayIndex={weekData.todayIndex}
+              streak={streak}
+            />
+          </FadeInView>
+
+          {/* ━━━ Study Insight (contextual tip) ━━━ */}
+          <FadeInView delay={240}>
+            <StudyInsightsCard data={{
+              streak,
+              freezes: streakData?.streakFreezes ?? 0,
+              accuracy: progressData?.overallAccuracy ?? null,
+              studiedToday,
+            }} />
+          </FadeInView>
+
           {/* ══════════════════════════════════════════════════════
               PERSONALIZED SECTIONS — only shown if onboarded
           ══════════════════════════════════════════════════════ */}
           {isOnboarded ? (
             <>
-              {/* ─── "Up Next for You" hero card ─── */}
+              {/* ━━━ "Up Next for You" hero card ━━━ */}
               {upNextSubject && (() => {
                 const upNextAccentIdx = personalizedSubjects?.findIndex(s => s.id === upNextSubject.id) ?? 0;
                 const upNextAccent = SUBJECT_ACCENT_PALETTE[upNextAccentIdx % SUBJECT_ACCENT_PALETTE.length]!;
                 const upNextStage = Math.min(
-                  Math.floor((masteryMap.get(upNextSubject.id) ?? 0) * 5),
+                  masteryMap.get(upNextSubject.id)?.levelIndex ?? 0,
                   4,
                 );
                 return (
@@ -478,11 +421,11 @@ export default function HomeScreen() {
                 );
               })()}
 
-              {/* ─── "Your Target Subjects" carousel ─── */}
+              {/* ━━━ "Your Target Subjects" carousel ━━━ */}
               <View style={{ gap: spacing.md }}>
                 <FadeInView delay={360}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="h4">Your Target Subjects</Typography>
+                    <Typography variant="h4">Your Subjects</Typography>
                     <TouchableOpacity onPress={() => router.push('/(tabs)/study')} accessibilityRole="link" accessibilityLabel="See all target subjects">
                       <Typography variant="label" color={theme.primary}>See all</Typography>
                     </TouchableOpacity>
@@ -509,7 +452,8 @@ export default function HomeScreen() {
                         key={subject.id}
                         subject={subject}
                         accentIndex={idx}
-                        masteryProgress={masteryMap.get(subject.id) ?? 0}
+                        correctAnswers={masteryMap.get(subject.id)?.correctAnswers ?? 0}
+                        levelIndex={masteryMap.get(subject.id)?.levelIndex ?? 0}
                         animDelay={360 + idx * 80}
                         onPress={() =>
                           router.push(
@@ -523,7 +467,7 @@ export default function HomeScreen() {
               </View>
             </>
           ) : (
-            /* ─── GENERIC: Explore Exams (unonboarded users) ─── */
+            /* ━━━ GENERIC: Explore Exams (unonboarded users) ━━━ */
             <FadeInView delay={300}>
               <View style={{ gap: spacing.md }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -568,13 +512,25 @@ export default function HomeScreen() {
             </FadeInView>
           )}
 
-          {/* ─── Recent Activity ─── */}
+          {/* ━━━ Recent Activity ━━━ */}
           {activityData && activityData.length > 0 ? (
-            <FadeInView delay={isOnboarded ? 480 : 380}>
-              <View style={{ gap: spacing.md }}>
-                <Typography variant="h4">Recent Activity</Typography>
-                <View style={{ gap: 0 }}>
-                  {activityData.map((item, idx) => (
+            <FadeInView delay={isOnboarded ? 440 : 360}>
+              <View style={{ gap: spacing.sm }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="h4">Recent Activity</Typography>
+                  <TouchableOpacity onPress={() => router.push('/(tabs)/progress')} accessibilityRole="link" accessibilityLabel="View all activity">
+                    <Typography variant="label" color={theme.primary}>View all</Typography>
+                  </TouchableOpacity>
+                </View>
+                <View
+                  style={{
+                    backgroundColor: theme.card,
+                    borderRadius: radius.xl,
+                    paddingHorizontal: spacing.base,
+                    overflow: 'hidden',
+                  }}
+                >
+                  {activityData.slice(0, RECENT_ACTIVITY_LIMIT).map((item, idx) => (
                     <View key={`${item.deckId}-${idx}`}>
                       <ActivityItem
                         examName={item.deckTitle}
@@ -583,15 +539,17 @@ export default function HomeScreen() {
                         timeAgo={formatRelativeTime(item.endedAt)}
                         icon="library-outline"
                       />
-                      {idx < activityData.length - 1 && <Divider style={{ marginVertical: 0 }} />}
+                      {idx < Math.min(activityData.length, RECENT_ACTIVITY_LIMIT) - 1 && (
+                        <Divider style={{ marginVertical: 0 }} />
+                      )}
                     </View>
                   ))}
                 </View>
               </View>
             </FadeInView>
           ) : solved === 0 ? (
-            /* ─── Smart empty state ─── */
-            <FadeInView delay={isOnboarded ? 480 : 380}>
+            /* ━━━ Smart empty state ━━━ */
+            <FadeInView delay={isOnboarded ? 440 : 360}>
               <View
                 style={{
                   alignItems: 'center', gap: spacing.lg,

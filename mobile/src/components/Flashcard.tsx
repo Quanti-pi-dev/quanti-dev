@@ -24,6 +24,7 @@ import Animated, {
   interpolate,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import { radius, spacing, typography, shadows } from '../theme/tokens';
 import { Typography } from './ui/Typography';
@@ -138,23 +139,38 @@ export function FlashCard({
     let bg = theme.cardAlt;
     let border: string = theme.border;
     let textColor: string = theme.text;
+    let keyBg: string = theme.primaryMuted;
+    let keyColor: string = theme.primary;
 
     if (answerState === 'skipped' && isCorrect) {
       // Highlight correct answer when skipped
       bg = theme.successLight;
       border = theme.glowCorrect;
       textColor = theme.success;
+      keyBg = theme.glowCorrect + '30';
+      keyColor = theme.success;
     } else if (isSelected && answerState === 'correct') {
       bg = theme.successLight;
       border = theme.glowCorrect;
       textColor = theme.success;
+      keyBg = theme.glowCorrect + '30';
+      keyColor = theme.success;
     } else if (isSelected && answerState === 'incorrect') {
       bg = theme.errorLight;
       border = theme.glowWrong;
       textColor = theme.error;
+      keyBg = theme.glowWrong + '30';
+      keyColor = theme.error;
+    } else if (answerState !== 'unanswered' && isCorrect && !isSelected) {
+      // Show the correct answer when user was wrong
+      bg = theme.successLight;
+      border = theme.glowCorrect + '88';
+      textColor = theme.success;
+      keyBg = theme.glowCorrect + '30';
+      keyColor = theme.success;
     }
 
-    return { bg, border, textColor };
+    return { bg, border, textColor, keyBg, keyColor };
   };
 
   return (
@@ -209,11 +225,15 @@ export function FlashCard({
         <View style={{ gap: spacing.sm }}>
           {options?.map((opt) => {
             const s = optionStyles(opt.key);
+            const isSelected = selectedKey === opt.key;
+            const showCheckmark = isSelected && answerState === 'correct';
+            const showCross = isSelected && answerState === 'incorrect';
             return (
               <TouchableOpacity
                 key={opt.key}
                 onPress={() => handleSelectOption(opt.key)}
                 disabled={answerState !== 'unanswered'}
+                activeOpacity={0.78}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -225,26 +245,40 @@ export function FlashCard({
                   gap: spacing.sm,
                 }}
               >
-                {/* Key bubble */}
+                {/* Key bubble — changes color on answer */}
                 <View
                   style={{
                     width: 28,
                     height: 28,
                     borderRadius: radius.full,
-                    backgroundColor: theme.primaryMuted,
+                    backgroundColor: s.keyBg,
                     alignItems: 'center',
                     justifyContent: 'center',
                     flexShrink: 0,
                   }}
                 >
-                  <Typography variant="caption" color={theme.primary} style={{ fontWeight: '700' }}>
-                    {opt.key}
-                  </Typography>
+                  {showCheckmark ? (
+                    <Ionicons name="checkmark" size={14} color={s.keyColor} />
+                  ) : showCross ? (
+                    <Ionicons name="close" size={14} color={s.keyColor} />
+                  ) : (
+                    <Typography variant="caption" color={s.keyColor} style={{ fontWeight: '700' }}>
+                      {opt.key}
+                    </Typography>
+                  )}
                 </View>
 
                 <Typography variant="bodySmall" color={s.textColor} style={{ flex: 1 }}>
                   {opt.text}
                 </Typography>
+
+                {/* Trailing icon for correct/selected */}
+                {showCheckmark && (
+                  <Ionicons name="checkmark-circle" size={18} color={s.keyColor} />
+                )}
+                {showCross && (
+                  <Ionicons name="close-circle" size={18} color={s.keyColor} />
+                )}
               </TouchableOpacity>
             );
           })}
@@ -254,15 +288,23 @@ export function FlashCard({
         {onSkip && answerState === 'unanswered' && (
           <TouchableOpacity
             onPress={handleSkip}
+            activeOpacity={0.7}
             style={{
               alignSelf: 'center',
-              paddingHorizontal: spacing.lg,
-              paddingVertical: spacing.xs,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 4,
+              paddingHorizontal: spacing.md,
+              paddingVertical: 6,
+              borderRadius: radius.full,
+              borderWidth: 1,
+              borderColor: theme.border,
             }}
           >
             <Typography variant="caption" color={theme.textTertiary}>
-              Skip this card →
+              Skip
             </Typography>
+            <Ionicons name="play-skip-forward" size={12} color={theme.textTertiary} />
           </TouchableOpacity>
         )}
       </Animated.View>
@@ -289,32 +331,41 @@ export function FlashCard({
         ]}
       >
         {/* Result indicator */}
-        <View
-          style={{
-            width: 64,
-            height: 64,
-            borderRadius: radius.full,
-            backgroundColor: answerState === 'correct' ? theme.successLight
-              : answerState === 'skipped' ? theme.primaryMuted
-              : theme.errorLight,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Typography variant="h2">
-            {answerState === 'correct' ? '✓' : answerState === 'skipped' ? '→' : '✗'}
+        <View style={{ alignItems: 'center', gap: spacing.xs }}>
+          <View
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: radius.full,
+              backgroundColor: answerState === 'correct' ? theme.successLight
+                : answerState === 'skipped' ? theme.primaryMuted
+                : theme.errorLight,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 2,
+              borderColor: answerState === 'correct' ? theme.glowCorrect
+                : answerState === 'skipped' ? theme.glowSkip
+                : theme.glowWrong,
+            }}
+          >
+            <Ionicons
+              name={answerState === 'correct' ? 'checkmark' : answerState === 'skipped' ? 'arrow-forward' : 'close'}
+              size={34}
+              color={answerState === 'correct' ? theme.success
+                : answerState === 'skipped' ? theme.skip
+                : theme.error}
+            />
+          </View>
+          <Typography
+            variant="h3"
+            color={answerState === 'correct' ? theme.success
+              : answerState === 'skipped' ? theme.skip
+              : theme.error}
+            align="center"
+          >
+            {answerState === 'correct' ? 'Correct! 🎉' : answerState === 'skipped' ? 'Skipped' : 'Not quite'}
           </Typography>
         </View>
-
-        <Typography
-          variant="h3"
-          color={answerState === 'correct' ? theme.success
-            : answerState === 'skipped' ? theme.skip
-            : theme.error}
-          align="center"
-        >
-          {answerState === 'correct' ? 'Correct!' : answerState === 'skipped' ? 'Skipped' : 'Not quite'}
-        </Typography>
 
         <View
           style={{
@@ -326,9 +377,12 @@ export function FlashCard({
             width: '100%',
           }}
         >
-          <Typography variant="label" color={theme.success} style={{ marginBottom: 4 }}>
-            Answer: {correctKey}
-          </Typography>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: 4 }}>
+            <Ionicons name="checkmark-circle" size={14} color={theme.success} />
+            <Typography variant="label" color={theme.success}>
+              Correct answer: {correctKey}
+            </Typography>
+          </View>
           {explanation && (
             <Typography variant="bodySmall" color={theme.textSecondary} style={{ lineHeight: typography.sm * 1.5 }}>
               {explanation}

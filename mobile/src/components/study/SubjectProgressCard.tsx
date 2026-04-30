@@ -19,9 +19,9 @@ import { useTheme } from '../../theme';
 import { radius, spacing } from '../../theme/tokens';
 import { Typography } from '../ui/Typography';
 import { getSubjectIcon, SUBJECT_ACCENT_PALETTE } from '../TargetSubjectCard';
+import { getMasteryDisplayInfo } from '../../utils/mastery';
 
-// ─── Level labels ─────────────────────────────────────────────
-const LEVEL_LABELS = ['Beginner', 'Elementary', 'Developing', 'Proficient', 'Advanced', 'Master'];
+
 
 function ProgressRing({
   progress,
@@ -81,7 +81,7 @@ export function SubjectProgressCard({
   subjectName,
   examName,
   levelIndex,
-  correctAnswers: _correctAnswers,
+  correctAnswers,
   accentIndex,
   onPress,
   animDelay = 0,
@@ -90,9 +90,9 @@ export function SubjectProgressCard({
   const accent = SUBJECT_ACCENT_PALETTE[accentIndex % SUBJECT_ACCENT_PALETTE.length]!;
   const icon = getSubjectIcon(subjectName);
 
-  // Mastery ring 0-1 based on level (6 levels total)
-  const masteryProgress = Math.min((levelIndex + 1) / 6, 1);
-  const levelLabel = LEVEL_LABELS[levelIndex] ?? 'Beginner';
+  // Canonical mastery computation from shared utility
+  const { label: levelLabel, badge, progress: masteryProgress, pct } = getMasteryDisplayInfo(correctAnswers, levelIndex);
+  const isStarted = correctAnswers > 0;
 
   // ── Entrance animation ────────────────────────────────────
   const translateX = useSharedValue(30);
@@ -162,7 +162,7 @@ export function SubjectProgressCard({
                 color={accent.bg}
                 style={{ fontSize: 9, letterSpacing: 0.5 }}
               >
-                L{levelIndex + 1}
+                {badge}
               </Typography>
             </View>
           </View>

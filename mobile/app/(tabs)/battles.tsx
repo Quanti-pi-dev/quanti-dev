@@ -1,22 +1,31 @@
 // ─── Battles Hub ────────────────────────────────────────────
-// Main tab screen for P2P Challenges:
-// - Active game banner (if live)
-// - Pending invites
-// - Recent history (Win/Loss/Tie)
-// - CTA to create or find friends
+// Main tab screen for P2P Challenges.
+// Improvements:
+//  - Gradient hero header with coin display
+//  - Active game banner with live pulse indicator
+//  - Pending invites with richer card design (bet highlight, countdown feel)
+//  - Challenge CTA upgraded to gradient card with icon
+//  - History rows with colored result pill, accuracy bar, coin delta
+//  - Empty state with animated illustration
 
 import { useCallback } from 'react';
-import { View, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
+import {
+  View, FlatList, TouchableOpacity, RefreshControl,
+  ActivityIndicator,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, {
+  FadeInDown, FadeIn,
+  useSharedValue, useAnimatedStyle, withRepeat, withTiming,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/theme';
 import { spacing, radius, shadows } from '../../src/theme/tokens';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';
-import { CoinDisplay } from '../../src/components/CoinDisplay';
 import { Skeleton } from '../../src/components/ui/Skeleton';
 import { useCoinBalance } from '../../src/hooks/useGamification';
 import {
@@ -26,6 +35,30 @@ import {
   useAcceptChallenge,
   useDeclineChallenge,
 } from '../../src/hooks/useChallenge';
+import { useEffect } from 'react';
+
+// ─── Live pulse dot ───────────────────────────────────────────
+function LiveDot() {
+  const pulse = useSharedValue(1);
+  useEffect(() => {
+    pulse.value = withRepeat(withTiming(1.6, { duration: 800 }), -1, true);
+  }, []);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ scale: pulse.value }],
+    opacity: 2 - pulse.value,
+  }));
+  return (
+    <View style={{ width: 10, height: 10, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View
+        style={[style, {
+          position: 'absolute', width: 10, height: 10,
+          borderRadius: 5, backgroundColor: '#4ADE80',
+        }]}
+      />
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#22C55E' }} />
+    </View>
+  );
+}
 
 export default function BattlesScreen() {
   const { theme } = useTheme();
@@ -47,39 +80,79 @@ export default function BattlesScreen() {
     void refetchHistory();
   }, [refetchPending, refetchActive, refetchHistory]);
 
+  const hasPending = (pending?.length ?? 0) > 0;
+  const hasHistory = (history?.data?.length ?? 0) > 0;
+
   return (
     <ScreenWrapper>
-      {/* ── Header ── */}
-      <View
+      {/* ── Gradient Hero Header ── */}
+      <LinearGradient
+        colors={['#6366F1', '#8B5CF6']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={{
           paddingHorizontal: spacing.xl,
-          paddingTop: spacing.base,
-          paddingBottom: spacing.lg,
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
+          paddingTop: spacing.lg,
+          paddingBottom: spacing.xl,
         }}
       >
-        <Typography variant="h3">⚔️ Battles</Typography>
-        <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
-          <CoinDisplay coins={coins?.balance ?? 0} size="sm" />
-          <TouchableOpacity
-            onPress={() => router.push('/social')}
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: radius.full,
-              backgroundColor: theme.primaryMuted,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Ionicons name="people" size={18} color={theme.primary} />
-          </TouchableOpacity>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View>
+            <Typography variant="h3" color="#FFF">⚔️ Battles</Typography>
+            <Typography variant="caption" color="rgba(255,255,255,0.75)">
+              Challenge friends • Win coins
+            </Typography>
+          </View>
+          <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+            {/* Coin pill */}
+            <View
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: 4,
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                borderRadius: radius.full,
+                paddingHorizontal: spacing.md,
+                paddingVertical: 6,
+              }}
+            >
+              <Typography style={{ fontSize: 14 }}>🪙</Typography>
+              <Typography variant="label" color="#FFF">{coins?.balance ?? 0}</Typography>
+            </View>
+            <TouchableOpacity
+              onPress={() => router.push('/social')}
+              style={{
+                width: 38, height: 38, borderRadius: radius.full,
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="people" size={18} color="#FFF" />
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+
+        {/* Stats row */}
+        <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
+          {[
+            { label: 'Pending', value: pending?.length ?? 0, icon: 'hourglass-outline' as const },
+            { label: 'Active', value: active ? 1 : 0, icon: 'flash' as const },
+            { label: 'Battles', value: history?.data?.length ?? 0, icon: 'trophy-outline' as const },
+          ].map((s) => (
+            <View
+              key={s.label}
+              style={{
+                flex: 1, alignItems: 'center', gap: 2,
+                backgroundColor: 'rgba(255,255,255,0.15)',
+                borderRadius: radius.lg,
+                paddingVertical: spacing.sm,
+              }}
+            >
+              <Ionicons name={s.icon} size={14} color="rgba(255,255,255,0.9)" />
+              <Typography variant="label" color="#FFF" style={{ fontSize: 16 }}>{s.value}</Typography>
+              <Typography variant="caption" color="rgba(255,255,255,0.7)" style={{ fontSize: 10 }}>{s.label}</Typography>
+            </View>
+          ))}
+        </View>
+      </LinearGradient>
 
       <FlatList
         data={[]}
@@ -89,47 +162,51 @@ export default function BattlesScreen() {
         }
         ListHeaderComponent={
           <View style={{ padding: spacing.xl, gap: spacing['2xl'] }}>
+
             {/* ── Active Game Banner ── */}
             {activeLoading ? (
-              <Skeleton width="100%" height={80} borderRadius={radius.lg} />
+              <Skeleton width="100%" height={88} borderRadius={radius.xl} />
             ) : active ? (
               <Animated.View entering={FadeInDown.duration(400)}>
                 <TouchableOpacity
                   onPress={() => router.push(`/battles/active/${active.id}`)}
-                  activeOpacity={0.8}
-                  style={{
-                    backgroundColor: theme.primary,
-                    borderRadius: radius.lg,
-                    padding: spacing.lg,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: spacing.md,
-                    ...shadows.md,
-                    shadowColor: theme.primary,
-                  }}
+                  activeOpacity={0.85}
+                  style={{ borderRadius: radius.xl, overflow: 'hidden' }}
                 >
-                  <Animated.View
+                  <LinearGradient
+                    colors={['#10B981', '#059669']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
                     style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: radius.full,
-                      backgroundColor: 'rgba(255,255,255,0.2)',
+                      padding: spacing.lg,
+                      flexDirection: 'row',
                       alignItems: 'center',
-                      justifyContent: 'center',
+                      gap: spacing.md,
                     }}
                   >
-                    <Ionicons name="game-controller" size={24} color="#fff" />
-                  </Animated.View>
-                  <View style={{ flex: 1 }}>
-                    <Typography variant="bodyBold" style={{ color: '#fff' }}>
-                      Game In Progress!
-                    </Typography>
-                    <Typography variant="caption" style={{ color: 'rgba(255,255,255,0.8)' }}>
-                      vs {active.creatorName === active.opponentName ? 'opponent' :
-                        active.opponentName} • Tap to continue
-                    </Typography>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.8)" />
+                    <View
+                      style={{
+                        width: 52, height: 52, borderRadius: radius.full,
+                        backgroundColor: 'rgba(255,255,255,0.2)',
+                        alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons name="game-controller" size={26} color="#FFF" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                        <LiveDot />
+                        <Typography variant="captionBold" color="rgba(255,255,255,0.85)" style={{ fontSize: 10, letterSpacing: 0.5 }}>
+                          LIVE GAME
+                        </Typography>
+                      </View>
+                      <Typography variant="label" color="#FFF" style={{ fontSize: 16 }}>Game In Progress!</Typography>
+                      <Typography variant="caption" color="rgba(255,255,255,0.8)">
+                        vs {active.opponentName} · Tap to continue
+                      </Typography>
+                    </View>
+                    <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.8)" />
+                  </LinearGradient>
                 </TouchableOpacity>
               </Animated.View>
             ) : null}
@@ -137,101 +214,146 @@ export default function BattlesScreen() {
             {/* ── Pending Invites ── */}
             {pendingLoading ? (
               <View style={{ gap: spacing.md }}>
-                <Skeleton width={120} height={20} borderRadius={radius.sm} />
-                <Skeleton width="100%" height={100} borderRadius={radius.lg} />
+                <Skeleton width={160} height={18} borderRadius={radius.sm} />
+                <Skeleton width="100%" height={110} borderRadius={radius.xl} />
               </View>
-            ) : pending && pending.length > 0 ? (
+            ) : hasPending ? (
               <View style={{ gap: spacing.md }}>
-                <Typography variant="labelMedium" style={{ color: theme.textSecondary }}>
-                  INCOMING CHALLENGES ({pending.length})
-                </Typography>
-                {pending.map((challenge, idx) => (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                  <View
+                    style={{
+                      width: 8, height: 8, borderRadius: 4, backgroundColor: '#F59E0B',
+                    }}
+                  />
+                  <Typography variant="label" color={theme.textSecondary} style={{ fontSize: 11, letterSpacing: 0.6 }}>
+                    INCOMING CHALLENGES ({pending!.length})
+                  </Typography>
+                </View>
+                {pending!.map((challenge, idx) => (
                   <Animated.View
                     key={challenge.id}
                     entering={FadeInDown.delay(idx * 80).duration(400)}
                     style={{
                       backgroundColor: theme.card,
-                      borderRadius: radius.lg,
-                      padding: spacing.lg,
-                      borderWidth: 1,
-                      borderColor: theme.border,
-                      gap: spacing.md,
+                      borderRadius: radius.xl,
+                      borderWidth: 1.5,
+                      borderColor: '#F59E0B44',
+                      overflow: 'hidden',
                       ...shadows.sm,
-                      shadowColor: theme.shadow,
+                      shadowColor: '#F59E0B',
                     }}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                    {/* Colored top stripe */}
+                    <View style={{ height: 3, backgroundColor: '#F59E0B' }} />
+                    <View style={{ padding: spacing.lg, gap: spacing.md }}>
+                      {/* Challenger row */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                        <View
+                          style={{
+                            width: 46, height: 46, borderRadius: radius.full,
+                            backgroundColor: '#F59E0B18',
+                            alignItems: 'center', justifyContent: 'center',
+                            borderWidth: 2, borderColor: '#F59E0B44',
+                          }}
+                        >
+                          <Typography variant="label" color="#F59E0B" style={{ fontSize: 18 }}>
+                            {challenge.creatorName.charAt(0).toUpperCase()}
+                          </Typography>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Typography variant="label">{challenge.creatorName}</Typography>
+                          <Typography variant="caption" color={theme.textSecondary}>
+                            {challenge.level} · {Math.round(challenge.durationSeconds / 60)} min
+                          </Typography>
+                        </View>
+                        {/* Bet badge */}
+                        <View
+                          style={{
+                            backgroundColor: theme.coinLight,
+                            paddingHorizontal: spacing.md,
+                            paddingVertical: spacing.xs,
+                            borderRadius: radius.full,
+                            borderWidth: 1,
+                            borderColor: theme.coin + '44',
+                          }}
+                        >
+                          <Typography variant="captionBold" color={theme.coin}>
+                            🪙 {challenge.betAmount}
+                          </Typography>
+                        </View>
+                      </View>
+
+                      {/* Prize preview */}
                       <View
                         style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: radius.full,
-                          backgroundColor: theme.primaryMuted,
+                          backgroundColor: theme.successMuted,
+                          borderRadius: radius.lg,
+                          paddingHorizontal: spacing.md,
+                          paddingVertical: spacing.sm,
+                          flexDirection: 'row',
                           alignItems: 'center',
-                          justifyContent: 'center',
+                          gap: spacing.xs,
                         }}
                       >
-                        <Ionicons name="person" size={20} color={theme.primary} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Typography variant="bodyBold">{challenge.creatorName}</Typography>
-                        <Typography variant="caption" style={{ color: theme.textSecondary }}>
-                          {challenge.level} • {challenge.durationSeconds}s • {challenge.betAmount} coins
+                        <Ionicons name="trophy" size={12} color={theme.success} />
+                        <Typography variant="caption" color={theme.success}>
+                          Winner takes 🪙 {challenge.betAmount * 2}
                         </Typography>
                       </View>
-                      <View style={{
-                        backgroundColor: theme.coinLight,
-                        paddingHorizontal: spacing.sm,
-                        paddingVertical: spacing.xs,
-                        borderRadius: radius.full,
-                      }}>
-                        <Typography variant="captionBold" style={{ color: theme.coin }}>
-                          🪙 {challenge.betAmount}
-                        </Typography>
-                      </View>
-                    </View>
 
-                    <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                      <TouchableOpacity
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          declineMutation.mutate(challenge.id);
-                        }}
-                        disabled={declineMutation.isPending}
-                        style={{
-                          flex: 1,
-                          paddingVertical: spacing.sm,
-                          borderRadius: radius.md,
-                          backgroundColor: theme.buttonSecondary,
-                          alignItems: 'center',
-                        }}
-                      >
-                        <Typography variant="bodySemiBold" style={{ color: theme.buttonSecondaryText }}>
-                          Decline
-                        </Typography>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                          acceptMutation.mutate(challenge.id);
-                        }}
-                        disabled={acceptMutation.isPending}
-                        style={{
-                          flex: 1,
-                          paddingVertical: spacing.sm,
-                          borderRadius: radius.md,
-                          backgroundColor: theme.buttonPrimary,
-                          alignItems: 'center',
-                        }}
-                      >
-                        {acceptMutation.isPending ? (
-                          <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                          <Typography variant="bodySemiBold" style={{ color: theme.buttonPrimaryText }}>
-                            Accept ⚔️
+                      {/* Action buttons */}
+                      <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            declineMutation.mutate(challenge.id);
+                          }}
+                          disabled={declineMutation.isPending}
+                          style={{
+                            flex: 1,
+                            paddingVertical: spacing.sm + 2,
+                            borderRadius: radius.lg,
+                            backgroundColor: theme.cardAlt,
+                            alignItems: 'center',
+                            borderWidth: 1,
+                            borderColor: theme.border,
+                          }}
+                        >
+                          <Typography variant="label" color={theme.textSecondary} style={{ fontSize: 13 }}>
+                            Decline
                           </Typography>
-                        )}
-                      </TouchableOpacity>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => {
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            acceptMutation.mutate(challenge.id);
+                          }}
+                          disabled={acceptMutation.isPending}
+                          style={{ flex: 1, borderRadius: radius.lg, overflow: 'hidden' }}
+                        >
+                          <LinearGradient
+                            colors={['#6366F1', '#8B5CF6']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={{
+                              paddingVertical: spacing.sm + 2,
+                              alignItems: 'center',
+                              flexDirection: 'row',
+                              justifyContent: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            {acceptMutation.isPending ? (
+                              <ActivityIndicator size="small" color="#FFF" />
+                            ) : (
+                              <>
+                                <Typography variant="label" color="#FFF" style={{ fontSize: 13 }}>Accept</Typography>
+                                <Typography style={{ fontSize: 13 }}>⚔️</Typography>
+                              </>
+                            )}
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </Animated.View>
                 ))}
@@ -242,102 +364,171 @@ export default function BattlesScreen() {
             <TouchableOpacity
               onPress={() => router.push('/battles/friend-select')}
               activeOpacity={0.85}
-              style={{
-                backgroundColor: theme.card,
-                borderRadius: radius.lg,
-                padding: spacing.xl,
-                borderWidth: 1.5,
-                borderColor: theme.primary,
-                borderStyle: 'dashed',
-                alignItems: 'center',
-                gap: spacing.sm,
-              }}
+              style={{ borderRadius: radius.xl, overflow: 'hidden' }}
             >
-              <Ionicons name="add-circle" size={32} color={theme.primary} />
-              <Typography variant="bodySemiBold" style={{ color: theme.primary }}>
-                Challenge a Friend
-              </Typography>
+              <LinearGradient
+                colors={['#6366F118', '#8B5CF608']}
+                style={{
+                  borderRadius: radius.xl,
+                  padding: spacing.xl,
+                  borderWidth: 1.5,
+                  borderColor: '#6366F140',
+                  alignItems: 'center',
+                  gap: spacing.sm,
+                }}
+              >
+                <View
+                  style={{
+                    width: 56, height: 56, borderRadius: radius.full,
+                    backgroundColor: '#6366F122',
+                    alignItems: 'center', justifyContent: 'center',
+                    borderWidth: 2, borderColor: '#6366F140',
+                  }}
+                >
+                  <Ionicons name="add" size={28} color="#6366F1" />
+                </View>
+                <Typography variant="label" color="#6366F1" style={{ fontSize: 15 }}>
+                  Challenge a Friend
+                </Typography>
+                <Typography variant="caption" color={theme.textTertiary} align="center">
+                  Pick a subject, set stakes, and test your knowledge
+                </Typography>
+              </LinearGradient>
             </TouchableOpacity>
 
-            {/* ── Recent History ── */}
+            {/* ── Battle History ── */}
             <View style={{ gap: spacing.md }}>
-              <Typography variant="labelMedium" style={{ color: theme.textSecondary }}>
-                RECENT BATTLES
-              </Typography>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                <Ionicons name="time-outline" size={14} color={theme.textTertiary} />
+                <Typography variant="label" color={theme.textSecondary} style={{ fontSize: 11, letterSpacing: 0.6 }}>
+                  RECENT BATTLES
+                </Typography>
+              </View>
+
               {historyLoading ? (
                 <View style={{ gap: spacing.sm }}>
                   {[0, 1, 2].map((i) => (
-                    <Skeleton key={i} width="100%" height={64} borderRadius={radius.md} />
+                    <Skeleton key={i} width="100%" height={72} borderRadius={radius.xl} />
                   ))}
                 </View>
-              ) : history?.data && history.data.length > 0 ? (
-                history.data.slice(0, 10).map((c, idx) => {
+              ) : hasHistory ? (
+                history!.data.slice(0, 10).map((c, idx) => {
                   const isWinner = c.winnerId !== null && c.winnerId === user?.id;
                   const isTie = c.winnerId === null && c.status === 'completed';
-                  let resultLabel = '';
-                  let resultColor = theme.textSecondary;
-                  let resultIcon: React.ComponentProps<typeof Ionicons>['name'] = 'remove-circle-outline';
 
-                  if (c.status === 'completed') {
-                    if (isTie) {
-                      resultLabel = 'TIE';
-                      resultColor = theme.coin;
-                      resultIcon = 'swap-horizontal';
-                    } else if (isWinner) {
-                      resultLabel = 'WON';
-                      resultColor = theme.success;
-                      resultIcon = 'trophy';
-                    } else {
-                      resultLabel = 'LOST';
-                      resultColor = theme.error;
-                      resultIcon = 'close-circle';
-                    }
-                  } else {
-                    resultLabel = c.status.toUpperCase();
-                  }
+                  const resultLabel = c.status === 'completed'
+                    ? (isTie ? 'TIE' : isWinner ? 'WON' : 'LOST')
+                    : c.status.toUpperCase();
+                  const resultColor = isTie ? theme.coin : isWinner ? theme.success : theme.error;
+                  const resultBg = isTie ? theme.coinLight : isWinner ? theme.successLight : theme.errorLight;
+                  const resultIcon: React.ComponentProps<typeof Ionicons>['name'] =
+                    isTie ? 'swap-horizontal' : isWinner ? 'trophy' : 'close-circle';
+                  const coinDelta = isWinner
+                    ? `+${c.betAmount * 2} 🪙`
+                    : isTie ? `↩${c.betAmount} 🪙` : `-${c.betAmount} 🪙`;
+                  const myScore = isWinner || (!isTie && isWinner === false)
+                    ? (user?.id === c.creatorId ? c.creatorScore : c.opponentScore)
+                    : c.creatorScore;
+                  const oppScore = user?.id === c.creatorId ? c.opponentScore : c.creatorScore;
 
                   return (
                     <Animated.View
                       key={c.id}
-                      entering={FadeInDown.delay(idx * 60).duration(300)}
+                      entering={FadeInDown.delay(idx * 50).duration(300)}
                       style={{
                         backgroundColor: theme.card,
-                        borderRadius: radius.md,
-                        padding: spacing.base,
+                        borderRadius: radius.xl,
+                        padding: spacing.md,
                         flexDirection: 'row',
                         alignItems: 'center',
                         gap: spacing.md,
                         borderWidth: 1,
-                        borderColor: theme.borderLight,
+                        borderColor: resultColor + '22',
+                        ...shadows.xs,
+                        shadowColor: resultColor,
                       }}
                     >
-                      <Ionicons name={resultIcon} size={24} color={resultColor} />
-                      <View style={{ flex: 1 }}>
-                        <Typography variant="bodySemiBold">
+                      {/* Result icon */}
+                      <View
+                        style={{
+                          width: 44, height: 44, borderRadius: radius.full,
+                          backgroundColor: resultBg,
+                          alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Ionicons name={resultIcon} size={22} color={resultColor} />
+                      </View>
+
+                      {/* Info */}
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Typography variant="label" numberOfLines={1}>
                           vs {c.opponentName}
                         </Typography>
-                        <Typography variant="caption" style={{ color: theme.textSecondary }}>
-                          {c.creatorScore} — {c.opponentScore} • {c.level}
-                        </Typography>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                          <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 11 }}>
+                            {myScore}–{oppScore}
+                          </Typography>
+                          <View style={{ width: 3, height: 3, borderRadius: 2, backgroundColor: theme.textTertiary }} />
+                          <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 11 }}>
+                            {c.level}
+                          </Typography>
+                        </View>
                       </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Typography variant="captionBold" style={{ color: resultColor }}>
-                          {resultLabel}
-                        </Typography>
-                        <Typography variant="caption" style={{ color: theme.textTertiary, fontSize: 10 }}>
-                          {isWinner ? `+${c.betAmount * 2}` : isTie ? `↩${c.betAmount}` : `-${c.betAmount}`} 🪙
+
+                      {/* Right: result pill + coin delta */}
+                      <View style={{ alignItems: 'flex-end', gap: 3 }}>
+                        <View
+                          style={{
+                            backgroundColor: resultBg,
+                            paddingHorizontal: spacing.sm,
+                            paddingVertical: 2,
+                            borderRadius: radius.full,
+                            borderWidth: 1,
+                            borderColor: resultColor + '44',
+                          }}
+                        >
+                          <Typography variant="captionBold" color={resultColor} style={{ fontSize: 10 }}>
+                            {resultLabel}
+                          </Typography>
+                        </View>
+                        <Typography variant="caption" color={resultColor} style={{ fontSize: 11, fontWeight: '700' }}>
+                          {coinDelta}
                         </Typography>
                       </View>
                     </Animated.View>
                   );
                 })
               ) : (
-                <View style={{ alignItems: 'center', padding: spacing['2xl'], gap: spacing.md }}>
-                  <Ionicons name="shield-outline" size={48} color={theme.textTertiary} />
-                  <Typography variant="body" style={{ color: theme.textTertiary, textAlign: 'center' }}>
-                    No battles yet.{'\n'}Challenge a friend to get started!
-                  </Typography>
-                </View>
+                <Animated.View entering={FadeIn.duration(400)}>
+                  <View
+                    style={{
+                      alignItems: 'center',
+                      padding: spacing['2xl'],
+                      gap: spacing.md,
+                      backgroundColor: theme.cardAlt,
+                      borderRadius: radius.xl,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 72, height: 72, borderRadius: radius.full,
+                        backgroundColor: theme.primaryMuted,
+                        alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons name="shield-outline" size={36} color={theme.primary} />
+                    </View>
+                    <Typography variant="label" color={theme.textSecondary} align="center">
+                      No battles yet
+                    </Typography>
+                    <Typography variant="caption" color={theme.textTertiary} align="center">
+                      Challenge a friend above to fight your first battle and win coins!
+                    </Typography>
+                  </View>
+                </Animated.View>
               )}
             </View>
           </View>

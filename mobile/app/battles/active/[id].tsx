@@ -1,12 +1,24 @@
 // ─── Live Challenge Game ────────────────────────────────────
-// The core gameplay screen: shows flashcards, live scoreboard,
-// countdown timer, and SSE-driven score updates.
+// The core gameplay screen: flashcards, live scoreboard, countdown.
+// Improvements:
+//  - Premium scoreboard with gradient header and player avatars
+//  - Timer with animated low-time warning + pulse
+//  - Question card with cleaner typography
+//  - Options with letter-key bubbles + icon feedback
+//  - Progress bar beneath scoreboard
+//  - Game-over overlay with dramatic styling
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, {
+  FadeIn, FadeInDown, FadeInUp,
+  useSharedValue, useAnimatedStyle,
+  withRepeat, withTiming, withSequence,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/theme';
 import { spacing, radius, shadows } from '../../../src/theme/tokens';
 import { ScreenWrapper } from '../../../src/components/layout/ScreenWrapper';
@@ -18,6 +30,54 @@ import { useChallengeSSE } from '../../../src/hooks/useChallengeSSE';
 import { fetchDeckCards } from '../../../src/services/api-contracts';
 import type { Flashcard } from '@kd/shared';
 
+const OPTION_KEYS = ['A', 'B', 'C', 'D'] as const;
+
+// ─── Pulsing timer ────────────────────────────────────────────
+function TimerPill({ timeDisplay, isLowTime }: { timeDisplay: string; isLowTime: boolean }) {
+  const { theme } = useTheme();
+  const pulse = useSharedValue(1);
+
+  useEffect(() => {
+    if (isLowTime) {
+      pulse.value = withRepeat(
+        withSequence(withTiming(1.08, { duration: 400 }), withTiming(1, { duration: 400 })),
+        -1,
+        true,
+      );
+    } else {
+      pulse.value = 1;
+    }
+  }, [isLowTime]);
+
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
+
+  return (
+    <Animated.View style={style}>
+      <View
+        style={{
+          backgroundColor: isLowTime ? theme.error : '#6366F1',
+          paddingHorizontal: spacing.lg,
+          paddingVertical: spacing.sm,
+          borderRadius: radius.full,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 5,
+          shadowColor: isLowTime ? theme.error : '#6366F1',
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.35,
+          shadowRadius: 8,
+          elevation: 4,
+        }}
+      >
+        <Ionicons name="timer" size={14} color="#FFF" />
+        <Typography variant="label" color="#FFF" style={{ fontSize: 18, fontVariant: ['tabular-nums'] }}>
+          {timeDisplay}
+        </Typography>
+      </View>
+    </Animated.View>
+  );
+}
+
 export default function ActiveChallengeScreen() {
   const { theme } = useTheme();
   const { showAlert } = useGlobalUI();
@@ -28,13 +88,10 @@ export default function ActiveChallengeScreen() {
   const { data: challenge } = useChallengeDetail(id ?? null);
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  // FIX B5: Track auto-advance timer for cleanup on unmount
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(false);
 
-  // Derive role by comparing the challenge's creatorId to the current user.
-  // FIX L2: avoid `as any` — use typed property access with fallback.
   const challengeCreatorId = (challenge as { creatorId?: string } | undefined)?.creatorId;
   const myRole: 'creator' | 'opponent' | null = challenge
     ? (challengeCreatorId === user?.id ? 'creator' : 'opponent')
@@ -43,17 +100,16 @@ export default function ActiveChallengeScreen() {
   const sse = useChallengeSSE(id ?? null, myRole);
   const submitAnswer = useSubmitAnswer(id ?? '');
 
-  // Fetch cards on mount
-  // FIX B5: Add cancellation flag to prevent state update on unmounted component
   useEffect(() => {
     let cancelled = false;
     if (challenge?.deckId) {
-      fetchDeckCards(challenge.deckId).then((c) => { if (!cancelled) setCards(c); }).catch(() => {});
+      fetchDeckCards(challenge.deckId)
+        .then((c) => { if (!cancelled) setCards(c); })
+        .catch(() => {});
     }
     return () => { cancelled = true; };
   }, [challenge?.deckId]);
 
-  // Navigate to results when game ends
   useEffect(() => {
     if (sse.gameOver) {
       const timer = setTimeout(() => {
@@ -63,7 +119,6 @@ export default function ActiveChallengeScreen() {
     }
   }, [sse.gameOver, id, router]);
 
-  // FIX B5: Clean up auto-advance timer on unmount
   useEffect(() => {
     return () => {
       if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
@@ -72,17 +127,19 @@ export default function ActiveChallengeScreen() {
 
   const currentCard = cards[currentIndex];
 
-
   const handleAnswer = useCallback(
     (optionId: string) => {
       if (!currentCard || showResult) return;
       setSelectedOption(optionId);
       setShowResult(true);
 
+      const isCorrect = optionId === currentCard.correctAnswerId;
+      Haptics.notificationAsync(
+        isCorrect ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error,
+      );
 
       submitAnswer.mutate({ cardId: currentCard.id, selectedAnswerId: optionId });
 
-      // FIX B5: Auto-advance after 600ms with cleanup on unmount
       if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
       advanceTimerRef.current = setTimeout(() => {
         setSelectedOption(null);
@@ -91,22 +148,22 @@ export default function ActiveChallengeScreen() {
           const next = prev + 1;
           return next >= cards.length ? 0 : next;
         });
-      }, 600);
+      }, 700);
     },
     [currentCard, showResult, submitAnswer, cards.length],
   );
 
-  // Format time
   const seconds = Math.ceil(sse.timeRemainingMs / 1000);
   const timeDisplay = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
   const isLowTime = seconds <= 10;
+  const progress = cards.length > 0 ? (currentIndex + 1) / cards.length : 0;
 
   if (!challenge || cards.length === 0) {
     return (
       <ScreenWrapper>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color={theme.primary} />
-          <Typography variant="body" style={{ color: theme.textSecondary, marginTop: spacing.md }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.lg }}>
+          <ActivityIndicator size="large" color="#6366F1" />
+          <Typography variant="body" color={theme.textSecondary}>
             Loading challenge...
           </Typography>
         </View>
@@ -116,8 +173,8 @@ export default function ActiveChallengeScreen() {
 
   return (
     <ScreenWrapper>
-      {/* ── FIX U5: Forfeit button ── */}
-      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: spacing.md, paddingTop: spacing.xs }}>
+      {/* ── Forfeit button ── */}
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: spacing.lg, paddingTop: spacing.xs }}>
         <TouchableOpacity
           onPress={() => {
             showAlert({
@@ -136,61 +193,90 @@ export default function ActiveChallengeScreen() {
           }}
           style={{
             paddingHorizontal: spacing.md,
-            paddingVertical: spacing.xs,
+            paddingVertical: 5,
             borderRadius: radius.full,
             backgroundColor: theme.errorMuted,
+            borderWidth: 1,
+            borderColor: theme.error + '33',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
           }}
         >
-          <Typography variant="captionBold" style={{ color: theme.error }}>Forfeit</Typography>
+          <Ionicons name="flag" size={12} color={theme.error} />
+          <Typography variant="captionBold" color={theme.error} style={{ fontSize: 11 }}>
+            Forfeit
+          </Typography>
         </TouchableOpacity>
       </View>
 
-      {/* ── Scoreboard Header ── */}
-      <View
+      {/* ── Scoreboard ── */}
+      <LinearGradient
+        colors={['#6366F1', '#8B5CF6']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
         style={{
           paddingHorizontal: spacing.xl,
           paddingVertical: spacing.md,
           flexDirection: 'row',
           justifyContent: 'space-between',
           alignItems: 'center',
-          backgroundColor: theme.surface,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
         }}
       >
-        <View style={{ alignItems: 'center', flex: 1 }}>
-          <Typography variant="caption" style={{ color: theme.textSecondary }}>You</Typography>
-          <Typography variant="h3" style={{ color: theme.primary }}>{sse.myScore}</Typography>
+        {/* You */}
+        <View style={{ alignItems: 'center', gap: 4, flex: 1 }}>
+          <View
+            style={{
+              width: 38, height: 38, borderRadius: radius.full,
+              backgroundColor: 'rgba(255,255,255,0.25)',
+              alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Typography variant="label" color="#FFF" style={{ fontSize: 16 }}>
+              {(user?.displayName ?? 'Y').charAt(0).toUpperCase()}
+            </Typography>
+          </View>
+          <Typography variant="caption" color="rgba(255,255,255,0.8)" style={{ fontSize: 10 }}>You</Typography>
+          <Typography variant="h2" color="#FFF">{sse.myScore}</Typography>
         </View>
 
         {/* Timer */}
-        <View
-          style={{
-            backgroundColor: isLowTime ? theme.errorMuted : theme.primaryMuted,
-            paddingHorizontal: spacing.lg,
-            paddingVertical: spacing.sm,
-            borderRadius: radius.full,
-          }}
-        >
-          <Typography
-            variant="bodyBold"
-            style={{ color: isLowTime ? theme.error : theme.primary, fontSize: 18 }}
-          >
-            {timeDisplay}
-          </Typography>
-        </View>
+        <TimerPill timeDisplay={timeDisplay} isLowTime={isLowTime} />
 
-        <View style={{ alignItems: 'center', flex: 1 }}>
-          <Typography variant="caption" style={{ color: theme.textSecondary }}>
+        {/* Opponent */}
+        <View style={{ alignItems: 'center', gap: 4, flex: 1 }}>
+          <View
+            style={{
+              width: 38, height: 38, borderRadius: radius.full,
+              backgroundColor: 'rgba(255,255,255,0.25)',
+              alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Typography variant="label" color="#FFF" style={{ fontSize: 16 }}>
+              {(challenge.opponentName ?? 'O').charAt(0).toUpperCase()}
+            </Typography>
+          </View>
+          <Typography variant="caption" color="rgba(255,255,255,0.8)" style={{ fontSize: 10 }}>
             {challenge.opponentName}
           </Typography>
-          <Typography variant="h3" style={{ color: theme.error }}>{sse.opponentScore}</Typography>
+          <Typography variant="h2" color="rgba(255,255,255,0.9)">{sse.opponentScore}</Typography>
         </View>
+      </LinearGradient>
+
+      {/* ── Progress bar ── */}
+      <View style={{ height: 3, backgroundColor: theme.border }}>
+        <View
+          style={{
+            height: '100%',
+            width: `${progress * 100}%`,
+            backgroundColor: '#6366F1',
+          }}
+        />
       </View>
 
-      {/* ── Card Counter ── */}
-      <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.md }}>
-        <Typography variant="caption" style={{ color: theme.textTertiary, textAlign: 'center' }}>
+      {/* ── Card counter ── */}
+      <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.sm }}>
+        <Typography variant="caption" color={theme.textTertiary} align="center">
           Card {currentIndex + 1} of {cards.length}
         </Typography>
       </View>
@@ -201,74 +287,84 @@ export default function ActiveChallengeScreen() {
           entering={FadeIn.duration(400)}
           style={{
             position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
+            top: 0, left: 0, right: 0, bottom: 0,
             zIndex: 100,
-            backgroundColor: theme.overlay,
+            backgroundColor: 'rgba(0,0,0,0.7)',
             justifyContent: 'center',
             alignItems: 'center',
           }}
         >
-          <View
+          <Animated.View
+            entering={FadeInUp.delay(100).duration(350)}
             style={{
               backgroundColor: theme.card,
-              borderRadius: radius.xl,
+              borderRadius: radius['2xl'],
               padding: spacing['2xl'],
               alignItems: 'center',
               gap: spacing.md,
               ...shadows.lg,
-              shadowColor: theme.shadow,
+              shadowColor: '#6366F1',
+              borderWidth: 1.5,
+              borderColor: '#6366F144',
+              marginHorizontal: spacing.xl,
             }}
           >
-            <Ionicons name="flag" size={48} color={theme.primary} />
+            <Typography style={{ fontSize: 48 }}>⏱️</Typography>
             <Typography variant="h3">Time's Up!</Typography>
-            <Typography variant="body" style={{ color: theme.textSecondary }}>
+            <Typography variant="body" color={theme.textSecondary} align="center">
               Calculating results...
             </Typography>
-            <ActivityIndicator size="small" color={theme.primary} />
-          </View>
+            <ActivityIndicator size="small" color="#6366F1" />
+          </Animated.View>
         </Animated.View>
       )}
 
-      {/* ── Question ── */}
+      {/* ── Question + Options ── */}
       {currentCard && (
-        <View style={{ flex: 1, padding: spacing.xl, gap: spacing.xl }}>
+        <View style={{ flex: 1, padding: spacing.lg, gap: spacing.lg }}>
+          {/* Question card */}
           <Animated.View
             key={currentCard.id}
-            entering={FadeInDown.duration(300)}
+            entering={FadeInDown.duration(280)}
             style={{
               backgroundColor: theme.card,
-              borderRadius: radius.lg,
-              padding: spacing.xl,
+              borderRadius: radius.xl,
+              padding: spacing.lg,
               borderWidth: 1,
               borderColor: theme.border,
-              minHeight: 120,
+              minHeight: 100,
               justifyContent: 'center',
               ...shadows.sm,
               shadowColor: theme.shadow,
             }}
           >
-            <Typography variant="bodyBold" style={{ fontSize: 16, lineHeight: 24 }}>
+            <Typography variant="label" style={{ fontSize: 15, lineHeight: 22 }}>
               {currentCard.question}
             </Typography>
           </Animated.View>
 
           {/* Options */}
-          <View style={{ gap: spacing.md }}>
-            {currentCard.options.map((option) => {
+          <View style={{ gap: spacing.sm }}>
+            {currentCard.options.map((option, optIdx) => {
               const isSelected = selectedOption === option.id;
               const isCorrect = option.id === currentCard.correctAnswerId;
+              const letterKey = OPTION_KEYS[optIdx] ?? 'A';
+
               let optionBg = theme.card;
               let optionBorder = theme.border;
+              let keyBg = theme.primaryMuted;
+              let keyColor = theme.primary;
 
               if (showResult && isSelected) {
                 optionBg = isCorrect ? theme.successLight : theme.errorLight;
                 optionBorder = isCorrect ? theme.success : theme.error;
+                keyBg = isCorrect ? theme.success + '33' : theme.error + '33';
+                keyColor = isCorrect ? theme.success : theme.error;
               } else if (showResult && isCorrect) {
                 optionBg = theme.successLight;
-                optionBorder = theme.success;
+                optionBorder = theme.success + '88';
+                keyBg = theme.success + '33';
+                keyColor = theme.success;
               }
 
               return (
@@ -276,11 +372,11 @@ export default function ActiveChallengeScreen() {
                   key={option.id}
                   onPress={() => handleAnswer(option.id)}
                   disabled={showResult}
-                  activeOpacity={0.7}
+                  activeOpacity={0.78}
                   style={{
                     backgroundColor: optionBg,
-                    borderRadius: radius.md,
-                    padding: spacing.lg,
+                    borderRadius: radius.lg,
+                    padding: spacing.md,
                     borderWidth: 1.5,
                     borderColor: optionBorder,
                     flexDirection: 'row',
@@ -288,13 +384,37 @@ export default function ActiveChallengeScreen() {
                     gap: spacing.md,
                   }}
                 >
-                  <Typography variant="body" style={{ flex: 1 }}>
+                  {/* Letter key bubble */}
+                  <View
+                    style={{
+                      width: 30, height: 30, borderRadius: radius.full,
+                      backgroundColor: keyBg,
+                      alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {showResult && isSelected ? (
+                      <Ionicons
+                        name={isCorrect ? 'checkmark' : 'close'}
+                        size={16}
+                        color={keyColor}
+                      />
+                    ) : (
+                      <Typography variant="caption" color={keyColor} style={{ fontWeight: '700' }}>
+                        {letterKey}
+                      </Typography>
+                    )}
+                  </View>
+
+                  <Typography variant="body" style={{ flex: 1, fontSize: 14 }}>
                     {option.text}
                   </Typography>
+
+                  {/* Trailing result icon */}
                   {showResult && isSelected && (
                     <Ionicons
                       name={isCorrect ? 'checkmark-circle' : 'close-circle'}
-                      size={22}
+                      size={20}
                       color={isCorrect ? theme.success : theme.error}
                     />
                   )}

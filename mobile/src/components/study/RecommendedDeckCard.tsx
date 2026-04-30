@@ -1,7 +1,7 @@
 // ─── RecommendedDeckCard ──────────────────────────────────────
 // AI-curated deck card for the "Recommended For You" horizontal
 // carousel. Glassmorphic design with glowing accent border,
-// reason label, and a priority indicator star.
+// reason label, a priority indicator star, and a "Start" CTA button.
 
 import { useEffect } from 'react';
 import { View, TouchableOpacity } from 'react-native';
@@ -118,7 +118,7 @@ export function RecommendedDeckCard({
           style={{
             paddingHorizontal: spacing.lg,
             paddingTop: spacing.md,
-            paddingBottom: spacing.sm,
+            paddingBottom: spacing.md,
             gap: spacing.xs,
           }}
         >
@@ -164,9 +164,9 @@ export function RecommendedDeckCard({
         <View
           style={{
             backgroundColor: theme.card,
-            paddingHorizontal: spacing.lg,
+            paddingHorizontal: spacing.md,
             paddingVertical: spacing.sm + 2,
-            gap: spacing.xs,
+            gap: spacing.sm,
           }}
         >
           {/* Reason */}
@@ -182,15 +182,41 @@ export function RecommendedDeckCard({
             </Typography>
           </View>
 
-          {/* Suggested cards */}
-          {suggestedCards != null && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 }}>
-              <Ionicons name="layers-outline" size={12} color={theme.textTertiary} />
-              <Typography variant="caption" color={theme.textTertiary}>
-                {suggestedCards} suggested cards
+          {/* Footer row: cards count + start button */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            {suggestedCards != null ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Ionicons name="layers-outline" size={12} color={theme.textTertiary} />
+                <Typography variant="caption" color={theme.textTertiary}>
+                  {suggestedCards} cards
+                </Typography>
+              </View>
+            ) : (
+              <View />
+            )}
+
+            {/* Start CTA */}
+            <TouchableOpacity
+              onPress={() => onPress(deckId)}
+              activeOpacity={0.78}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                backgroundColor: accent.color + '18',
+                borderRadius: radius.full,
+                paddingHorizontal: spacing.sm,
+                paddingVertical: 4,
+                borderWidth: 1,
+                borderColor: accent.color + '44',
+              }}
+            >
+              <Typography variant="captionBold" color={accent.color} style={{ fontSize: 10 }}>
+                Start
               </Typography>
-            </View>
-          )}
+              <Ionicons name="play" size={9} color={accent.color} />
+            </TouchableOpacity>
+          </View>
         </View>
       </TouchableOpacity>
     </Animated.View>

@@ -20,6 +20,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../theme';
 import { radius, spacing } from '../theme/tokens';
 import { Typography } from './ui/Typography';
+import { getMasteryDisplayInfo } from '../utils/mastery';
 
 // ─── Accent palette ───────────────────────────────────────────
 export const SUBJECT_ACCENT_PALETTE = [
@@ -55,16 +56,6 @@ export function getSubjectIcon(name: string): keyof typeof Ionicons['glyphMap'] 
   return 'school-outline';
 }
 
-// ─── Mastery label + level badge ─────────────────────────────
-function getMasteryInfo(pct: number) {
-  if (pct === 0)  return { label: 'Not started', level: 0, badge: '—' };
-  if (pct < 20)  return { label: 'Beginner',    level: 1, badge: 'L1' };
-  if (pct < 40)  return { label: 'Elementary',  level: 2, badge: 'L2' };
-  if (pct < 60)  return { label: 'Developing',  level: 3, badge: 'L3' };
-  if (pct < 80)  return { label: 'Proficient',  level: 4, badge: 'L4' };
-  if (pct < 100) return { label: 'Advanced',    level: 5, badge: 'L5' };
-  return              { label: 'Mastered',      level: 6, badge: '★' };
-}
 
 // ─── SVG Progress Ring ────────────────────────────────────────
 interface ProgressRingProps {
@@ -101,7 +92,10 @@ function ProgressRing({ progress, size, strokeWidth, color, trackColor }: Progre
 export interface TargetSubjectCardProps {
   subject: { id: string; name: string; description?: string };
   accentIndex: number;
-  masteryProgress?: number; // 0–1
+  /** Total correct answers across all levels for this subject */
+  correctAnswers?: number;
+  /** Highest level index reached (0=Beginner … 5=Master) */
+  levelIndex?: number;
   animDelay?: number;
   onPress: () => void;
   style?: ViewStyle;
@@ -110,7 +104,8 @@ export interface TargetSubjectCardProps {
 export function TargetSubjectCard({
   subject,
   accentIndex,
-  masteryProgress = 0,
+  correctAnswers = 0,
+  levelIndex = 0,
   animDelay = 0,
   onPress,
   style,
@@ -118,8 +113,7 @@ export function TargetSubjectCard({
   const { theme } = useTheme();
   const accent = SUBJECT_ACCENT_PALETTE[accentIndex % SUBJECT_ACCENT_PALETTE.length]!;
   const icon = getSubjectIcon(subject.name);
-  const masteryPct = Math.round(masteryProgress * 100);
-  const mastery = getMasteryInfo(masteryPct);
+  const mastery = getMasteryDisplayInfo(correctAnswers, levelIndex);
 
   // ── Entrance animation ──────────────────────────────────────
   const translateY = useSharedValue(28);
@@ -155,7 +149,7 @@ export function TargetSubjectCard({
           onPressOut={handlePressOut}
           activeOpacity={1}
           accessibilityRole="button"
-          accessibilityLabel={`${subject.name}. Mastery: ${mastery.label}, ${masteryPct}%`}
+          accessibilityLabel={`${subject.name}. Mastery: ${mastery.label}, ${mastery.pct}%`}
           accessibilityHint="Double tap to start studying this subject"
           style={{
             width: 176,
@@ -226,7 +220,7 @@ export function TargetSubjectCard({
           >
             <View style={{ width: 44, height: 44 }}>
               <ProgressRing
-                progress={masteryProgress}
+                progress={mastery.progress}
                 size={44}
                 strokeWidth={4.5}
                 color={accent.bg}
@@ -243,7 +237,7 @@ export function TargetSubjectCard({
                   color={accent.bg}
                   style={{ fontSize: 9, fontWeight: '700' }}
                 >
-                  {masteryPct}%
+                  {mastery.pct}%
                 </Typography>
               </View>
             </View>
@@ -263,7 +257,7 @@ export function TargetSubjectCard({
                 <View
                   style={{
                     height: '100%',
-                    width: `${masteryPct}%`,
+                    width: `${mastery.pct}%`,
                     backgroundColor: accent.bg,
                     borderRadius: 2,
                   }}

@@ -16,4 +16,5 @@ export { RecentDeckCard } from './RecentDeckCard';
 export type { RecentDeckCardProps } from './RecentDeckCard';
 export { RecommendedDeckCard } from './RecommendedDeckCard';
 export type { RecommendedDeckCardProps } from './RecommendedDeckCard';
+export { TodaysFocusSection } from './TodaysFocusSection';
 

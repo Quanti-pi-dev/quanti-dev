@@ -1,7 +1,7 @@
 // ─── RecentDeckCard ───────────────────────────────────────────
 // Slim, premium card for the "Pick Up Where You Left Off" section.
 // Displays deck title, relative timestamp, accuracy, cards studied,
-// and a "Resume" action button.
+// a mini accuracy bar, and a "Resume" action button.
 
 import { View, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +22,7 @@ function accuracyColor(pct: number) {
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return 'Just now';
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
@@ -63,14 +64,12 @@ export function RecentDeckCard({
     <Animated.View style={animStyle}>
       <View
         style={{
-          flexDirection: 'row',
-          alignItems: 'center',
           backgroundColor: theme.card,
           borderRadius: radius.xl,
           padding: spacing.md,
           borderWidth: 1,
           borderColor: theme.border,
-          gap: spacing.md,
+          gap: spacing.sm,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.06,
@@ -78,70 +77,92 @@ export function RecentDeckCard({
           elevation: 2,
         }}
       >
-        {/* Icon badge */}
-        <View
-          style={{
-            width: 46, height: 46, borderRadius: radius.lg,
-            backgroundColor: theme.primaryMuted,
-            alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <Ionicons name="layers-outline" size={22} color={theme.primary} />
-        </View>
+        {/* Main row */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+          {/* Icon badge */}
+          <View
+            style={{
+              width: 44, height: 44, borderRadius: radius.lg,
+              backgroundColor: theme.primaryMuted,
+              alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <Ionicons name="layers-outline" size={20} color={theme.primary} />
+          </View>
 
-        {/* Info block */}
-        <View style={{ flex: 1, gap: 3 }}>
-          <Typography variant="label" numberOfLines={1}>{deckTitle}</Typography>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-            {/* Accuracy pill */}
-            <View
-              style={{
-                flexDirection: 'row', alignItems: 'center', gap: 3,
-                backgroundColor: accColor + '18',
-                borderRadius: radius.full,
-                paddingHorizontal: 7, paddingVertical: 2,
-              }}
-            >
-              <Ionicons name="checkmark-circle" size={10} color={accColor} />
-              <Typography variant="caption" color={accColor} style={{ fontSize: 10, fontWeight: '700' }}>
-                {accuracy}%
+          {/* Info block */}
+          <View style={{ flex: 1, gap: 2 }}>
+            <Typography variant="label" numberOfLines={1}>{deckTitle}</Typography>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+              <Ionicons name="time-outline" size={11} color={theme.textTertiary} />
+              <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 11 }}>
+                {timeAgo}
+              </Typography>
+              <Typography variant="caption" color={theme.textTertiary}>·</Typography>
+              <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 11 }}>
+                {cardsStudied} cards
               </Typography>
             </View>
-            <Typography variant="caption" color={theme.textTertiary}>
-              {cardsStudied} cards
-            </Typography>
-            <Typography variant="caption" color={theme.textTertiary}>·</Typography>
-            <Typography variant="caption" color={theme.textTertiary}>
-              {timeAgo}
-            </Typography>
           </View>
+
+          {/* Resume button */}
+          <TouchableOpacity
+            onPress={() => onResume(deckId)}
+            activeOpacity={0.78}
+            accessibilityRole="button"
+            accessibilityLabel={`Resume ${deckTitle}`}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 4,
+              backgroundColor: theme.primary,
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.xs + 2,
+              borderRadius: radius.full,
+              shadowColor: theme.primary,
+              shadowOffset: { width: 0, height: 3 },
+              shadowOpacity: 0.35,
+              shadowRadius: 6,
+              elevation: 3,
+            }}
+          >
+            <Typography variant="captionBold" color="#FFF" style={{ fontSize: 11 }}>Resume</Typography>
+            <Ionicons name="play" size={10} color="#FFF" />
+          </TouchableOpacity>
         </View>
 
-        {/* Resume button */}
-        <TouchableOpacity
-          onPress={() => onResume(deckId)}
-          activeOpacity={0.78}
-          accessibilityRole="button"
-          accessibilityLabel={`Resume ${deckTitle}`}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 4,
-            backgroundColor: theme.primary,
-            paddingHorizontal: spacing.md,
-            paddingVertical: spacing.xs + 2,
-            borderRadius: radius.full,
-            shadowColor: theme.primary,
-            shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.35,
-            shadowRadius: 6,
-            elevation: 3,
-          }}
-        >
-          <Typography variant="captionBold" color="#FFF" style={{ fontSize: 11 }}>Resume</Typography>
-          <Ionicons name="play" size={10} color="#FFF" />
-        </TouchableOpacity>
+        {/* Accuracy row with bar */}
+        <View style={{ gap: 4 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Ionicons name="checkmark-circle" size={12} color={accColor} />
+              <Typography variant="caption" color={accColor} style={{ fontSize: 11, fontWeight: '700' }}>
+                {accuracy}% accuracy
+              </Typography>
+            </View>
+            <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 10 }}>
+              {correctAnswers}/{cardsStudied} correct
+            </Typography>
+          </View>
+          {/* Mini accuracy bar */}
+          <View
+            style={{
+              height: 4, borderRadius: 2,
+              backgroundColor: accColor + '20',
+              overflow: 'hidden',
+            }}
+          >
+            <View
+              style={{
+                height: '100%',
+                width: `${accuracy}%`,
+                backgroundColor: accColor,
+                borderRadius: 2,
+              }}
+            />
+          </View>
+        </View>
       </View>
     </Animated.View>
   );

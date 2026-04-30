@@ -1,17 +1,26 @@
 // ─── Create Challenge Wizard ────────────────────────────────
 // 3-step flow: Content → Stakes → Review
-// Uses swipeable Animated.View, no page navigation.
+// Improvements:
+//  - Segmented step progress bar with labels
+//  - Chip-style selectors with checkmark on selected
+//  - Bet slider preview with "you could win X" calculation
+//  - Review card uses icon rows
+//  - Gradient submit button
 
 import { useState } from 'react';
-import { View, TouchableOpacity, ScrollView, ActivityIndicator, TextInput } from 'react-native';
+import {
+  View, TouchableOpacity, ScrollView,
+  ActivityIndicator, TextInput,
+} from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInRight } from 'react-native-reanimated';
+import Animated, { FadeInRight, FadeInUp } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/theme';
-import { spacing, radius, shadows } from '../../src/theme/tokens';
+import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';
-import { CoinDisplay } from '../../src/components/CoinDisplay';
 import { useCoinBalance } from '../../src/hooks/useGamification';
 import { useCreateChallenge } from '../../src/hooks/useChallenge';
 import { useExams } from '../../src/hooks/useExams';
@@ -25,6 +34,69 @@ const DURATIONS = [
   { label: '20 min', value: 1200 },
 ];
 
+const BET_PRESETS = [10, 25, 50, 100, 250, 500];
+
+const STEP_LABELS = ['Content', 'Stakes', 'Review'];
+
+// ─── Reusable chip ────────────────────────────────────────────
+function SelectChip({
+  label,
+  selected,
+  onPress,
+  accent = '#6366F1',
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+  accent?: string;
+}) {
+  const { theme } = useTheme();
+  return (
+    <TouchableOpacity
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onPress();
+      }}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      style={{
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+        borderRadius: radius.full,
+        backgroundColor: selected ? accent : theme.card,
+        borderWidth: 1.5,
+        borderColor: selected ? accent : theme.border,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+      }}
+    >
+      {selected && <Ionicons name="checkmark" size={12} color="#FFF" />}
+      <Typography
+        variant="label"
+        color={selected ? '#FFF' : theme.text}
+        style={{ fontSize: 13 }}
+      >
+        {label}
+      </Typography>
+    </TouchableOpacity>
+  );
+}
+
+// ─── Section heading ──────────────────────────────────────────
+function SectionLabel({ label }: { label: string }) {
+  const { theme } = useTheme();
+  return (
+    <Typography
+      variant="label"
+      color={theme.textTertiary}
+      style={{ fontSize: 10, letterSpacing: 0.8, marginBottom: -spacing.xs }}
+    >
+      {label}
+    </Typography>
+  );
+}
+
 export default function CreateChallengeScreen() {
   const { theme } = useTheme();
   const router = useRouter();
@@ -32,7 +104,6 @@ export default function CreateChallengeScreen() {
   const createMutation = useCreateChallenge();
   const { data: coins } = useCoinBalance();
 
-  // Wizard state
   const [step, setStep] = useState(0);
   const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
@@ -42,13 +113,11 @@ export default function CreateChallengeScreen() {
   const [isCustomDuration, setIsCustomDuration] = useState(false);
   const [customDurationMinutes, setCustomDurationMinutes] = useState('25');
 
-  // Data
   const { data: examsPages, isLoading: examsLoading } = useExams();
   const { data: subjects, isLoading: subjectsLoading } = useExamSubjects(selectedExamId ?? '');
 
   const balance = coins?.balance ?? 0;
   const maxBet = Math.min(balance, 50000);
-
   const exams = examsPages?.pages?.flatMap((p) => p.data) ?? [];
   const selectedExam = exams.find((e) => e.id === selectedExamId);
   const subjectsList = subjects ?? [];
@@ -57,6 +126,19 @@ export default function CreateChallengeScreen() {
   const canProceedStep0 = !!selectedExamId && !!selectedSubjectId && !!selectedLevel;
   const canProceedStep1 = betAmount >= 10 && betAmount <= maxBet;
 
+  const effectiveDurationSeconds = isCustomDuration
+    ? (parseInt(customDurationMinutes) || 5) * 60
+    : durationSeconds;
+
+  function goNext() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setStep((s) => s + 1);
+  }
+  function goPrev() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setStep((s) => s - 1);
+  }
+
   return (
     <ScreenWrapper>
       {/* ── Header ── */}
@@ -64,7 +146,7 @@ export default function CreateChallengeScreen() {
         style={{
           paddingHorizontal: spacing.xl,
           paddingTop: spacing.base,
-          paddingBottom: spacing.lg,
+          paddingBottom: spacing.md,
           flexDirection: 'row',
           alignItems: 'center',
           gap: spacing.md,
@@ -74,11 +156,8 @@ export default function CreateChallengeScreen() {
       >
         <TouchableOpacity
           onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/(tabs)/battles');
-            }
+            if (router.canGoBack()) router.back();
+            else router.replace('/(tabs)/battles');
           }}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityRole="button"
@@ -88,17 +167,48 @@ export default function CreateChallengeScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Typography variant="h4">Create Challenge</Typography>
-          <Typography variant="caption" style={{ color: theme.textSecondary }}>
-            Step {step + 1} of 3
-          </Typography>
+          {params.opponentName && (
+            <Typography variant="caption" color={theme.textTertiary}>
+              vs {params.opponentName}
+            </Typography>
+          )}
         </View>
-        <CoinDisplay coins={balance} size="sm" />
+        {/* Coin balance */}
+        <View
+          style={{
+            flexDirection: 'row', alignItems: 'center', gap: 4,
+            backgroundColor: theme.coinLight,
+            borderRadius: radius.full,
+            paddingHorizontal: spacing.sm,
+            paddingVertical: 4,
+          }}
+        >
+          <Typography style={{ fontSize: 12 }}>🪙</Typography>
+          <Typography variant="captionBold" color={theme.coin}>{balance}</Typography>
+        </View>
       </View>
 
-      {/* ── Progress bar ── */}
-      <View style={{ height: 3, backgroundColor: theme.borderLight, flexDirection: 'row' }}>
-        <View style={{ flex: step + 1, backgroundColor: theme.primary, borderRadius: 2 }} />
-        <View style={{ flex: 2 - step }} />
+      {/* ── Segmented Step Progress ── */}
+      <View style={{ paddingHorizontal: spacing.xl, paddingVertical: spacing.md, gap: spacing.xs }}>
+        <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+          {STEP_LABELS.map((label, i) => (
+            <View key={label} style={{ flex: 1, gap: 4 }}>
+              <View
+                style={{
+                  height: 4, borderRadius: 2,
+                  backgroundColor: i <= step ? '#6366F1' : theme.border,
+                }}
+              />
+              <Typography
+                variant="caption"
+                color={i <= step ? '#6366F1' : theme.textTertiary}
+                style={{ fontSize: 10, textAlign: 'center' }}
+              >
+                {label}
+              </Typography>
+            </View>
+          ))}
+        </View>
       </View>
 
       <ScrollView
@@ -107,42 +217,22 @@ export default function CreateChallengeScreen() {
       >
         {/* ═══ Step 0: Content ═══ */}
         {step === 0 && (
-          <Animated.View entering={FadeInRight.duration(300)} style={{ gap: spacing.xl }}>
+          <Animated.View entering={FadeInRight.duration(280)} style={{ gap: spacing.xl }}>
+
             {/* Exam picker */}
             <View style={{ gap: spacing.md }}>
-              <Typography variant="labelMedium" style={{ color: theme.textSecondary }}>
-                SELECT EXAM
-              </Typography>
+              <SectionLabel label="SELECT EXAM" />
               {examsLoading ? (
                 <ActivityIndicator color={theme.primary} />
               ) : (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-                  {(exams ?? []).map((exam) => (
-                    <TouchableOpacity
+                  {exams.map((exam) => (
+                    <SelectChip
                       key={exam.id}
+                      label={exam.title}
+                      selected={selectedExamId === exam.id}
                       onPress={() => { setSelectedExamId(exam.id); setSelectedSubjectId(null); }}
-                      accessibilityRole="radio"
-                      accessibilityLabel={exam.title}
-                      accessibilityState={{ selected: selectedExamId === exam.id }}
-                      style={{
-                        paddingHorizontal: spacing.base,
-                        paddingVertical: spacing.sm,
-                        borderRadius: radius.full,
-                        backgroundColor: selectedExamId === exam.id ? theme.primary : theme.card,
-                        borderWidth: 1,
-                        borderColor: selectedExamId === exam.id ? theme.primary : theme.border,
-                      }}
-                    >
-                      <Typography
-                        variant="bodySemiBold"
-                        style={{
-                          color: selectedExamId === exam.id ? theme.buttonPrimaryText : theme.text,
-                          fontSize: 13,
-                        }}
-                      >
-                        {exam.title}
-                      </Typography>
-                    </TouchableOpacity>
+                    />
                   ))}
                 </View>
               )}
@@ -150,159 +240,82 @@ export default function CreateChallengeScreen() {
 
             {/* Subject picker */}
             {selectedExamId && (
-              <View style={{ gap: spacing.md }}>
-                <Typography variant="labelMedium" style={{ color: theme.textSecondary }}>
-                  SELECT SUBJECT
-                </Typography>
+              <Animated.View entering={FadeInUp.duration(260)} style={{ gap: spacing.md }}>
+                <SectionLabel label="SELECT SUBJECT" />
                 {subjectsLoading ? (
                   <ActivityIndicator color={theme.primary} />
                 ) : (
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
                     {subjectsList.map((subject) => (
-                      <TouchableOpacity
+                      <SelectChip
                         key={subject.id}
+                        label={subject.name}
+                        selected={selectedSubjectId === subject.id}
                         onPress={() => setSelectedSubjectId(subject.id)}
-                        accessibilityRole="radio"
-                        accessibilityLabel={subject.name}
-                        accessibilityState={{ selected: selectedSubjectId === subject.id }}
-                        style={{
-                          paddingHorizontal: spacing.base,
-                          paddingVertical: spacing.sm,
-                          borderRadius: radius.full,
-                          backgroundColor: selectedSubjectId === subject.id ? theme.primary : theme.card,
-                          borderWidth: 1,
-                          borderColor: selectedSubjectId === subject.id ? theme.primary : theme.border,
-                        }}
-                      >
-                        <Typography
-                          variant="bodySemiBold"
-                          style={{
-                            color: selectedSubjectId === subject.id ? theme.buttonPrimaryText : theme.text,
-                            fontSize: 13,
-                          }}
-                        >
-                          {subject.name}
-                        </Typography>
-                      </TouchableOpacity>
+                      />
                     ))}
                   </View>
                 )}
-              </View>
+              </Animated.View>
             )}
 
             {/* Level picker */}
             {selectedSubjectId && (
-              <View style={{ gap: spacing.md }}>
-                <Typography variant="labelMedium" style={{ color: theme.textSecondary }}>
-                  SELECT LEVEL
-                </Typography>
+              <Animated.View entering={FadeInUp.duration(260)} style={{ gap: spacing.md }}>
+                <SectionLabel label="SELECT LEVEL" />
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
                   {SUBJECT_LEVELS.map((level) => (
-                    <TouchableOpacity
+                    <SelectChip
                       key={level}
+                      label={level}
+                      selected={selectedLevel === level}
                       onPress={() => setSelectedLevel(level)}
-                      accessibilityRole="radio"
-                      accessibilityLabel={level}
-                      accessibilityState={{ selected: selectedLevel === level }}
-                      style={{
-                        paddingHorizontal: spacing.base,
-                        paddingVertical: spacing.sm,
-                        borderRadius: radius.full,
-                        backgroundColor: selectedLevel === level ? theme.primary : theme.card,
-                        borderWidth: 1,
-                        borderColor: selectedLevel === level ? theme.primary : theme.border,
-                      }}
-                    >
-                      <Typography
-                        variant="bodySemiBold"
-                        style={{
-                          color: selectedLevel === level ? theme.buttonPrimaryText : theme.text,
-                          fontSize: 13,
-                        }}
-                      >
-                        {level}
-                      </Typography>
-                    </TouchableOpacity>
+                      accent="#8B5CF6"
+                    />
                   ))}
                 </View>
-              </View>
+              </Animated.View>
             )}
           </Animated.View>
         )}
 
         {/* ═══ Step 1: Stakes ═══ */}
         {step === 1 && (
-          <Animated.View entering={FadeInRight.duration(300)} style={{ gap: spacing.xl }}>
-            {/* Duration toggle */}
+          <Animated.View entering={FadeInRight.duration(280)} style={{ gap: spacing.xl }}>
+
+            {/* Duration */}
             <View style={{ gap: spacing.md }}>
-              <Typography variant="labelMedium" style={{ color: theme.textSecondary }}>
-                MATCH DURATION
-              </Typography>
-              <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
+              <SectionLabel label="MATCH DURATION" />
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
                 {DURATIONS.map((d) => (
-                  <TouchableOpacity
+                  <SelectChip
                     key={d.value}
-                    onPress={() => {
-                      setIsCustomDuration(false);
-                      setDurationSeconds(d.value);
-                    }}
-                    accessibilityRole="radio"
-                    accessibilityLabel={d.label}
-                    accessibilityState={{ selected: !isCustomDuration && durationSeconds === d.value }}
-                    style={{
-                      flexBasis: '30%',
-                      paddingVertical: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: !isCustomDuration && durationSeconds === d.value ? theme.primary : theme.card,
-                      borderWidth: 1,
-                      borderColor: !isCustomDuration && durationSeconds === d.value ? theme.primary : theme.border,
-                      alignItems: 'center',
-                      marginBottom: spacing.sm,
-                    }}
-                  >
-                    <Typography
-                      variant="bodySemiBold"
-                      style={{
-                        color: !isCustomDuration && durationSeconds === d.value ? theme.buttonPrimaryText : theme.text,
-                        fontSize: 13,
-                      }}
-                    >
-                      {d.label}
-                    </Typography>
-                  </TouchableOpacity>
+                    label={d.label}
+                    selected={!isCustomDuration && durationSeconds === d.value}
+                    onPress={() => { setIsCustomDuration(false); setDurationSeconds(d.value); }}
+                    accent="#10B981"
+                  />
                 ))}
-                
-                <TouchableOpacity
+                <SelectChip
+                  label="Custom"
+                  selected={isCustomDuration}
                   onPress={() => setIsCustomDuration(true)}
-                  accessibilityRole="radio"
-                  accessibilityLabel="Custom time"
-                  accessibilityState={{ selected: isCustomDuration }}
-                  style={{
-                    flexBasis: '30%',
-                    paddingVertical: spacing.md,
-                    borderRadius: radius.md,
-                    backgroundColor: isCustomDuration ? theme.primary : theme.card,
-                    borderWidth: 1,
-                    borderColor: isCustomDuration ? theme.primary : theme.border,
-                    alignItems: 'center',
-                    marginBottom: spacing.sm,
-                  }}
-                >
-                  <Typography
-                    variant="bodySemiBold"
-                    style={{
-                      color: isCustomDuration ? theme.buttonPrimaryText : theme.text,
-                      fontSize: 13,
-                    }}
-                  >
-                    Custom
-                  </Typography>
-                </TouchableOpacity>
+                  accent="#10B981"
+                />
               </View>
 
               {isCustomDuration && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs }}>
-                  <Typography variant="body" style={{ color: theme.textSecondary }}>Minutes:</Typography>
+                <View
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+                    backgroundColor: theme.card,
+                    borderRadius: radius.xl,
+                    padding: spacing.md,
+                    borderWidth: 1, borderColor: '#10B98144',
+                  }}
+                >
+                  <Ionicons name="timer-outline" size={18} color="#10B981" />
+                  <Typography variant="body" color={theme.textSecondary}>Minutes:</Typography>
                   <TextInput
                     value={customDurationMinutes}
                     onChangeText={setCustomDurationMinutes}
@@ -310,16 +323,15 @@ export default function CreateChallengeScreen() {
                     placeholder="25"
                     placeholderTextColor={theme.textTertiary}
                     style={{
-                      backgroundColor: theme.card,
+                      backgroundColor: theme.cardAlt,
                       color: theme.text,
                       borderColor: theme.border,
                       borderWidth: 1,
-                      borderRadius: radius.md,
+                      borderRadius: radius.lg,
                       paddingHorizontal: spacing.md,
                       paddingVertical: spacing.sm,
                       minWidth: 80,
                       textAlign: 'center',
-                      fontFamily: 'Inter-Medium',
                       fontSize: 14,
                     }}
                   />
@@ -329,139 +341,163 @@ export default function CreateChallengeScreen() {
 
             {/* Bet amount */}
             <View style={{ gap: spacing.md }}>
-              <Typography variant="labelMedium" style={{ color: theme.textSecondary }}>
-                BET AMOUNT
-              </Typography>
-              <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
-                {[10, 25, 50, 100, 250, 500].filter((v) => v <= maxBet).map((v) => (
-                  <TouchableOpacity
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <SectionLabel label="BET AMOUNT" />
+                <Typography variant="caption" color={theme.textTertiary}>
+                  Balance: 🪙 {balance}
+                </Typography>
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+                {BET_PRESETS.filter((v) => v <= maxBet).map((v) => (
+                  <SelectChip
                     key={v}
+                    label={`🪙 ${v}`}
+                    selected={betAmount === v}
                     onPress={() => setBetAmount(v)}
-                    accessibilityRole="radio"
-                    accessibilityLabel={`${v} coins`}
-                    accessibilityState={{ selected: betAmount === v }}
-                    style={{
-                      paddingHorizontal: spacing.lg,
-                      paddingVertical: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: betAmount === v ? theme.coin : theme.card,
-                      borderWidth: 1,
-                      borderColor: betAmount === v ? theme.coin : theme.border,
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Typography
-                      variant="bodyBold"
-                      style={{
-                        color: betAmount === v ? '#fff' : theme.text,
-                      }}
-                    >
-                      🪙 {v}
-                    </Typography>
-                  </TouchableOpacity>
+                    accent="#F59E0B"
+                  />
                 ))}
               </View>
-              <Typography variant="caption" style={{ color: theme.textTertiary }}>
-                Your balance: {balance} coins
-              </Typography>
             </View>
 
-            {/* Winner preview */}
-            <View
-              style={{
-                backgroundColor: theme.successLight,
-                borderRadius: radius.lg,
-                padding: spacing.lg,
-                alignItems: 'center',
-                gap: spacing.xs,
-              }}
-            >
-              <Typography variant="h3" style={{ color: theme.success }}>
-                🏆 {betAmount * 2}
-              </Typography>
-              <Typography variant="caption" style={{ color: theme.success }}>
-                Winner takes all
-              </Typography>
+            {/* Prize preview card */}
+            <View style={{ borderRadius: radius.xl, overflow: 'hidden' }}>
+              <LinearGradient
+                colors={['#F59E0B', '#FBBF24']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{
+                  padding: spacing.lg,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: spacing.md,
+                }}
+              >
+                <Typography style={{ fontSize: 28 }}>🏆</Typography>
+                <View style={{ flex: 1 }}>
+                  <Typography variant="h3" color="#FFF">{betAmount * 2} coins</Typography>
+                  <Typography variant="caption" color="rgba(255,255,255,0.85)">
+                    Winner takes all · Your bet: 🪙 {betAmount}
+                  </Typography>
+                </View>
+              </LinearGradient>
             </View>
           </Animated.View>
         )}
 
         {/* ═══ Step 2: Review ═══ */}
         {step === 2 && (
-          <Animated.View entering={FadeInRight.duration(300)} style={{ gap: spacing.xl }}>
+          <Animated.View entering={FadeInRight.duration(280)} style={{ gap: spacing.xl }}>
             <View
               style={{
                 backgroundColor: theme.card,
-                borderRadius: radius.lg,
-                padding: spacing.xl,
-                gap: spacing.md,
+                borderRadius: radius.xl,
+                overflow: 'hidden',
                 borderWidth: 1,
                 borderColor: theme.border,
-                ...shadows.sm,
-                shadowColor: theme.shadow,
               }}
             >
-              <Typography variant="h4" style={{ textAlign: 'center' }}>Challenge Summary</Typography>
-              <View style={{ height: 1, backgroundColor: theme.divider }} />
+              {/* Card header */}
+              <LinearGradient
+                colors={['#6366F1CC', '#8B5CF6CC']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{
+                  paddingHorizontal: spacing.lg,
+                  paddingVertical: spacing.md,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: spacing.sm,
+                }}
+              >
+                <Ionicons name="document-text-outline" size={18} color="#FFF" />
+                <Typography variant="label" color="#FFF">Challenge Summary</Typography>
+              </LinearGradient>
 
-              {[
-                { label: 'Opponent', value: params.opponentName ?? '—' },
-                { label: 'Exam', value: selectedExam?.title ?? '—' },
-                { label: 'Subject', value: (selectedSubject as { name: string } | undefined)?.name ?? '—' },
-                { label: 'Level', value: selectedLevel },
-                { label: 'Duration', value: isCustomDuration ? `${parseInt(customDurationMinutes) || 5} min` : `${durationSeconds / 60} min` },
-                { label: 'Your Bet', value: `🪙 ${betAmount}` },
-                { label: 'Winner Takes', value: `🪙 ${betAmount * 2}` },
-              ].map((row) => (
-                <View key={row.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Typography variant="body" style={{ color: theme.textSecondary }}>{row.label}</Typography>
-                  <Typography variant="bodySemiBold">{row.value}</Typography>
-                </View>
-              ))}
+              {/* Rows */}
+              <View style={{ padding: spacing.lg, gap: spacing.md }}>
+                {[
+                  { icon: 'person-outline' as const, label: 'Opponent', value: params.opponentName ?? '—' },
+                  { icon: 'school-outline' as const, label: 'Exam', value: selectedExam?.title ?? '—' },
+                  { icon: 'book-outline' as const, label: 'Subject', value: (selectedSubject as { name: string } | undefined)?.name ?? '—' },
+                  { icon: 'bar-chart-outline' as const, label: 'Level', value: selectedLevel },
+                  { icon: 'timer-outline' as const, label: 'Duration', value: isCustomDuration ? `${parseInt(customDurationMinutes) || 5} min` : `${durationSeconds / 60} min` },
+                  { icon: 'cash-outline' as const, label: 'Your Bet', value: `🪙 ${betAmount}` },
+                  { icon: 'trophy-outline' as const, label: 'Winner Takes', value: `🪙 ${betAmount * 2}` },
+                ].map((row, i) => (
+                  <View key={row.label}>
+                    {i > 0 && <View style={{ height: 1, backgroundColor: theme.border, marginBottom: spacing.md }} />}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                      <View
+                        style={{
+                          width: 30, height: 30, borderRadius: radius.md,
+                          backgroundColor: theme.primaryMuted,
+                          alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
+                        <Ionicons name={row.icon} size={14} color={theme.primary} />
+                      </View>
+                      <Typography variant="body" color={theme.textSecondary} style={{ flex: 1 }}>
+                        {row.label}
+                      </Typography>
+                      <Typography variant="label">{row.value}</Typography>
+                    </View>
+                  </View>
+                ))}
+              </View>
             </View>
 
-            {/* Create Challenge button */}
+            {/* Submit */}
             <TouchableOpacity
               onPress={() => {
                 if (!params.opponentId) {
                   router.push('/battles/friend-select');
                 } else {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                   createMutation.mutate({
                     opponentId: params.opponentId,
                     examId: selectedExamId!,
                     subjectId: selectedSubjectId!,
                     level: selectedLevel,
                     betAmount,
-                    durationSeconds: isCustomDuration ? (parseInt(customDurationMinutes) || 5) * 60 : durationSeconds,
+                    durationSeconds: effectiveDurationSeconds,
                   });
                 }
               }}
               disabled={createMutation.isPending}
               accessibilityRole="button"
-              accessibilityLabel={`Send challenge. Bet: ${betAmount} coins. Winner takes ${betAmount * 2}.`}
-              style={{
-                backgroundColor: theme.buttonPrimary,
-                borderRadius: radius.lg,
-                paddingVertical: spacing.lg,
-                alignItems: 'center',
-                ...shadows.md,
-                shadowColor: theme.primary,
-                opacity: createMutation.isPending ? 0.7 : 1,
-              }}
+              style={{ borderRadius: radius.xl, overflow: 'hidden', opacity: createMutation.isPending ? 0.7 : 1 }}
             >
-              {createMutation.isPending ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Typography variant="bodyBold" style={{ color: theme.buttonPrimaryText, fontSize: 16 }}>
-                  {params.opponentName ? `Challenge ${params.opponentName} ⚔️` : 'Choose Opponent →'}
-                </Typography>
-              )}
+              <LinearGradient
+                colors={['#6366F1', '#8B5CF6']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{
+                  paddingVertical: spacing.lg,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: spacing.sm,
+                }}
+              >
+                {createMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="flash" size={18} color="#FFF" />
+                    <Typography variant="label" color="#FFF" style={{ fontSize: 16 }}>
+                      {params.opponentName ? `Challenge ${params.opponentName}` : 'Choose Opponent →'}
+                    </Typography>
+                    {params.opponentName && <Typography style={{ fontSize: 16 }}>⚔️</Typography>}
+                  </>
+                )}
+              </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
         )}
       </ScrollView>
 
-      {/* ── Navigation buttons ── */}
+      {/* ── Footer nav ── */}
       {step < 2 && (
         <View
           style={{
@@ -475,48 +511,49 @@ export default function CreateChallengeScreen() {
         >
           {step > 0 && (
             <TouchableOpacity
-              onPress={() => setStep(step - 1)}
+              onPress={goPrev}
               accessibilityRole="button"
-              accessibilityLabel="Previous step"
               style={{
                 flex: 1,
                 paddingVertical: spacing.md,
-                borderRadius: radius.md,
-                backgroundColor: theme.buttonSecondary,
+                borderRadius: radius.xl,
+                backgroundColor: theme.cardAlt,
                 alignItems: 'center',
+                borderWidth: 1,
+                borderColor: theme.border,
               }}
             >
-              <Typography variant="bodySemiBold" style={{ color: theme.buttonSecondaryText }}>
-                Back
-              </Typography>
+              <Typography variant="label" color={theme.textSecondary}>Back</Typography>
             </TouchableOpacity>
           )}
           <TouchableOpacity
-            onPress={() => setStep(step + 1)}
+            onPress={goNext}
             disabled={step === 0 ? !canProceedStep0 : !canProceedStep1}
             accessibilityRole="button"
-            accessibilityLabel={step === 0 ? 'Next: Set stakes' : 'Next: Review challenge'}
-            accessibilityState={{ disabled: step === 0 ? !canProceedStep0 : !canProceedStep1 }}
             style={{
               flex: 1,
-              paddingVertical: spacing.md,
-              borderRadius: radius.md,
-              backgroundColor: (step === 0 ? canProceedStep0 : canProceedStep1)
-                ? theme.buttonPrimary
-                : theme.buttonDisabled,
-              alignItems: 'center',
+              borderRadius: radius.xl,
+              overflow: 'hidden',
+              opacity: (step === 0 ? canProceedStep0 : canProceedStep1) ? 1 : 0.4,
             }}
           >
-            <Typography
-              variant="bodySemiBold"
+            <LinearGradient
+              colors={['#6366F1', '#8B5CF6']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
               style={{
-                color: (step === 0 ? canProceedStep0 : canProceedStep1)
-                  ? theme.buttonPrimaryText
-                  : theme.buttonDisabledText,
+                paddingVertical: spacing.md,
+                alignItems: 'center',
+                flexDirection: 'row',
+                justifyContent: 'center',
+                gap: 6,
               }}
             >
-              Next
-            </Typography>
+              <Typography variant="label" color="#FFF">
+                {step === 0 ? 'Next: Stakes' : 'Next: Review'}
+              </Typography>
+              <Ionicons name="arrow-forward" size={16} color="#FFF" />
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       )}

@@ -1,17 +1,27 @@
 // ─── Friend Select ──────────────────────────────────────────
-// Picks an opponent from the user's friend list, then creates the challenge.
+// Picks an opponent from the user's friend list.
+// Improvements:
+//  - Premium header with gradient accent
+//  - Friend cards with avatar initials + colored ring
+//  - "Challenge" button with gradient styling
+//  - Better empty state with CTA
+//  - Search bar with rounded pill design
 
 import { useState } from 'react';
 import { View, FlatList, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../src/theme';
 import { spacing, radius, shadows } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';
 import { useFriends } from '../../src/hooks/useFriend';
 import type { UserSummary } from '@kd/shared';
+
+// Color palette for avatar rings
+const AVATAR_COLORS = ['#6366F1', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#3B82F6', '#EF4444', '#14B8A6'];
 
 export default function FriendSelectScreen() {
   const { theme } = useTheme();
@@ -33,7 +43,7 @@ export default function FriendSelectScreen() {
 
   return (
     <ScreenWrapper>
-      {/* Header */}
+      {/* ── Header ── */}
       <View
         style={{
           paddingHorizontal: spacing.xl,
@@ -46,33 +56,46 @@ export default function FriendSelectScreen() {
           borderBottomColor: theme.border,
         }}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/(tabs)/battles');
-            }
+            if (router.canGoBack()) router.back();
+            else router.replace('/(tabs)/battles');
           }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Typography variant="h4" style={{ flex: 1 }}>Choose Opponent</Typography>
+        <View style={{ flex: 1 }}>
+          <Typography variant="h4">Choose Opponent</Typography>
+          <Typography variant="caption" color={theme.textTertiary}>
+            Select a friend to challenge
+          </Typography>
+        </View>
+        <TouchableOpacity
+          onPress={() => router.push('/social')}
+          style={{
+            width: 36, height: 36, borderRadius: radius.full,
+            backgroundColor: theme.primaryMuted,
+            alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <Ionicons name="person-add" size={16} color={theme.primary} />
+        </TouchableOpacity>
       </View>
 
-      {/* Search */}
+      {/* ── Search bar ── */}
       <View style={{ paddingHorizontal: spacing.xl, paddingVertical: spacing.md }}>
         <View
           style={{
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: theme.inputBackground,
-            borderRadius: radius.md,
+            backgroundColor: theme.cardAlt,
+            borderRadius: radius.full,
             borderWidth: 1,
-            borderColor: theme.inputBorder,
+            borderColor: theme.border,
             paddingHorizontal: spacing.md,
             gap: spacing.sm,
-            height: 44,
+            height: 46,
           }}
         >
           <Ionicons name="search" size={18} color={theme.textTertiary} />
@@ -97,83 +120,128 @@ export default function FriendSelectScreen() {
       </View>
 
       {isLoading ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.md }}>
           <ActivityIndicator size="large" color={theme.primary} />
+          <Typography variant="caption" color={theme.textTertiary}>
+            Loading your friends...
+          </Typography>
         </View>
       ) : filtered.length === 0 ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.lg, padding: spacing.xl }}>
-          <Ionicons name="people-outline" size={64} color={theme.textTertiary} />
-          <Typography variant="body" style={{ color: theme.textTertiary, textAlign: 'center' }}>
-            No friends yet.{'\n'}Find friends in the Social tab to challenge them!
-          </Typography>
-          <TouchableOpacity
-            onPress={() => router.push('/social')}
+          <View
             style={{
-              backgroundColor: theme.buttonPrimary,
-              paddingHorizontal: spacing.xl,
-              paddingVertical: spacing.md,
-              borderRadius: radius.md,
+              width: 80, height: 80, borderRadius: radius.full,
+              backgroundColor: theme.primaryMuted,
+              alignItems: 'center', justifyContent: 'center',
             }}
           >
-            <Typography variant="bodySemiBold" style={{ color: theme.buttonPrimaryText }}>
-              Find Friends
+            <Ionicons name="people-outline" size={40} color={theme.primary} />
+          </View>
+          <View style={{ alignItems: 'center', gap: spacing.xs }}>
+            <Typography variant="label" color={theme.textSecondary} align="center">
+              {searchQuery ? 'No friends found' : 'No friends yet'}
             </Typography>
-          </TouchableOpacity>
+            <Typography variant="caption" color={theme.textTertiary} align="center">
+              {searchQuery
+                ? 'Try a different name'
+                : 'Find friends in the Social tab to challenge them!'}
+            </Typography>
+          </View>
+          {!searchQuery && (
+            <TouchableOpacity
+              onPress={() => router.push('/social')}
+              style={{ borderRadius: radius.xl, overflow: 'hidden' }}
+            >
+              <LinearGradient
+                colors={['#6366F1', '#8B5CF6']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{
+                  paddingHorizontal: spacing.xl,
+                  paddingVertical: spacing.md,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: spacing.sm,
+                }}
+              >
+                <Ionicons name="person-add" size={16} color="#FFF" />
+                <Typography variant="label" color="#FFF">Find Friends</Typography>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: spacing.xl, gap: spacing.md }}
-          renderItem={({ item, index }) => (
-            <Animated.View entering={FadeInDown.delay(index * 60).duration(300)}>
-              <View
-                style={{
-                  backgroundColor: theme.card,
-                  borderRadius: radius.lg,
-                  padding: spacing.lg,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.md,
-                  borderWidth: 1,
-                  borderColor: theme.borderLight,
-                  ...shadows.xs,
-                  shadowColor: theme.shadow,
-                }}
-              >
+          renderItem={({ item, index }) => {
+            const accentColor = AVATAR_COLORS[index % AVATAR_COLORS.length]!;
+            return (
+              <Animated.View entering={FadeInDown.delay(index * 60).duration(300)}>
                 <View
                   style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: radius.full,
-                    backgroundColor: theme.primaryMuted,
+                    backgroundColor: theme.card,
+                    borderRadius: radius.xl,
+                    padding: spacing.md,
+                    flexDirection: 'row',
                     alignItems: 'center',
-                    justifyContent: 'center',
+                    gap: spacing.md,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    ...shadows.xs,
+                    shadowColor: theme.shadow,
                   }}
                 >
-                  <Typography variant="bodyBold" style={{ color: theme.primary, fontSize: 18 }}>
-                    {item.displayName.charAt(0).toUpperCase()}
-                  </Typography>
+                  {/* Avatar */}
+                  <View
+                    style={{
+                      width: 48, height: 48, borderRadius: radius.full,
+                      backgroundColor: accentColor + '18',
+                      alignItems: 'center', justifyContent: 'center',
+                      borderWidth: 2, borderColor: accentColor + '55',
+                    }}
+                  >
+                    <Typography variant="label" color={accentColor} style={{ fontSize: 20 }}>
+                      {item.displayName.charAt(0).toUpperCase()}
+                    </Typography>
+                  </View>
+
+                  {/* Name */}
+                  <View style={{ flex: 1 }}>
+                    <Typography variant="label">{item.displayName}</Typography>
+                    <Typography variant="caption" color={theme.textTertiary}>
+                      Ready to battle
+                    </Typography>
+                  </View>
+
+                  {/* Challenge button */}
+                  <TouchableOpacity
+                    onPress={() => handleChallenge(item)}
+                    style={{ borderRadius: radius.lg, overflow: 'hidden' }}
+                  >
+                    <LinearGradient
+                      colors={['#6366F1', '#8B5CF6']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={{
+                        paddingHorizontal: spacing.md,
+                        paddingVertical: spacing.sm,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <Ionicons name="flash" size={12} color="#FFF" />
+                      <Typography variant="captionBold" color="#FFF" style={{ fontSize: 12 }}>
+                        Challenge
+                      </Typography>
+                    </LinearGradient>
+                  </TouchableOpacity>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Typography variant="bodySemiBold">{item.displayName}</Typography>
-                </View>
-                <TouchableOpacity
-                  onPress={() => handleChallenge(item)}
-                  style={{
-                    backgroundColor: theme.buttonPrimary,
-                    paddingHorizontal: spacing.lg,
-                    paddingVertical: spacing.sm,
-                    borderRadius: radius.md,
-                  }}
-                >
-                  <Typography variant="bodySemiBold" style={{ color: theme.buttonPrimaryText, fontSize: 13 }}>
-                    Select →
-                  </Typography>
-                </TouchableOpacity>
-              </View>
-            </Animated.View>
-          )}
+              </Animated.View>
+            );
+          }}
         />
       )}
     </ScreenWrapper>

@@ -348,25 +348,36 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
     }
     const pipelineResults = await pipeline.exec();
 
-    // Aggregate: highest level per (examId, subjectId)
-    const entries = new Map<string, { examId: string; subjectId: string; levelIndex: number; level: string; correctAnswers: number }>();
+    // Aggregate: highest level + sum of ALL correct/total across levels per (examId, subjectId)
+    const entries = new Map<string, { examId: string; subjectId: string; levelIndex: number; level: string; correctAnswers: number; totalAnswers: number }>();
 
     for (let i = 0; i < parsed.length; i++) {
       const entry = parsed[i]!;
       const [err, rawData] = pipelineResults?.[i] ?? [null, {}];
       const data = (!err && rawData ? rawData : {}) as Record<string, string>;
       const correct = parseInt(data['correct'] ?? '0', 10);
+      const total = parseInt(data['total'] ?? '0', 10);
 
       const mapKey = `${entry.examId}:${entry.subjectId}`;
       const existing = entries.get(mapKey);
-      if (!existing || entry.levelIndex > existing.levelIndex) {
+      if (!existing) {
         entries.set(mapKey, {
           examId: entry.examId,
           subjectId: entry.subjectId,
           levelIndex: entry.levelIndex,
           level: entry.level,
           correctAnswers: correct,
+          totalAnswers: total,
         });
+      } else {
+        // Sum correct/total across all levels for this subject
+        existing.correctAnswers += correct;
+        existing.totalAnswers += total;
+        // Track the highest level reached
+        if (entry.levelIndex > existing.levelIndex) {
+          existing.levelIndex = entry.levelIndex;
+          existing.level = entry.level;
+        }
       }
     }
 
@@ -403,7 +414,8 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
       subjectName: subjectMap.get(e.subjectId) ?? e.subjectId,
       highestLevel: e.level,
       levelIndex: e.levelIndex,   // 0=Beginner … 5=Master
-      correctAnswers: e.correctAnswers,
+      correctAnswers: e.correctAnswers,  // total correct across ALL levels
+      totalAnswers: e.totalAnswers,      // total attempts across ALL levels
     }));
 
     return reply.send({ success: true, data, timestamp: new Date().toISOString() });
