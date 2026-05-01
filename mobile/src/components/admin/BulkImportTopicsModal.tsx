@@ -1,15 +1,14 @@
-// ─── BulkImportModal ─────────────────────────────────────────
-// Modal for importing flashcards from JSON or CSV files.
+// ─── BulkImportTopicsModal ───────────────────────────────────
+// Modal for importing topics from JSON or CSV files for a given subject.
 // Admin picks a file via expo-document-picker, we parse it,
-// preview the results, and submit in bulk with progress tracking.
+// preview the results, and submit in bulk.
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   ScrollView,
   Modal,
   TouchableOpacity,
-  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
@@ -21,59 +20,41 @@ import { Typography } from '../ui/Typography';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import {
-  parseCSV,
-  parseJSON,
-  ParsedFlashcard,
-  ParseResult,
-} from '../../utils/csvParser';
+  parseTopicCSV,
+  parseTopicJSON,
+  type ParsedTopic,
+  type TopicParseResult,
+} from '../../utils/topicParser';
 import { useGlobalUI } from '../../contexts/GlobalUIContext';
 
 // ─── Types ───────────────────────────────────────────────────
 
-interface BulkImportModalProps {
+interface BulkImportTopicsModalProps {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (
-    cards: ParsedFlashcard[],
-    onProgress?: (currentBatch: number, totalBatches: number, insertedSoFar: number) => void,
-  ) => Promise<void>;
+  onSubmit: (topics: ParsedTopic[]) => Promise<void>;
 }
 
 type FileFormat = 'json' | 'csv';
 
-interface UploadProgress {
-  currentBatch: number;
-  totalBatches: number;
-  insertedSoFar: number;
-}
-
 // ─── Component ───────────────────────────────────────────────
 
-export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalProps) {
+export function BulkImportTopicsModal({ visible, onClose, onSubmit }: BulkImportTopicsModalProps) {
   const { theme } = useTheme();
   const { showToast } = useGlobalUI();
   const insets = useSafeAreaInsets();
 
   const [format, setFormat] = useState<FileFormat>('csv');
   const [fileName, setFileName] = useState<string | null>(null);
-  const [result, setResult] = useState<ParseResult | null>(null);
+  const [result, setResult] = useState<TopicParseResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [progress, setProgress] = useState<UploadProgress | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_batchErrors, setBatchErrors] = useState<string[]>([]);
-
-  // Animated progress bar width
-  const progressAnim = useRef(new Animated.Value(0)).current;
 
   const reset = useCallback(() => {
     setFileName(null);
     setResult(null);
     setSubmitted(false);
-    setProgress(null);
-    setBatchErrors([]);
-    progressAnim.setValue(0);
-  }, [progressAnim]);
+  }, []);
 
   const handleClose = useCallback(() => {
     reset();
@@ -84,22 +65,22 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
   const handlePickFile = useCallback(async () => {
     try {
       const mimeType = format === 'csv' ? 'text/csv' : 'application/json';
-      const result = await DocumentPicker.getDocumentAsync({
+      const pickerResult = await DocumentPicker.getDocumentAsync({
         type: mimeType,
         copyToCacheDirectory: true,
         multiple: false,
       });
 
-      if (result.canceled || !result.assets?.[0]) return;
+      if (pickerResult.canceled || !pickerResult.assets?.[0]) return;
 
-      const asset = result.assets[0];
+      const asset = pickerResult.assets[0];
 
-      // Guard: reject files over 5 MB to prevent UI freeze
-      const MAX_FILE_BYTES = 5 * 1024 * 1024;
+      // Guard: reject files over 2 MB
+      const MAX_FILE_BYTES = 2 * 1024 * 1024;
       if (asset.size && asset.size > MAX_FILE_BYTES) {
         setResult({
-          cards: [],
-          errors: [`File too large (${(asset.size / 1024 / 1024).toFixed(1)} MB). Maximum is 5 MB.`],
+          topics: [],
+          errors: [`File too large (${(asset.size / 1024 / 1024).toFixed(1)} MB). Maximum is 2 MB.`],
         });
         setFileName(asset.name ?? 'file');
         return;
@@ -107,49 +88,35 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
 
       setFileName(asset.name ?? 'file');
 
-      // Read the file contents using the new File API
+      // Read the file contents
       const file = new ExpoFile(asset.uri);
       const content = await file.text();
 
       // Parse based on chosen format
-      const parsed = format === 'csv' ? parseCSV(content) : parseJSON(content);
+      const parsed = format === 'csv' ? parseTopicCSV(content) : parseTopicJSON(content);
       setResult(parsed);
     } catch {
       showToast('Could not read the selected file. Please try again.', 'error');
     }
-  }, [format]);
+  }, [format, showToast]);
 
   // ── Submit ─────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
-    if (!result || result.cards.length === 0) return;
+    if (!result || result.topics.length === 0) return;
     setSubmitting(true);
-    setProgress(null);
-    setBatchErrors([]);
-    progressAnim.setValue(0);
 
     try {
-      await onSubmit(result.cards, (currentBatch, totalBatches, insertedSoFar) => {
-        setProgress({ currentBatch, totalBatches, insertedSoFar });
-        // Animate progress bar
-        const pct = currentBatch / totalBatches;
-        Animated.timing(progressAnim, {
-          toValue: pct,
-          duration: 200,
-          useNativeDriver: false,
-        }).start();
-      });
+      await onSubmit(result.topics);
       setSubmitted(true);
     } catch (err: unknown) {
       showToast(
-        err instanceof Error ? err.message : 'Failed to upload cards. Please try again.',
+        err instanceof Error ? err.message : 'Failed to import topics. Please try again.',
         'error',
       );
     } finally {
       setSubmitting(false);
     }
-  }, [result, onSubmit, progressAnim]);
-
-  const progressPct = progress ? Math.round((progress.currentBatch / progress.totalBatches) * 100) : 0;
+  }, [result, onSubmit, showToast]);
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
@@ -159,7 +126,7 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
           flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
           padding: spacing.xl, paddingTop: Math.max(spacing.xl, insets.top + spacing.md), borderBottomWidth: 1, borderBottomColor: theme.border,
         }}>
-          <Typography variant="h4">Bulk Import Cards</Typography>
+          <Typography variant="h4">Bulk Import Topics</Typography>
           <TouchableOpacity onPress={handleClose}>
             <Ionicons name="close" size={24} color={theme.text} />
           </TouchableOpacity>
@@ -215,8 +182,8 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
               </Typography>
               <Typography variant="caption" color={theme.textTertiary}>
                 {format === 'csv'
-                  ? 'Required: question, optionA, optionB, optionC, optionD, correctAnswer\nOptional: explanation, source (original|pyq|ai_generated), sourceYear, sourcePaper, tags'
-                  : '[{ "question": "...", "options": [{"id": "A", "text": "..."}], "correctAnswerId": "A", "explanation": "...",\n  "source": "pyq", "sourceYear": 2022, "sourcePaper": "Paper 1", "tags": ["kinematics"] }]'}
+                  ? 'Required: displayName\nOptional: slug, order\n\nIf slug is omitted, it will be auto-generated from the display name.\nExample:\ndisplayName,slug,order\nKinematics,kinematics,0\nLaws of Motion,,1'
+                  : '[{ "displayName": "Kinematics", "slug": "kinematics", "order": 0 },\n { "displayName": "Laws of Motion" }]\n\nslug and order are optional. Slugs are auto-generated if omitted.'}
               </Typography>
             </View>
           </Card>
@@ -250,7 +217,7 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
             </Typography>
             {!fileName && (
               <Typography variant="caption" color={theme.textTertiary} align="center">
-                Max 5 MB · {format.toUpperCase()} format
+                Max 2 MB · {format.toUpperCase()} format
               </Typography>
             )}
           </TouchableOpacity>
@@ -266,8 +233,8 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
                   flex: 1, padding: spacing.md, borderRadius: radius.lg,
                   backgroundColor: theme.success + '18', alignItems: 'center', gap: spacing.xs,
                 }}>
-                  <Typography variant="h3" color={theme.success}>{result.cards.length}</Typography>
-                  <Typography variant="caption" color={theme.textTertiary}>Valid Cards</Typography>
+                  <Typography variant="h3" color={theme.success}>{result.topics.length}</Typography>
+                  <Typography variant="caption" color={theme.textTertiary}>Valid Topics</Typography>
                 </View>
                 {result.errors.length > 0 && (
                   <View style={{
@@ -299,97 +266,40 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
                 </Card>
               )}
 
-              {/* Card preview */}
-              {result.cards.length > 0 && (
+              {/* Topic preview */}
+              {result.topics.length > 0 && (
                 <View style={{ gap: spacing.sm }}>
                   <Typography variant="overline" color={theme.textTertiary}>
-                    Preview (first 5)
+                    Preview (first 10)
                   </Typography>
-                  {result.cards.slice(0, 5).map((card, i) => (
-                    <Card key={i}>
-                      <View style={{ gap: spacing.xs }}>
-                        <Typography variant="label" numberOfLines={2}>
-                          {i + 1}. {card.question}
-                        </Typography>
-                        {card.options.map((opt) => (
-                          <View key={opt.id} style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
-                            <Ionicons
-                              name={opt.id === card.correctAnswerId ? 'checkmark-circle' : 'ellipse-outline'}
-                              size={14}
-                              color={opt.id === card.correctAnswerId ? theme.success : theme.textTertiary}
-                            />
-                            <Typography
-                              variant="caption"
-                              color={opt.id === card.correctAnswerId ? theme.success : theme.textSecondary}
-                            >
-                              {opt.text}
-                            </Typography>
-                          </View>
-                        ))}
-                        {/* PYQ metadata badge */}
-                        {(card.source || card.tags?.length) ? (
-                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs }}>
-                            {card.source && card.source !== 'original' && (
-                              <View style={{
-                                backgroundColor: card.source === 'pyq' ? '#F59E0B18' : '#6366F118',
-                                borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
-                              }}>
-                                <Typography variant="caption" color={card.source === 'pyq' ? '#F59E0B' : '#6366F1'}>
-                                  {card.source === 'pyq' ? `PYQ${card.sourceYear ? ` ${card.sourceYear}` : ''}${card.sourcePaper ? ` · ${card.sourcePaper}` : ''}` : 'Textbook'}
-                                </Typography>
-                              </View>
-                            )}
-                            {card.tags?.map((tag) => (
-                              <View key={tag} style={{
-                                backgroundColor: '#10B98118',
-                                borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
-                              }}>
-                                <Typography variant="caption" color="#10B981">{tag}</Typography>
-                              </View>
-                            ))}
-                          </View>
-                        ) : null}
+                  {result.topics.slice(0, 10).map((topic, i) => (
+                    <Card key={topic.slug}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                        <View style={{
+                          width: 28, height: 28, borderRadius: radius.full,
+                          backgroundColor: theme.primary + '22',
+                          alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <Typography variant="caption" color={theme.primary} style={{ fontWeight: '700' }}>
+                            {i + 1}
+                          </Typography>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Typography variant="label" numberOfLines={1}>
+                            {topic.displayName}
+                          </Typography>
+                          <Typography variant="caption" color={theme.textTertiary}>
+                            {topic.slug}{topic.order !== undefined ? ` · order: ${topic.order}` : ''}
+                          </Typography>
+                        </View>
                       </View>
                     </Card>
                   ))}
-                  {result.cards.length > 5 && (
+                  {result.topics.length > 10 && (
                     <Typography variant="caption" color={theme.textTertiary} align="center">
-                      … and {result.cards.length - 5} more cards
+                      … and {result.topics.length - 10} more topics
                     </Typography>
                   )}
-                </View>
-              )}
-
-              {/* ── Progress Bar (Component D) ── */}
-              {submitting && progress && (
-                <View style={{ gap: spacing.sm }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="label" color={theme.primary}>
-                      Uploading…
-                    </Typography>
-                    <Typography variant="caption" color={theme.textTertiary}>
-                      Batch {progress.currentBatch}/{progress.totalBatches} · {progressPct}%
-                    </Typography>
-                  </View>
-                  <View style={{
-                    height: 8,
-                    borderRadius: radius.full,
-                    backgroundColor: theme.border,
-                    overflow: 'hidden',
-                  }}>
-                    <Animated.View style={{
-                      height: '100%',
-                      borderRadius: radius.full,
-                      backgroundColor: theme.primary,
-                      width: progressAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: ['0%', '100%'],
-                      }),
-                    }} />
-                  </View>
-                  <Typography variant="caption" color={theme.textSecondary} align="center">
-                    {progress.insertedSoFar} cards inserted so far
-                  </Typography>
                 </View>
               )}
 
@@ -401,7 +311,7 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
                 }}>
                   <Ionicons name="checkmark-circle" size={36} color={theme.success} />
                   <Typography variant="label" color={theme.success}>
-                    {progress?.insertedSoFar ?? result.cards.length} cards imported successfully!
+                    {result.topics.length} topics imported successfully!
                   </Typography>
                   <Button variant="secondary" size="md" onPress={handleClose}>
                     Done
@@ -412,11 +322,11 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
                   fullWidth
                   size="lg"
                   loading={submitting}
-                  disabled={result.cards.length === 0}
+                  disabled={result.topics.length === 0}
                   onPress={handleSubmit}
                   icon={<Ionicons name="cloud-upload-outline" size={18} color="#FFFFFF" />}
                 >
-                  {`Import ${result.cards.length} Cards`}
+                  {`Import ${result.topics.length} Topics`}
                 </Button>
               )}
             </View>

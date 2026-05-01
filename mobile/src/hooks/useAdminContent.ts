@@ -411,6 +411,34 @@ export function useDeleteTopic() {
   });
 }
 
+/**
+ * Bulk import topics for a subject (exam-scoped).
+ */
+export function useAdminBulkImportTopics() {
+  const qc = useQueryClient();
+  return useMutation<
+    { inserted: number; skipped: number; requested: number },
+    Error,
+    {
+      subjectId: string;
+      examId: string;
+      topics: { slug: string; displayName: string; order?: number }[];
+    }
+  >({
+    mutationFn: async ({ subjectId, examId, topics }) => {
+      const { data } = await adminApi.post(`/subjects/${subjectId}/topics/bulk`, {
+        examId,
+        topics,
+      });
+      return data.data as { inserted: number; skipped: number; requested: number };
+    },
+    onSuccess: (_data, { subjectId }) => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'subject-topics', subjectId] });
+    },
+    onError: (err) => showMutationError('Bulk Import Topics', err),
+  });
+}
+
 
 /**
  * Fetch topics for an exam+subject pair (exam-scoped, new hierarchy endpoint).

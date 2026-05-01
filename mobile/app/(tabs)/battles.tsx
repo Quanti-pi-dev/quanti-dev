@@ -257,7 +257,7 @@ export default function BattlesScreen() {
                           }}
                         >
                           <Typography variant="label" color="#F59E0B" style={{ fontSize: 18 }}>
-                            {challenge.creatorName.charAt(0).toUpperCase()}
+                            {challenge.creatorName?.charAt(0)?.toUpperCase() ?? '?'}
                           </Typography>
                         </View>
                         <View style={{ flex: 1 }}>
@@ -463,7 +463,7 @@ export default function BattlesScreen() {
                       {/* Info */}
                       <View style={{ flex: 1, gap: 2 }}>
                         <Typography variant="label" numberOfLines={1}>
-                          vs {c.opponentName}
+                          vs {user?.id === c.creatorId ? c.opponentName : c.creatorName}
                         </Typography>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
                           <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 11 }}>

@@ -90,7 +90,7 @@ export default function GamifyScreen() {
           return (
             <TouchableOpacity
               key={type}
-              onPress={() => !locked && setLeaderboardType(type)}
+              onPress={() => setLeaderboardType(type)}
               style={{
                 paddingVertical: spacing.sm,
                 paddingHorizontal: spacing.base,
@@ -158,7 +158,14 @@ export default function GamifyScreen() {
       })()}
 
       {/* ── List ── */}
-      {leaderboardLoading ? (
+      {leaderboardType === 'weekly' && planTier < 1 ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xl }}>
+          <Ionicons name="lock-closed-outline" size={48} color={theme.textTertiary} />
+          <Typography variant="body" color={theme.textTertiary} align="center" style={{ marginTop: spacing.md }}>
+            Upgrade your plan to see the weekly leaderboard and compete!
+          </Typography>
+        </View>
+      ) : leaderboardLoading ? (
         <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.md, gap: spacing.sm }}>
           {[0, 1, 2, 3, 4].map((i) => (
             <Skeleton key={i} height={64} borderRadius={radius.lg} />

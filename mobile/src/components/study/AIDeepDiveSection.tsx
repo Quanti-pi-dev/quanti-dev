@@ -63,9 +63,12 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
     }
   }, [answer]);
 
-  // Fetch live explanation from Gemini
+  // Fetch live explanation from Gemini (premium) or reveal seed explanation (free).
   const fetchExplanation = useCallback(async () => {
     setShowDeepDive(true);
+
+    // Free users: just reveal the seed explanation — no API call needed.
+    if (!hasAIExplanations) return;
 
     // Serve from session cache if available
     const cached = cacheRef.current.get(cardId);
@@ -74,15 +77,16 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
       return;
     }
 
-    if (hasAIExplanations && cardId) {
+    if (cardId) {
       try {
         const text = await explainCard.mutateAsync(cardId);
-        if (text) {
+        // Guard against empty string — a blank response is not a valid AI explanation.
+        if (text && text.trim().length > 0) {
           cacheRef.current.set(cardId, text);
           setLiveExplanation(text);
         }
       } catch {
-        // Fall through to seed explanation
+        // Fall through to seed explanation on network / quota errors
       }
     }
   }, [cardId, hasAIExplanations, explainCard]);

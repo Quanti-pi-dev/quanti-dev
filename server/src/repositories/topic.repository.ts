@@ -121,6 +121,68 @@ class TopicRepository {
     return result.deletedCount > 0;
   }
 
+  /**
+   * Bulk-create topics for an exam+subject pair.
+   * Skips any topics whose slug already exists in that scope.
+   * Returns the number of topics actually inserted and the created Topic objects.
+   */
+  async bulkCreate(
+    examId: string,
+    subjectId: string,
+    items: { slug: string; displayName: string; order?: number }[],
+  ): Promise<{ inserted: number; skipped: number; topics: Topic[] }> {
+    if (items.length === 0) return { inserted: 0, skipped: 0, topics: [] };
+
+    const examOid = new ObjectId(examId);
+    const subjectOid = new ObjectId(subjectId);
+
+    // Find existing slugs in this scope to skip duplicates
+    const existingDocs = await this.col
+      .find({ examId: examOid, subjectId: subjectOid }, { projection: { slug: 1 } })
+      .toArray();
+    const existingSlugs = new Set(existingDocs.map((d) => d['slug'] as string));
+
+    // Also deduplicate within the incoming batch (first occurrence wins)
+    const seenInBatch = new Set<string>();
+    const toInsert: typeof items = [];
+    for (const item of items) {
+      if (existingSlugs.has(item.slug) || seenInBatch.has(item.slug)) continue;
+      seenInBatch.add(item.slug);
+      toInsert.push(item);
+    }
+
+    if (toInsert.length === 0) {
+      return { inserted: 0, skipped: items.length, topics: [] };
+    }
+
+    const now = new Date();
+    const baseOrder = await this.col.countDocuments({ examId: examOid, subjectId: subjectOid });
+
+    const docs = toInsert.map((item, i) => ({
+      examId: examOid,
+      subjectId: subjectOid,
+      slug: item.slug,
+      displayName: item.displayName,
+      order: item.order ?? baseOrder + i,
+      createdAt: now,
+      updatedAt: now,
+    }));
+
+    const result = await this.col.insertMany(docs);
+    const insertedIds = Object.values(result.insertedIds);
+
+    const topics: Topic[] = docs.map((doc, i) => this.toTopic({
+      _id: insertedIds[i],
+      ...doc,
+    }));
+
+    return {
+      inserted: toInsert.length,
+      skipped: items.length - toInsert.length,
+      topics,
+    };
+  }
+
   // ─── Private Helpers ──────────────────────────────────────
 
   private toTopic(doc: Document): Topic {

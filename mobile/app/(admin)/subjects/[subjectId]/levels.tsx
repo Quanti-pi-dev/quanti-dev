@@ -24,9 +24,12 @@ import {
   useCreateTopic,
   useUpdateTopic,
   useDeleteTopic,
+  useAdminBulkImportTopics,
   type TopicEntry,
 } from '../../../../src/hooks/useAdminContent';
 import { SUBJECT_LEVELS } from '@kd/shared';
+import { BulkImportTopicsModal } from '../../../../src/components/admin/BulkImportTopicsModal';
+import type { ParsedTopic } from '../../../../src/utils/topicParser';
 import type { SubjectLevel } from '@kd/shared';
 
 // ─── Level meta ───────────────────────────────────────────────
@@ -315,10 +318,12 @@ export default function SubjectLevelsScreen() {
   const createTopic = useCreateTopic();
   const updateTopic = useUpdateTopic();
   const deleteTopic = useDeleteTopic();
+  const bulkImportTopics = useAdminBulkImportTopics();
 
   // Modal state
   const [formVisible, setFormVisible] = useState(false);
   const [editingTopic, setEditingTopic] = useState<TopicEntry | null>(null);
+  const [showBulkImport, setShowBulkImport] = useState(false);
 
   function openCreate() {
     setEditingTopic(null);
@@ -379,6 +384,24 @@ export default function SubjectLevelsScreen() {
     });
   }
 
+  // ── Bulk import handler ──────────────────────────────────────
+  async function handleBulkImportTopics(topics: ParsedTopic[]) {
+    if (!examId) {
+      showToast('Exam context is missing. Navigate from an exam to use bulk import.', 'error');
+      return;
+    }
+    const result = await bulkImportTopics.mutateAsync({
+      subjectId,
+      examId,
+      topics,
+    });
+    if (result.skipped > 0) {
+      showToast(`${result.inserted} topics imported, ${result.skipped} skipped (duplicates)`);
+    } else {
+      showToast(`${result.inserted} topics imported successfully`);
+    }
+  }
+
   return (
     <ScreenWrapper>
       <Header showBack title={`${subjectName} — Topics`} />
@@ -392,6 +415,24 @@ export default function SubjectLevelsScreen() {
           <Typography variant="bodySmall" color={theme.textTertiary} style={{ flex: 1 }}>
             Manage topics for this subject. Tap a topic to expand its 6 level decks.
           </Typography>
+          <TouchableOpacity
+            onPress={() => setShowBulkImport(true)}
+            activeOpacity={0.8}
+            style={{
+              flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
+              backgroundColor: theme.card,
+              borderWidth: 1.5,
+              borderColor: theme.primary,
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.sm,
+              borderRadius: radius.xl,
+            }}
+          >
+            <Ionicons name="cloud-upload-outline" size={16} color={theme.primary} />
+            <Typography variant="caption" color={theme.primary} style={{ fontWeight: '600' }}>
+              Bulk
+            </Typography>
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={openCreate}
             activeOpacity={0.8}
@@ -466,6 +507,13 @@ export default function SubjectLevelsScreen() {
         onSubmit={handleFormSubmit}
         editing={editingTopic}
         submitting={createTopic.isPending || updateTopic.isPending}
+      />
+
+      {/* Bulk Import modal */}
+      <BulkImportTopicsModal
+        visible={showBulkImport}
+        onClose={() => setShowBulkImport(false)}
+        onSubmit={handleBulkImportTopics}
       />
     </ScreenWrapper>
   );

@@ -395,7 +395,7 @@ export default function HomeScreen() {
             <>
               {/* ━━━ "Up Next for You" hero card ━━━ */}
               {upNextSubject && (() => {
-                const upNextAccentIdx = personalizedSubjects?.findIndex(s => s.id === upNextSubject.id) ?? 0;
+                const upNextAccentIdx = Math.max(0, personalizedSubjects?.findIndex(s => s.id === upNextSubject.id) ?? 0);
                 const upNextAccent = SUBJECT_ACCENT_PALETTE[upNextAccentIdx % SUBJECT_ACCENT_PALETTE.length]!;
                 const upNextStage = Math.min(
                   masteryMap.get(upNextSubject.id)?.levelIndex ?? 0,
@@ -586,7 +586,7 @@ export default function HomeScreen() {
                   )}
                 </View>
                 <Button
-                  onPress={() => router.push('/(tabs)/study')}
+                  onPress={() => router.push(isOnboarded ? '/(tabs)/study' : '/explore-exams')}
                   variant="primary"
                   size="sm"
                 >

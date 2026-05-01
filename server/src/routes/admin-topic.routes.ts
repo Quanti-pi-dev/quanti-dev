@@ -88,4 +88,38 @@ export async function adminTopicRoutes(fastify: FastifyInstance): Promise<void> 
     await topicRepository.delete(topicId);
     return reply.send({ success: true, data: { id: topicId }, message: 'Topic deleted', timestamp: new Date().toISOString() });
   });
+
+  // POST /admin/subjects/:id/topics/bulk — bulk import topics
+  fastify.post('/subjects/:id/topics/bulk', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id: subjectId } = request.params as { id: string };
+    const subject = await subjectRepository.findById(subjectId);
+    if (!subject) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Subject not found' }, timestamp: new Date().toISOString() });
+    }
+
+    const bulkTopicSchema = z.object({
+      examId: z.string().min(1),
+      topics: z.array(z.object({
+        slug: z.string().min(1).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be kebab-case'),
+        displayName: z.string().min(1).max(200),
+        order: z.number().int().nonnegative().optional(),
+      })).min(1).max(500),
+    });
+
+    const input = bulkTopicSchema.parse(request.body);
+
+    const result = await topicRepository.bulkCreate(input.examId, subjectId, input.topics);
+
+    return reply.status(201).send({
+      success: true,
+      data: {
+        inserted: result.inserted,
+        skipped: result.skipped,
+        requested: input.topics.length,
+        topics: result.topics,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  });
 }
+

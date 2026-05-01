@@ -5,7 +5,7 @@
 // Supports optional PYQ metadata fields (source, sourceYear, sourcePaper, tags)
 // matching the FlashcardSource schema in @kd/shared.
 
-export type FlashcardSource = 'original' | 'pyq' | 'textbook';
+export type FlashcardSource = 'original' | 'pyq' | 'ai_generated';
 
 export interface ParsedFlashcard {
   question: string;
@@ -62,7 +62,7 @@ function splitCSVRow(line: string): string[] {
   return result;
 }
 
-const VALID_SOURCES: FlashcardSource[] = ['original', 'pyq', 'textbook'];
+const VALID_SOURCES: FlashcardSource[] = ['original', 'pyq', 'ai_generated'];
 
 export function parseCSV(text: string): ParseResult {
   const errors: string[] = [];

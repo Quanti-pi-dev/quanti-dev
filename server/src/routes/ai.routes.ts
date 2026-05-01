@@ -108,11 +108,12 @@ export async function aiRoutes(fastify: FastifyInstance): Promise<void> {
         data: { explanation: explanation.trim() },
       });
     } catch (err) {
-      // Fall back to seed explanation or generic message
-      const fallback = seedExplanation ?? 'The answer follows from the core concepts of this topic. Review the relevant theory and try again.';
-      return reply.send({
-        success: true,
-        data: { explanation: fallback, fromCache: true },
+      // Return a proper error so the client can distinguish a real AI response
+      // from a Gemini failure and fall back to the seed explanation on its own.
+      fastify.log.warn({ err, cardId }, 'Gemini explain failed — returning 502 to client');
+      return reply.status(502).send({
+        success: false,
+        message: 'AI explanation temporarily unavailable. Please try again.',
       });
     }
   });
