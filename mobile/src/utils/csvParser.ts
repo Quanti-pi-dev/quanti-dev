@@ -1,6 +1,6 @@
 // ─── CSV / JSON → Flashcard Parser ──────────────────────────
 // Converts admin-uploaded CSV or JSON text into the flashcard
-// payload expected by POST /admin/subjects/:id/levels/:level/cards/bulk.
+// payload expected by POST /admin/decks/:deckId/flashcards/bulk.
 //
 // Supports optional PYQ metadata fields (source, sourceYear, sourcePaper, tags)
 // matching the FlashcardSource schema in @kd/shared.

@@ -4,6 +4,7 @@
 
 import { useState } from 'react';
 import { View, ScrollView, ActivityIndicator, Modal, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useForm, Controller } from 'react-hook-form';
@@ -51,6 +52,7 @@ function hasValidImage(url: string): boolean {
 export default function ShopEditorScreen() {
   const { theme } = useTheme();
   const { showAlert, showToast } = useGlobalUI();
+  const insets = useSafeAreaInsets();
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<ShopItem | null>(null);
@@ -248,7 +250,7 @@ export default function ShopEditorScreen() {
         <View style={{ flex: 1, backgroundColor: theme.background }}>
           <View style={{
             flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-            padding: spacing.xl, borderBottomWidth: 1, borderBottomColor: theme.border,
+            padding: spacing.xl, paddingTop: Math.max(spacing.xl, insets.top + spacing.md), borderBottomWidth: 1, borderBottomColor: theme.border,
           }}>
             <Typography variant="h4">{editingItem ? 'Edit Item' : 'New Shop Item'}</Typography>
             <TouchableOpacity onPress={() => setModalVisible(false)}>

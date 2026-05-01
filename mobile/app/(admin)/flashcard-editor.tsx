@@ -46,7 +46,8 @@ const BLANK_FORM: CardForm = {
 };
 
 export default function FlashcardEditorScreen() {
-  const { subjectId, level, topicSlug, title } = useLocalSearchParams<{
+  const { examId, subjectId, level, topicSlug, title } = useLocalSearchParams<{
+    examId: string;
     subjectId: string;
     level: string;
     topicSlug: string;
@@ -63,7 +64,7 @@ export default function FlashcardEditorScreen() {
   const [showBulkImport, setShowBulkImport] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: levelData, isLoading } = useAdminLevelCards(subjectId, level, topicSlug);
+  const { data: levelData, isLoading } = useAdminLevelCards(examId, subjectId, level, topicSlug);
   const addCard = useAddLevelCard();
   const updateCard = useUpdateLevelCard();
   const deleteCard = useDeleteLevelCard();
@@ -108,7 +109,11 @@ export default function FlashcardEditorScreen() {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive',
-        onPress: () => deleteCard.mutate({ subjectId, level, topicSlug, cardId: card.id }),
+        onPress: () => deleteCard.mutate({
+          examId, subjectId, level, topicSlug,
+          deckId: levelData?.deckId ?? '',
+          cardId: card.id,
+        }),
       },
     ],
     });
@@ -139,9 +144,9 @@ export default function FlashcardEditorScreen() {
 
     try {
       if (editingCard) {
-        await updateCard.mutateAsync({ subjectId, level, topicSlug, cardId: editingCard.id, updates: payload });
+        await updateCard.mutateAsync({ examId, subjectId, level, topicSlug, cardId: editingCard.id, updates: payload });
       } else {
-        await addCard.mutateAsync({ subjectId, level, topicSlug, card: payload });
+        await addCard.mutateAsync({ examId, subjectId, level, topicSlug, card: payload });
       }
       setShowForm(false);
       setForm(BLANK_FORM);
@@ -150,11 +155,25 @@ export default function FlashcardEditorScreen() {
     }
   }
 
-  // ── Bulk import handler (W2: uses bulk endpoint instead of N requests) ──
   async function handleBulkSubmit(
     cards: ParsedFlashcard[],
     onProgress?: (current: number, total: number, inserted: number) => void,
   ) {
+    // First resolve the deckId for this exam/subject/topic/level
+    let deckId: string | null = levelData?.deckId ?? null;
+    if (!deckId) {
+      try {
+        const { data: deckRes } = await adminApi.get(
+          `/exams/${examId}/subjects/${subjectId}/topics/${topicSlug}/levels/${level}/deck`,
+        );
+        deckId = deckRes?.data?.deckId ?? null;
+      } catch { /* handled below */ }
+    }
+    if (!deckId) {
+      showToast('No deck found for this topic/level', 'error');
+      return;
+    }
+
     const batchSize = 100;
     const totalBatches = Math.ceil(cards.length / batchSize);
     let totalCreated = 0;
@@ -165,9 +184,8 @@ export default function FlashcardEditorScreen() {
       const batch = cards.slice(i, i + batchSize);
       try {
         const { data } = await adminApi.post(
-          `/subjects/${subjectId}/levels/${level}/cards/bulk`,
+          `/decks/${deckId}/flashcards/bulk`,
           { cards: batch },
-          { params: { topicSlug } },
         );
         totalCreated += (data?.data?.created ?? batch.length);
       } catch (err: unknown) {
@@ -176,7 +194,7 @@ export default function FlashcardEditorScreen() {
       onProgress?.(batchIndex, totalBatches, totalCreated);
     }
 
-    void queryClient.invalidateQueries({ queryKey: ['admin', 'level-cards', subjectId, level, topicSlug] });
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'level-cards', examId, subjectId, level, topicSlug] });
 
     if (errors.length > 0) {
       showToast(`${totalCreated} cards imported, ${errors.length} batch(es) failed`, 'error');

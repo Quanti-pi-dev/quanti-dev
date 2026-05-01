@@ -40,10 +40,12 @@ import type { SubjectStrength } from '@kd/shared';
 const GHOST_COUNT = 5;
 const RINGS = 4;
 const SIZE = 300;
-const CX = SIZE / 2;
-const CY = SIZE / 2;
+const SVG_W = 360;           // wider canvas so side labels don't clip
+const SVG_H = SIZE;
+const CX = SVG_W / 2;
+const CY = SVG_H / 2;
 const R_MAX = 90;
-const LABEL_R = R_MAX + 26;
+const LABEL_R = R_MAX + 34;  // push labels further from the polygon edge
 
 const VERTEX_COLORS = [
   '#67E8F9', '#6EE7B7', '#FCD34D', '#F9A8D4',
@@ -300,7 +302,7 @@ export function SubjectRadarChart({ data }: SubjectRadarChartProps) {
 
           {/* SVG Radar */}
           <Animated.View style={[{ alignItems: 'center' }, svgAnimStyle]}>
-            <Svg width={SIZE} height={SIZE}>
+            <Svg width={SVG_W} height={SVG_H}>
               <Defs>
                 <LinearGradient id="radarFill" x1="0" y1="0" x2="0" y2="1">
                   <Stop offset="0%" stopColor="#67E8F9" stopOpacity={fillOpacity} />
@@ -401,13 +403,13 @@ export function SubjectRadarChart({ data }: SubjectRadarChartProps) {
                   <G key={`lbl-${i}`} opacity={dimmed ? 0.35 : 1}>
                     <SvgText
                       x={lp.x} y={lp.y - 5}
-                      fontSize={10}
+                      fontSize={11}
                       fill={isSelected ? theme.text : theme.textSecondary}
-                      fontWeight={isSelected ? '700' : '400'}
+                      fontWeight={isSelected ? '700' : '500'}
                       textAnchor={textAnchor}
                       fontFamily="System"
                     >
-                      {lp.name.length > 12 ? lp.name.slice(0, 11) + '…' : lp.name}
+                      {lp.name}
                     </SvgText>
                     <SvgText
                       x={lp.x} y={lp.y + 9}

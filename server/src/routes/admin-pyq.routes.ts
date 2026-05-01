@@ -18,8 +18,6 @@ import { z } from 'zod';
 import { requireRole } from '../middleware/rbac.js';
 import { flashcardRepository } from '../repositories/flashcard.repository.js';
 import { deckRepository } from '../repositories/deck.repository.js';
-import { topicRepository } from '../repositories/topic.repository.js';
-import { subjectRepository } from '../repositories/subject.repository.js';
 import { getMongoDb } from '../lib/database.js';
 import { ObjectId } from 'mongodb';
 import { SUBJECT_LEVELS } from '@kd/shared';
@@ -43,7 +41,8 @@ const pyqCardSchema = z.object({
 });
 
 const pyqBulkSchema = z.object({
-  // Target: which deck to insert into (resolved via subject+level+topic)
+  // Target: which deck to insert into (resolved via exam+subject+topic+level)
+  examId: z.string().min(1),
   subjectId: z.string().min(1),
   topicSlug: z.string().min(1),
   level: z.enum(SUBJECT_LEVELS as [string, ...string[]]),
@@ -100,12 +99,12 @@ export async function adminPYQRoutes(fastify: FastifyInstance): Promise<void> {
       }
       filter['deckId'] = { $in: deckIds };
     } else if (examId) {
-      // Filter by exam — find all subjects for this exam, then all decks
-      const examDocs = await db.collection('subjects').find(
-        { examIds: new ObjectId(examId) },
-        { projection: { _id: 1 } },
+      // Resolve subjects via the exam_subjects join table (subjects.examIds doesn't exist)
+      const mappings = await db.collection('exam_subjects').find(
+        { examId: new ObjectId(examId) },
+        { projection: { subjectId: 1 } },
       ).toArray();
-      const subjectIds = examDocs.map((s) => s._id as ObjectId);
+      const subjectIds = mappings.map((m) => m['subjectId'] as ObjectId);
       const deckDocs = await db.collection('decks').find(
         { subjectId: { $in: subjectIds } },
         { projection: { _id: 1 } },
@@ -182,12 +181,13 @@ export async function adminPYQRoutes(fastify: FastifyInstance): Promise<void> {
       ).toArray();
       filter['deckId'] = { $in: deckDocs.map((d) => d._id) };
     } else if (examId) {
-      const subjectDocs = await db.collection('subjects').find(
-        { examIds: new ObjectId(examId) },
-        { projection: { _id: 1 } },
+      // Resolve subjects via the exam_subjects join table
+      const mappings = await db.collection('exam_subjects').find(
+        { examId: new ObjectId(examId) },
+        { projection: { subjectId: 1 } },
       ).toArray();
       const deckDocs = await db.collection('decks').find(
-        { subjectId: { $in: subjectDocs.map((s) => s._id) } },
+        { subjectId: { $in: mappings.map((m) => m['subjectId'] as ObjectId) } },
         { projection: { _id: 1 } },
       ).toArray();
       filter['deckId'] = { $in: deckDocs.map((d) => d._id) };
@@ -224,7 +224,7 @@ export async function adminPYQRoutes(fastify: FastifyInstance): Promise<void> {
   // ── POST /pyq/bulk — PYQ bulk import with request-level metadata ──
   fastify.post('/pyq/bulk', async (request: FastifyRequest, reply: FastifyReply) => {
     const input = pyqBulkSchema.parse(request.body);
-    const { subjectId, topicSlug, level, sourceYear, sourcePaper, examLabel, cards } = input;
+    const { examId, subjectId, topicSlug, level, sourceYear, sourcePaper, examLabel, cards } = input;
 
     // Validate level
     if (!SUBJECT_LEVELS.includes(level as typeof SUBJECT_LEVELS[number])) {
@@ -234,33 +234,18 @@ export async function adminPYQRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
 
-    // Find or auto-create the topic-scoped deck
-    let deck = await deckRepository.findBySubjectAndLevel(
-      subjectId, level as typeof SUBJECT_LEVELS[number], topicSlug,
-    );
-
-    if (!deck) {
-      const topics = await topicRepository.findBySubjectId(subjectId);
-      const topic = topics.find((t) => t.slug === topicSlug);
-      const subject = await subjectRepository.findById(subjectId);
-      const displayName = topic?.displayName ?? topicSlug;
-      const subjectName = subject?.name ?? '';
-
-      const deckId = await deckRepository.create({
-        title: `${displayName} — ${level}`,
-        description: `${level}-level ${examLabel ? `${examLabel} ` : ''}PYQ questions on ${displayName} (${subjectName})`,
-        category: 'subject',
-        type: 'mastery',
+    // Find or auto-create the exam-scoped deck (uses compound index)
+    let deck: Awaited<ReturnType<typeof deckRepository.findById>>;
+    try {
+      deck = await deckRepository.findOrCreateForHierarchy(
+        examId,
         subjectId,
         topicSlug,
-        level: level as typeof SUBJECT_LEVELS[number],
-        tags: [topicSlug, subjectName, level, 'pyq'],
-        createdBy: request.user!.id,
-      });
-      deck = await deckRepository.findById(deckId);
-    }
-
-    if (!deck) {
+        level as typeof SUBJECT_LEVELS[number],
+        request.user!.id,
+        { subjectName: examLabel ?? topicSlug },
+      );
+    } catch (err) {
       return reply.status(500).send({
         success: false,
         error: { code: 'INTERNAL_ERROR', message: 'Could not create or find deck' },

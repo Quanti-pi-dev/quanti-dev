@@ -178,6 +178,32 @@ class DeckRepository {
   }
 
   /**
+   * Find the best deck for a given exam+subject+level combination without
+   * requiring a topicSlug. Picks the published deck with the most cards
+   * (highest cardCount) so challenges always get the richest content pool.
+   *
+   * Used by: challenge.service.ts — challenges are scoped to subject+level,
+   * not to a specific topic.
+   */
+  async findFirstByExamSubjectLevel(
+    examId: string,
+    subjectId: string,
+    level: SubjectLevel,
+  ): Promise<Deck | null> {
+    const doc = await this.col.findOne(
+      {
+        examId: new ObjectId(examId),
+        subjectId: new ObjectId(subjectId),
+        level,
+        isPublished: true,
+      },
+      { sort: { cardCount: -1 } }, // prefer the deck with the most cards
+    );
+    if (!doc) return null;
+    return this.toDeck(doc);
+  }
+
+  /**
    * Find or auto-create a mastery deck for the given hierarchy.
    * Used by admin bulk-import flows. Extracts duplicated logic from admin routes.
    */

@@ -9,7 +9,7 @@
 
 import { challengeRepository } from '../repositories/challenge.repository.js';
 import { gamificationRepository } from '../repositories/gamification.repository.js';
-import { deckRepository } from '../repositories/content.repository.js';
+import { deckRepository } from '../repositories/deck.repository.js';
 import { getRedisClient, getPostgresPool } from '../lib/database.js';
 import { notificationService } from './notification.service.js';
 import { publishChallengeScore, publishChallengeLifecycle } from './realtime.service.js';
@@ -79,8 +79,12 @@ class ChallengeService {
       throw makeError('A challenge between you and this friend is already pending', 409);
     }
 
-    // 4. Resolve deckId
-    const deck = await deckRepository.findBySubjectAndLevel(input.subjectId, input.level as SubjectLevel);
+    // 4. Resolve deckId — find the richest published deck for this exam+subject+level
+    const deck = await deckRepository.findFirstByExamSubjectLevel(
+      input.examId,
+      input.subjectId,
+      input.level as SubjectLevel,
+    );
     if (!deck) {
       throw makeError('No deck available for this Exam/Subject/Level combination', 400);
     }

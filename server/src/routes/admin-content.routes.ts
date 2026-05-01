@@ -1,12 +1,10 @@
-// ─── Admin Content Routes ───────────────────────────────────
-// Deck + Flashcard CRUD, including legacy and hierarchy-based endpoints.
+// ─── Admin Content Routes ─────────────────────────────────────
+// Deck + Flashcard CRUD. All routes are exam-scoped.
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { deckRepository } from '../repositories/deck.repository.js';
 import { flashcardRepository } from '../repositories/flashcard.repository.js';
-import { topicRepository } from '../repositories/topic.repository.js';
-import { subjectRepository } from '../repositories/subject.repository.js';
 import { SUBJECT_LEVELS } from '@kd/shared';
 
 // ─── Schemas ────────────────────────────────────────────────
@@ -52,11 +50,7 @@ export async function adminContentRoutes(fastify: FastifyInstance): Promise<void
   fastify.post('/decks', async (request: FastifyRequest, reply: FastifyReply) => {
     const input = createDeckSchema.parse(request.body);
     const id = await deckRepository.create({ ...input, createdBy: request.user!.id });
-    return reply.status(201).send({
-      success: true,
-      data: { id },
-      timestamp: new Date().toISOString(),
-    });
+    return reply.status(201).send({ success: true, data: { id }, timestamp: new Date().toISOString() });
   });
 
   // PUT /admin/decks/:id — update a deck
@@ -96,22 +90,14 @@ export async function adminContentRoutes(fastify: FastifyInstance): Promise<void
     const { id: deckId } = request.params as { id: string };
     const input = createFlashcardSchema.parse(request.body);
     const cardId = await flashcardRepository.create(deckId, input);
-    return reply.status(201).send({
-      success: true,
-      data: { id: cardId, deckId },
-      timestamp: new Date().toISOString(),
-    });
+    return reply.status(201).send({ success: true, data: { id: cardId, deckId }, timestamp: new Date().toISOString() });
   });
 
-  // GET /admin/decks/:id/flashcards — list flashcards for a deck
+  // GET /admin/decks/:id/flashcards — list flashcards for a deck (admin view, no pagination)
   fastify.get('/decks/:id/flashcards', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id: deckId } = request.params as { id: string };
     const cards = await flashcardRepository.findByDeckIdAdmin(deckId);
-    return reply.send({
-      success: true,
-      data: cards,
-      timestamp: new Date().toISOString(),
-    });
+    return reply.send({ success: true, data: cards, timestamp: new Date().toISOString() });
   });
 
   // PUT /admin/flashcards/:cardId — update a flashcard
@@ -131,175 +117,57 @@ export async function adminContentRoutes(fastify: FastifyInstance): Promise<void
     return reply.send({ success: true, data: { id: cardId }, timestamp: new Date().toISOString() });
   });
 
-  // ═══════════════════════════════════════════════════════
-  // LEGACY: Topic-scoped card routes (backward compat)
-  // ═══════════════════════════════════════════════════════
-
-  // GET /admin/subjects/:id/levels/:level/cards?topicSlug=
-  fastify.get('/subjects/:id/levels/:level/cards', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id: subjectId, level } = request.params as { id: string; level: string };
-    const { topicSlug } = request.query as { topicSlug?: string };
-
-    if (!SUBJECT_LEVELS.includes(level as typeof SUBJECT_LEVELS[number])) {
-      return reply.status(400).send({
-        success: false,
-        error: { code: 'BAD_REQUEST', message: `Invalid level. Must be one of: ${SUBJECT_LEVELS.join(', ')}` },
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    const deck = await deckRepository.findBySubjectAndLevel(subjectId, level as typeof SUBJECT_LEVELS[number], topicSlug);
-    if (!deck) {
-      return reply.send({ success: true, data: { deckId: null, cardCount: 0, cards: [] }, timestamp: new Date().toISOString() });
-    }
-
-    const cards = await flashcardRepository.findByDeckIdAdmin(deck.id);
-    return reply.send({
-      success: true,
-      data: { deckId: deck.id, cardCount: deck.cardCount, cards },
-      timestamp: new Date().toISOString(),
-    });
-  });
-
-  // POST /admin/subjects/:id/levels/:level/cards — add card to a topic-scoped deck
-  fastify.post('/subjects/:id/levels/:level/cards', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id: subjectId, level } = request.params as { id: string; level: string };
-    const { topicSlug } = request.query as { topicSlug?: string };
-
-    if (!SUBJECT_LEVELS.includes(level as typeof SUBJECT_LEVELS[number])) {
-      return reply.status(400).send({
-        success: false,
-        error: { code: 'BAD_REQUEST', message: `Invalid level. Must be one of: ${SUBJECT_LEVELS.join(', ')}` },
-        timestamp: new Date().toISOString(),
-      });
-    }
-    if (!topicSlug) {
-      return reply.status(400).send({
-        success: false,
-        error: { code: 'MISSING_PARAM', message: 'topicSlug query parameter is required' },
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    const input = createFlashcardSchema.parse(request.body);
-
-    // Find the topic-scoped deck
-    let deck = await deckRepository.findBySubjectAndLevel(subjectId, level as typeof SUBJECT_LEVELS[number], topicSlug);
-
-    // Auto-create if it doesn't exist
-    if (!deck) {
-      const topic = (await topicRepository.findBySubjectId(subjectId)).find(t => t.slug === topicSlug);
-      const subject = await subjectRepository.findById(subjectId);
-      const displayName = topic?.displayName ?? topicSlug;
-      const subjectName = subject?.name ?? '';
-
-      const deckId = await deckRepository.create({
-        title: `${displayName} — ${level}`,
-        description: `${level}-level questions on ${displayName} (${subjectName})`,
-        category: 'subject',
-        type: 'mastery',
-        subjectId,
-        topicSlug,
-        level: level as typeof SUBJECT_LEVELS[number],
-        tags: [topicSlug, subjectName, level],
-        createdBy: request.user!.id,
-      });
-      deck = await deckRepository.findById(deckId);
-    }
-
-    if (!deck) {
-      return reply.status(500).send({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Could not create deck' }, timestamp: new Date().toISOString() });
-    }
-
-    const cardId = await flashcardRepository.create(deck.id, input);
-    return reply.status(201).send({
-      success: true,
-      data: { id: cardId, deckId: deck.id },
-      timestamp: new Date().toISOString(),
-    });
-  });
-
-  // PUT /admin/subjects/:id/levels/:level/cards/:cardId — update a card
-  fastify.put('/subjects/:id/levels/:level/cards/:cardId', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { cardId } = request.params as { id: string; level: string; cardId: string };
-    const input = createFlashcardSchema.partial().parse(request.body);
-    const ok = await flashcardRepository.update(cardId, input);
-    if (!ok) return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Card not found' }, timestamp: new Date().toISOString() });
-    return reply.send({ success: true, data: { id: cardId }, timestamp: new Date().toISOString() });
-  });
-
-  // DELETE /admin/subjects/:id/levels/:level/cards/:cardId?topicSlug=
-  fastify.delete('/subjects/:id/levels/:level/cards/:cardId', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id: subjectId, level, cardId } = request.params as { id: string; level: string; cardId: string };
-    const { topicSlug } = request.query as { topicSlug?: string };
-
-    if (!SUBJECT_LEVELS.includes(level as typeof SUBJECT_LEVELS[number])) {
-      return reply.status(400).send({ success: false, error: { code: 'BAD_REQUEST', message: 'Invalid level' }, timestamp: new Date().toISOString() });
-    }
-
-    const deck = await deckRepository.findBySubjectAndLevel(subjectId, level as typeof SUBJECT_LEVELS[number], topicSlug);
-    if (!deck) return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Deck not found for this topic/level' }, timestamp: new Date().toISOString() });
-
-    const ok = await flashcardRepository.delete(cardId, deck.id);
-    if (!ok) return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Card not found' }, timestamp: new Date().toISOString() });
-    return reply.send({ success: true, data: { id: cardId }, timestamp: new Date().toISOString() });
-  });
-
-  // POST /admin/subjects/:id/levels/:level/cards/bulk?topicSlug= — bulk insert
-  fastify.post('/subjects/:id/levels/:level/cards/bulk', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id: subjectId, level } = request.params as { id: string; level: string };
-    const { topicSlug } = request.query as { topicSlug?: string };
-
-    if (!SUBJECT_LEVELS.includes(level as typeof SUBJECT_LEVELS[number])) {
-      return reply.status(400).send({
-        success: false,
-        error: { code: 'BAD_REQUEST', message: `Invalid level. Must be one of: ${SUBJECT_LEVELS.join(', ')}` },
-        timestamp: new Date().toISOString(),
-      });
-    }
-    if (!topicSlug) {
-      return reply.status(400).send({
-        success: false,
-        error: { code: 'MISSING_PARAM', message: 'topicSlug query parameter is required' },
-        timestamp: new Date().toISOString(),
-      });
-    }
-
+  // POST /admin/decks/:id/flashcards/bulk — bulk insert cards into a specific deck
+  fastify.post('/decks/:id/flashcards/bulk', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id: deckId } = request.params as { id: string };
     const { cards } = bulkFlashcardsSchema.parse(request.body);
-
-    // Find or auto-create the topic-scoped deck
-    let deck = await deckRepository.findBySubjectAndLevel(subjectId, level as typeof SUBJECT_LEVELS[number], topicSlug);
-
-    if (!deck) {
-      const topic = (await topicRepository.findBySubjectId(subjectId)).find(t => t.slug === topicSlug);
-      const subject = await subjectRepository.findById(subjectId);
-      const displayName = topic?.displayName ?? topicSlug;
-      const subjectName = subject?.name ?? '';
-
-      const deckId = await deckRepository.create({
-        title: `${displayName} — ${level}`,
-        description: `${level}-level questions on ${displayName} (${subjectName})`,
-        category: 'subject',
-        type: 'mastery',
-        subjectId,
-        topicSlug,
-        level: level as typeof SUBJECT_LEVELS[number],
-        tags: [topicSlug, subjectName, level],
-        createdBy: request.user!.id,
-      });
-      deck = await deckRepository.findById(deckId);
-    }
-
-    if (!deck) {
-      return reply.status(500).send({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Could not create deck' }, timestamp: new Date().toISOString() });
-    }
-
-    const insertedCount = await flashcardRepository.bulkCreate(deck.id, cards);
-
+    const insertedCount = await flashcardRepository.bulkCreate(deckId, cards);
     return reply.status(201).send({
       success: true,
-      data: { deckId: deck.id, created: insertedCount, requested: cards.length },
+      data: { deckId, created: insertedCount, requested: cards.length },
       timestamp: new Date().toISOString(),
     });
   });
+
+  // ═══════════════════════════════════════════════════════
+  // HIERARCHY DECK RESOLVER
+  // ═══════════════════════════════════════════════════════
+
+  // GET /admin/exams/:examId/subjects/:subjectId/topics/:topicSlug/levels/:level/deck
+  // Resolves the deckId for a given exam/subject/topic/level combination.
+  // Used by the mobile admin to look up a deck before posting cards to it.
+  fastify.get(
+    '/exams/:examId/subjects/:subjectId/topics/:topicSlug/levels/:level/deck',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { examId, subjectId, topicSlug, level } = request.params as {
+        examId: string; subjectId: string; topicSlug: string; level: string;
+      };
+
+      if (!SUBJECT_LEVELS.includes(level as typeof SUBJECT_LEVELS[number])) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'BAD_REQUEST', message: `Invalid level. Must be one of: ${SUBJECT_LEVELS.join(', ')}` },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const deck = await deckRepository.findByHierarchy(
+        examId, subjectId, topicSlug, level as typeof SUBJECT_LEVELS[number],
+      );
+
+      if (!deck) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'No deck found for this exam/subject/topic/level' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: { deckId: deck.id, cardCount: deck.cardCount },
+        timestamp: new Date().toISOString(),
+      });
+    },
+  );
 }

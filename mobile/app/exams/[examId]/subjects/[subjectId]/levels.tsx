@@ -258,7 +258,7 @@ export default function LevelsScreen() {
   const subjectName = title ?? 'Subject';
 
   // Dynamic topic loading from API
-  const { data: topics, isLoading: topicsLoading } = useSubjectTopics(subjectId);
+  const { data: topics, isLoading: topicsLoading } = useSubjectTopics(examId, subjectId);
 
   return (
     <ScreenWrapper>

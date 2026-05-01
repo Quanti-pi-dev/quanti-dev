@@ -1,5 +1,5 @@
 // ─── useLevelCards ───────────────────────────────────────────
-// React Query hook for fetching flashcards scoped to a subject + topic + level.
+// React Query hook for fetching flashcards scoped to an exam + subject + topic + level.
 // Uses the centralized fetchLevelCards contract instead of raw api.get.
 
 import { useQuery } from '@tanstack/react-query';
@@ -11,17 +11,22 @@ interface LevelCardsData {
   cards: Flashcard[];
 }
 
-export function useLevelCards(subjectId?: string, level?: string, topicSlug?: string) {
+export function useLevelCards(
+  examId?: string,
+  subjectId?: string,
+  level?: string,
+  topicSlug?: string,
+) {
   return useQuery({
-    queryKey: ['level-cards', subjectId, level, topicSlug] as const,
+    queryKey: ['level-cards', examId, subjectId, level, topicSlug] as const,
     queryFn: async (): Promise<LevelCardsData> => {
-      const result = await fetchLevelCards(subjectId!, level!, topicSlug!);
+      const result = await fetchLevelCards(examId!, subjectId!, topicSlug!, level!);
       return {
         deckId: result?.deckId ?? '',
         cards: result?.cards ?? [],
       };
     },
-    enabled: !!subjectId && !!level && !!topicSlug,
+    enabled: !!examId && !!subjectId && !!level && !!topicSlug,
     staleTime: 5 * 60 * 1000, // 5 min — card content rarely changes
   });
 }

@@ -35,25 +35,12 @@ export const SUBJECT_ACCENT_PALETTE = [
 ];
 
 // ─── Icon mapping ─────────────────────────────────────────────
-const SUBJECT_ICONS: Array<[RegExp, keyof typeof Ionicons['glyphMap']]> = [
-  [/quant|math|calc|numer|algebra|statistic/i, 'calculator-outline'],
-  [/verbal|english|grammar|language|reading/i, 'book-outline'],
-  [/data|analytic|interpret/i,                 'bar-chart-outline'],
-  [/reason|logic|critical/i,                   'git-network-outline'],
-  [/writing|essay|compos/i,                    'create-outline'],
-  [/physics/i,                                 'planet-outline'],
-  [/chem/i,                                    'flask-outline'],
-  [/bio/i,                                     'leaf-outline'],
-  [/science/i,                                 'telescope-outline'],
-  [/history|social|geo/i,                      'earth-outline'],
-  [/vocab|word/i,                              'text-outline'],
-];
+// Centralized in constants/subject-icons.ts — re-exported here
+// so existing callers don't need to change their import paths.
+import { resolveSubjectIcon, type IoniconName } from '../constants/subject-icons';
 
-export function getSubjectIcon(name: string): keyof typeof Ionicons['glyphMap'] {
-  for (const [regex, icon] of SUBJECT_ICONS) {
-    if (regex.test(name)) return icon;
-  }
-  return 'school-outline';
+export function getSubjectIcon(name: string): IoniconName {
+  return resolveSubjectIcon(name);
 }
 
 
@@ -90,7 +77,7 @@ function ProgressRing({ progress, size, strokeWidth, color, trackColor }: Progre
 // ─── Main Card ────────────────────────────────────────────────
 
 export interface TargetSubjectCardProps {
-  subject: { id: string; name: string; description?: string };
+  subject: { id: string; name: string; description?: string; iconName?: string };
   accentIndex: number;
   /** Total correct answers across all levels for this subject */
   correctAnswers?: number;
@@ -112,7 +99,7 @@ export function TargetSubjectCard({
 }: TargetSubjectCardProps) {
   const { theme } = useTheme();
   const accent = SUBJECT_ACCENT_PALETTE[accentIndex % SUBJECT_ACCENT_PALETTE.length]!;
-  const icon = getSubjectIcon(subject.name);
+  const icon = (subject.iconName as IoniconName) || getSubjectIcon(subject.name);
   const mastery = getMasteryDisplayInfo(correctAnswers, levelIndex);
 
   // ── Entrance animation ──────────────────────────────────────

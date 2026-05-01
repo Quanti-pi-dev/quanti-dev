@@ -30,6 +30,10 @@ async function run() {
       { coll: 'flashcards', name: 'idx_flashcard_source' },
       { coll: 'flashcards', name: 'idx_flashcard_pyq_deck_year' },
       { coll: 'flashcards', name: 'idx_flashcard_pyq_year_paper' },
+      // ─── Superseded by exam-scoped variants (1A/1B) ────────
+      { coll: 'topics', name: 'topics_subject_slug_unique' },
+      { coll: 'topics', name: 'topics_subject_ordered' },
+      { coll: 'decks',  name: 'decks_subject_topic_level_unique' },
     ];
     for (const { coll, name } of legacyIndexes) {
       try {
@@ -85,15 +89,17 @@ async function run() {
     );
     console.log('  ✓ exam_subjects indexes done');
 
-    // ─── 3b. Topics ───────────────────────────────────────────
+    // ─── 3b. Topics (exam-scoped) ─────────────────────────────
+    // Unique triplet: one topic slug per (exam, subject) pair.
+    // JEE/Physics/kinematics and NEET/Physics/kinematics are distinct.
     console.log('📋 Creating indexes for topics...');
     await db.collection('topics').createIndex(
-      { subjectId: 1, slug: 1 },
-      { unique: true, name: 'topics_subject_slug_unique' }
+      { examId: 1, subjectId: 1, slug: 1 },
+      { unique: true, name: 'topics_exam_subject_slug_unique' }
     );
     await db.collection('topics').createIndex(
-      { subjectId: 1, order: 1 },
-      { name: 'topics_subject_ordered' }
+      { examId: 1, subjectId: 1, order: 1 },
+      { name: 'topics_exam_subject_ordered' }
     );
     console.log('  ✓ topics indexes done');
 
@@ -104,11 +110,17 @@ async function run() {
       { subjectId: 1, level: 1 },
       { name: 'decks_subject_level' }
     );
-    // Unique per (subject, topicSlug, level) — tags[0] is always topicSlug by convention
-    // This is the canonical uniqueness constraint for topic-scoped decks
+    // Exam+subject+level query index — used by findFirstByExamSubjectLevel (challenge service).
+    // Non-unique: multiple decks (one per topicSlug) share the same exam+subject+level.
     await db.collection('decks').createIndex(
-      { subjectId: 1, 'tags.0': 1, level: 1 },
-      { unique: true, sparse: true, name: 'decks_subject_topic_level_unique' }
+      { examId: 1, subjectId: 1, level: 1, cardCount: -1 },
+      { name: 'decks_exam_subject_level_cards' }
+    );
+    // Unique per (exam, subject, topicSlug, level) — the canonical hierarchy key.
+    // Replaces the old tags.0-based index which was exam-unaware.
+    await db.collection('decks').createIndex(
+      { examId: 1, subjectId: 1, topicSlug: 1, level: 1 },
+      { unique: true, sparse: true, name: 'decks_exam_hierarchy_unique' }
     );
     await db.collection('decks').createIndex(
       { category: 1 },
@@ -123,6 +135,7 @@ async function run() {
       { name: 'decks_text_search' }
     );
     console.log('  ✓ decks indexes done');
+
 
     // ─── 5. Flashcards ────────────────────────────────────────
     console.log('📋 Creating indexes for flashcards...');

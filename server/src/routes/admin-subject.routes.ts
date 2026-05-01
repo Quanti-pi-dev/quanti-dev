@@ -102,8 +102,29 @@ export async function adminSubjectRoutes(fastify: FastifyInstance): Promise<void
   });
 
   // DELETE /admin/exams/:id/subjects/:subjectId — remove subject from exam
+  // Blocked if topics or decks exist for this exam+subject pair.
   fastify.delete('/exams/:id/subjects/:subjectId', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id: examId, subjectId } = request.params as { id: string; subjectId: string };
+    const db = getMongoDb();
+    const examOid = new ObjectId(examId);
+    const subjectOid = new ObjectId(subjectId);
+
+    const [topicCount, deckCount] = await Promise.all([
+      db.collection('topics').countDocuments({ examId: examOid, subjectId: subjectOid }),
+      db.collection('decks').countDocuments({ examId: examOid, subjectId: subjectOid }),
+    ]);
+
+    if (topicCount > 0 || deckCount > 0) {
+      return reply.status(409).send({
+        success: false,
+        error: {
+          code: 'HAS_CONTENT',
+          message: `Cannot remove: this subject has ${topicCount} topic(s) and ${deckCount} deck(s) under this exam. Delete all topics and decks first.`,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     await examSubjectRepository.remove(examId, subjectId);
     return reply.send({ success: true, data: null, timestamp: new Date().toISOString() });
   });

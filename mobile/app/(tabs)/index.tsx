@@ -409,7 +409,7 @@ export default function HomeScreen() {
                       description={upNextSubject.description}
                       accentColor={upNextAccent.bg}
                       gradientColors={upNextAccent.grad}
-                      icon={getSubjectIcon(upNextSubject.name)}
+                      icon={(upNextSubject.iconName as never) || getSubjectIcon(upNextSubject.name)}
                       currentStage={upNextStage}
                       onStart={() =>
                         router.push(

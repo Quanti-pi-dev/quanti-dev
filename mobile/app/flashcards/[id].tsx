@@ -68,6 +68,7 @@ export default function FlashcardStudyScreen() {
     data: levelData, isLoading: levelLoading,
     isError: levelError, refetch: refetchLevel,
   } = useLevelCards(
+    isLevelMode ? examId : undefined,
     isLevelMode ? subjectId : undefined,
     isLevelMode ? level : undefined,
     isLevelMode ? topicSlug : undefined,

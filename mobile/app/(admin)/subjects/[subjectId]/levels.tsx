@@ -20,7 +20,7 @@ import { Button } from '../../../../src/components/ui/Button';
 import { Input } from '../../../../src/components/ui/Input';
 import {
   useAdminLevelCards,
-  useAdminSubjectTopics,
+  useAdminExamTopics,
   useCreateTopic,
   useUpdateTopic,
   useDeleteTopic,
@@ -57,13 +57,13 @@ function toSlug(text: string): string {
 // ─── Level row (fetches card count for topic+level) ───────────
 
 function LevelRow({
-  subjectId, level, topicSlug, subjectName: _subjectName, topicName: _topicName, onPress,
+  examId, subjectId, level, topicSlug, subjectName: _subjectName, topicName: _topicName, onPress,
 }: {
-  subjectId: string; level: SubjectLevel; topicSlug: string;
+  examId: string; subjectId: string; level: SubjectLevel; topicSlug: string;
   subjectName: string; topicName: string; onPress: () => void;
 }) {
   const { theme } = useTheme();
-  const { data, isLoading } = useAdminLevelCards(subjectId, level, topicSlug);
+  const { data, isLoading } = useAdminLevelCards(examId, subjectId, level, topicSlug);
   const meta = LEVEL_META[level];
   const cardCount = data?.cardCount ?? 0;
 
@@ -116,9 +116,9 @@ function LevelRow({
 // ─── Topic accordion row (with edit/delete) ───────────────────
 
 function TopicRow({
-  subjectId, subjectName, topic, accent, router, onEdit, onDelete,
+  examId, subjectId, subjectName, topic, accent, router, onEdit, onDelete,
 }: {
-  subjectId: string; subjectName: string;
+  examId: string; subjectId: string; subjectName: string;
   topic: TopicEntry;
   accent: string;
   router: ReturnType<typeof useRouter>;
@@ -183,6 +183,7 @@ function TopicRow({
           {(SUBJECT_LEVELS as SubjectLevel[]).map((level) => (
             <LevelRow
               key={level}
+              examId={examId}
               subjectId={subjectId}
               level={level}
               topicSlug={topic.slug}
@@ -192,6 +193,7 @@ function TopicRow({
                 router.push({
                   pathname: '/(admin)/flashcard-editor',
                   params: {
+                    examId,
                     subjectId,
                     level,
                     topicSlug: topic.slug,
@@ -308,8 +310,8 @@ export default function SubjectLevelsScreen() {
   const { showAlert, showToast } = useGlobalUI();
   const router = useRouter();
 
-  // Fetch topics from dynamic MongoDB API
-  const { data: topicData, isLoading: loadingTopics } = useAdminSubjectTopics(subjectId);
+  // Fetch topics from dynamic MongoDB API (exam-scoped)
+  const { data: topicData, isLoading: loadingTopics } = useAdminExamTopics(examId ?? '', subjectId);
   const subjectName = topicData?.subjectName ?? title ?? 'Subject';
   const topics = topicData?.topics ?? [];
   const subjectAccent = accent ?? theme.primary;
@@ -339,7 +341,7 @@ export default function SubjectLevelsScreen() {
     if (editingTopic?.id) {
       // Update
       updateTopic.mutate(
-        { subjectId, topicId: editingTopic.id, updates: formData },
+        { subjectId, examId: examId ?? '', topicId: editingTopic.id, updates: formData },
         {
           onSuccess: () => { setFormVisible(false); showToast('Topic updated'); },
           onError: () => showToast('Failed to update topic', 'error'),
@@ -369,7 +371,7 @@ export default function SubjectLevelsScreen() {
           onPress: () => {
             if (!topic.id) return;
             deleteTopic.mutate(
-              { subjectId, topicId: topic.id },
+              { subjectId, examId: examId ?? '', topicId: topic.id },
               {
                 onSuccess: () => showToast('Topic deleted'),
                 onError: (err) => {
@@ -488,6 +490,7 @@ export default function SubjectLevelsScreen() {
           topics.map((topic) => (
             <TopicRow
               key={topic.slug}
+              examId={examId ?? ''}
               subjectId={subjectId}
               subjectName={subjectName}
               topic={topic}

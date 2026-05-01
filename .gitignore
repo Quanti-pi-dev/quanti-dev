@@ -117,5 +117,11 @@ server/firebase-service-account.json
 scratch_*
 test-firebase*
 server/update-exam-counts.ts
+server/test_db.ts
 
 node_modules
+
+# DB Seeds (environment-specific data — not version-controlled)
+# Keep the directory in git via .gitkeep but ignore all seed files
+server/db/seeds/**
+!server/db/seeds/.gitkeep

@@ -284,17 +284,18 @@ export async function fetchAdvancedInsights(): Promise<AdvancedInsights> {
 }
 
 
-// ─── Level Cards (topic-scoped) ──────────────────────────────
+// ─── Level Cards (exam-scoped) ───────────────────────────────
 
 export async function fetchLevelCards(
+  examId: string,
   subjectId: string,
-  level: string,
   topicSlug: string,
+  level: string,
   pageSize = 100,
 ): Promise<{ deckId: string; cards: Flashcard[] }> {
   const { data } = await api.get<ApiResponse<{ deckId: string; cards: Flashcard[] }>>(
-    `/subjects/${subjectId}/levels/${level}/cards`,
-    { params: { pageSize, topicSlug } },
+    `/exams/${examId}/subjects/${subjectId}/topics/${topicSlug}/levels/${level}/cards`,
+    { params: { pageSize } },
   );
   return data?.data as { deckId: string; cards: Flashcard[] };
 }

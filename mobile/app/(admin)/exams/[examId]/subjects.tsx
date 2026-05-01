@@ -26,6 +26,8 @@ import {
 } from '../../../../src/hooks/useAdminContent';
 import { adminApi } from '../../../../src/services/api';
 import { DraggableList } from '../../../../src/components/admin/DraggableList';
+import { IconPickerGrid } from '../../../../src/components/admin/IconPickerGrid';
+import { resolveSubjectIcon } from '../../../../src/constants/subject-icons';
 import { useToast } from '../../../../src/contexts/ToastContext';
 
 // ─── Accent colour palette for new subjects ──────────────────
@@ -200,8 +202,20 @@ export default function ExamSubjectsScreen() {
                         <Ionicons name="reorder-three-outline" size={22} color={theme.textSecondary} />
                       </View>
 
-                      {/* Accent dot */}
-                      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: accent }} />
+                      {/* Subject icon */}
+                      <View
+                        style={{
+                          width: 36, height: 36, borderRadius: 18,
+                          backgroundColor: accent + '22',
+                          alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
+                        <Ionicons
+                          name={(subject?.iconName ?? resolveSubjectIcon(subject?.name ?? '')) as never}
+                          size={18}
+                          color={accent}
+                        />
+                      </View>
 
                       <View style={{ flex: 1 }}>
                         <Typography variant="label">{subject?.name ?? es.subjectId}</Typography>
@@ -306,7 +320,7 @@ export default function ExamSubjectsScreen() {
               <View style={{ gap: spacing.md }}>
                 <Input label="Name *" placeholder="e.g. Number Theory" value={newName} onChangeText={setNewName} />
                 <Input label="Description" placeholder="Brief description (optional)" value={newDescription} onChangeText={setNewDescription} />
-                <Input label="Icon Name" placeholder="e.g. calculator-outline" value={newIconName} onChangeText={setNewIconName} autoCapitalize="none" />
+                <IconPickerGrid selected={newIconName} onSelect={setNewIconName} accentColor={newAccent} />
 
                 {/* Accent colour picker */}
                 <View style={{ gap: spacing.xs }}>

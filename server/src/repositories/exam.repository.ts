@@ -133,13 +133,29 @@ class ExamRepository {
     return result;
   }
 
-  /** Delete an exam and cascade to questions + exam_subjects. */
+  /** Delete an exam and cascade to all child data. */
   async delete(id: string): Promise<boolean> {
+    const examOid = new ObjectId(id);
+    const db = getMongoDb();
+
+    // Collect deck IDs first so we can cascade to their flashcards.
+    const deckDocs = await db
+      .collection('decks')
+      .find({ examId: examOid }, { projection: { _id: 1 } })
+      .toArray();
+    const deckIds = deckDocs.map((d) => d._id as ObjectId);
+
     await Promise.all([
-      getMongoDb().collection('questions').deleteMany({ examId: new ObjectId(id) }),
-      getMongoDb().collection('exam_subjects').deleteMany({ examId: new ObjectId(id) }),
+      db.collection('questions').deleteMany({ examId: examOid }),
+      db.collection('exam_subjects').deleteMany({ examId: examOid }),
+      db.collection('topics').deleteMany({ examId: examOid }),
+      db.collection('decks').deleteMany({ examId: examOid }),
+      deckIds.length > 0
+        ? db.collection('flashcards').deleteMany({ deckId: { $in: deckIds } })
+        : Promise.resolve(),
     ]);
-    const result = await this.col.deleteOne({ _id: new ObjectId(id) });
+
+    const result = await this.col.deleteOne({ _id: examOid });
     await getRedisClient().unlink(CacheKey.exam(id));
     return result.deletedCount > 0;
   }

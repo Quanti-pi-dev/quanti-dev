@@ -14,12 +14,19 @@ export default function OnboardingLayout() {
   }, [user, preferences, router]);
 
   return (
-    <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
-      <Stack.Screen name="welcome" />
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        animation: 'slide_from_right',
+        animationDuration: 300,
+        gestureEnabled: true,
+      }}
+    >
+      <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
       <Stack.Screen name="index" />
       <Stack.Screen name="subjects" />
       <Stack.Screen name="email-prompt" />
-      <Stack.Screen name="complete" />
+      <Stack.Screen name="complete" options={{ animation: 'fade', gestureEnabled: false }} />
     </Stack>
   );
 }

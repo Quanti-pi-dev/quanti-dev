@@ -4,7 +4,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useGlobalUI } from '../contexts/GlobalUIContext';
-import { adminApi } from '../services/api';
+import { adminApi, api } from '../services/api';
 import {
   adminCreateExamApi,
   adminUpdateExamApi,
@@ -240,16 +240,24 @@ export function useRemoveSubjectFromExam() {
 
 // ─── Level card hooks ────────────────────────────────────────
 
-export function useAdminLevelCards(subjectId: string, level: string, topicSlug: string) {
+export function useAdminLevelCards(examId: string, subjectId: string, level: string, topicSlug: string) {
   return useQuery({
-    queryKey: ['admin', 'level-cards', subjectId, level, topicSlug],
+    queryKey: ['admin', 'level-cards', examId, subjectId, level, topicSlug],
     queryFn: async () => {
-      const { data } = await adminApi.get(`/subjects/${subjectId}/levels/${level}/cards`, {
-        params: { topicSlug },
-      });
-      return data?.data as AdminLevelCards;
+      // Resolve deck via hierarchy endpoint then fetch its cards
+      const { data: deckRes } = await adminApi.get(
+        `/exams/${examId}/subjects/${subjectId}/topics/${topicSlug}/levels/${level}/deck`,
+      );
+      const deckId: string = deckRes?.data?.deckId;
+      if (!deckId) return { deckId: null, cardCount: 0, cards: [] } as AdminLevelCards;
+      const { data } = await adminApi.get(`/decks/${deckId}/flashcards`);
+      return {
+        deckId,
+        cardCount: data?.data?.length ?? 0,
+        cards: data?.data ?? [],
+      } as AdminLevelCards;
     },
-    enabled: !!subjectId && !!level && !!topicSlug,
+    enabled: !!examId && !!subjectId && !!level && !!topicSlug,
   });
 }
 
@@ -257,8 +265,9 @@ export function useAddLevelCard() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
-      subjectId, level, topicSlug, card,
+      examId, subjectId, level, topicSlug, card,
     }: {
+      examId: string;
       subjectId: string;
       level: string;
       topicSlug: string;
@@ -270,15 +279,17 @@ export function useAddLevelCard() {
         tags?: string[];
       };
     }) => {
-      const { data } = await adminApi.post(
-        `/subjects/${subjectId}/levels/${level}/cards`,
-        card,
-        { params: { topicSlug } },
+      // Resolve deckId from hierarchy, then post to the clean deck endpoint
+      const { data: deckRes } = await adminApi.get(
+        `/exams/${examId}/subjects/${subjectId}/topics/${topicSlug}/levels/${level}/deck`,
       );
+      const deckId: string = deckRes?.data?.deckId;
+      if (!deckId) throw new Error('No deck found for this topic/level');
+      const { data } = await adminApi.post(`/decks/${deckId}/flashcards`, card);
       return data?.data as { id: string; deckId: string };
     },
-    onSuccess: (_, { subjectId, level, topicSlug }) => {
-      void qc.invalidateQueries({ queryKey: ['admin', 'level-cards', subjectId, level, topicSlug] });
+    onSuccess: (_, { examId, subjectId, level, topicSlug }) => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'level-cards', examId, subjectId, level, topicSlug] });
     },
     onError: (err) => showMutationError('Add Card', err),
   });
@@ -288,16 +299,15 @@ export function useUpdateLevelCard() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
-      subjectId, level, topicSlug: _topicSlug, cardId, updates,
+      examId, subjectId, level, topicSlug: _topicSlug, cardId, updates,
     }: {
-      subjectId: string; level: string; topicSlug: string; cardId: string;
+      examId: string; subjectId: string; level: string; topicSlug: string; cardId: string;
       updates: Partial<{ question: string; options: { id: string; text: string }[]; correctAnswerId: string; explanation: string | null }>;
     }) => {
-      // Updated to use the new clean endpoint
       await adminApi.put(`/flashcards/${cardId}`, updates);
     },
-    onSuccess: (_, { subjectId, level, topicSlug }) => {
-      void qc.invalidateQueries({ queryKey: ['admin', 'level-cards', subjectId, level, topicSlug] });
+    onSuccess: (_, { examId, subjectId, level, topicSlug }) => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'level-cards', examId, subjectId, level, topicSlug] });
     },
     onError: (err) => showMutationError('Update Card', err),
   });
@@ -306,12 +316,13 @@ export function useUpdateLevelCard() {
 export function useDeleteLevelCard() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ subjectId, level, topicSlug, cardId }: { subjectId: string; level: string; topicSlug: string; cardId: string }) => {
-      await adminApi.delete(`/subjects/${subjectId}/levels/${level}/cards/${cardId}`, { params: { topicSlug } });
+    mutationFn: async ({ examId, subjectId, level, topicSlug, deckId, cardId }: {
+      examId: string; subjectId: string; level: string; topicSlug: string; deckId: string; cardId: string;
+    }) => {
+      await adminApi.delete(`/decks/${deckId}/flashcards/${cardId}`);
     },
-    // ── Optimistic delete ──
-    onMutate: async ({ subjectId, level, topicSlug, cardId }) => {
-      const key = ['admin', 'level-cards', subjectId, level, topicSlug];
+    onMutate: async ({ examId, subjectId, level, topicSlug, cardId }) => {
+      const key = ['admin', 'level-cards', examId, subjectId, level, topicSlug];
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<AdminLevelCards>(key);
       qc.setQueryData<AdminLevelCards>(key, (old) =>
@@ -322,8 +333,8 @@ export function useDeleteLevelCard() {
     onError: (_err, _vars, context) => {
       if (context?.prev) qc.setQueryData(context.key, context.prev);
     },
-    onSettled: (_, __, { subjectId, level, topicSlug }) => {
-      void qc.invalidateQueries({ queryKey: ['admin', 'level-cards', subjectId, level, topicSlug] });
+    onSettled: (_, __, { examId, subjectId, level, topicSlug }) => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'level-cards', examId, subjectId, level, topicSlug] });
     },
   });
 }
@@ -340,21 +351,6 @@ export interface TopicEntry {
 }
 
 /**
- * Fetch topic list for a subject from the dynamic MongoDB endpoint.
- */
-export function useAdminSubjectTopics(subjectId: string) {
-  return useQuery<{ subjectName: string; topics: TopicEntry[] }>({
-    queryKey: ['admin', 'subject-topics', subjectId],
-    queryFn: async () => {
-      const { data } = await adminApi.get(`/subjects/${subjectId}/topics`);
-      return data.data as { subjectName: string; topics: TopicEntry[] };
-    },
-    enabled: !!subjectId,
-    staleTime: 300_000,
-  });
-}
-
-/**
  * Create a new topic for a subject (exam-scoped).
  */
 export function useCreateTopic() {
@@ -363,13 +359,14 @@ export function useCreateTopic() {
     mutationFn: async ({ subjectId, examId, slug, displayName, order }: {
       subjectId: string; examId: string; slug: string; displayName: string; order?: number;
     }) => {
-      const { data } = await adminApi.post(`/subjects/${subjectId}/topics`, {
-        examId, slug, displayName, order,
-      });
+      const { data } = await adminApi.post(
+        `/exams/${examId}/subjects/${subjectId}/topics`,
+        { slug, displayName, order },
+      );
       return data.data as TopicEntry;
     },
-    onSuccess: (_data, { subjectId }) => {
-      void qc.invalidateQueries({ queryKey: ['admin', 'subject-topics', subjectId] });
+    onSuccess: (_data, { subjectId, examId }) => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'exam-topics', examId, subjectId] });
     },
     onError: (err) => showMutationError('Create Topic', err),
   });
@@ -381,15 +378,18 @@ export function useCreateTopic() {
 export function useUpdateTopic() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ subjectId, topicId, updates }: {
-      subjectId: string; topicId: string;
+    mutationFn: async ({ subjectId, examId, topicId, updates }: {
+      subjectId: string; examId: string; topicId: string;
       updates: Partial<{ slug: string; displayName: string; order: number }>;
     }) => {
-      const { data } = await adminApi.patch(`/subjects/${subjectId}/topics/${topicId}`, updates);
+      const { data } = await adminApi.patch(
+        `/exams/${examId}/subjects/${subjectId}/topics/${topicId}`,
+        updates,
+      );
       return data.data as TopicEntry;
     },
-    onSuccess: (_data, { subjectId }) => {
-      void qc.invalidateQueries({ queryKey: ['admin', 'subject-topics', subjectId] });
+    onSuccess: (_data, { subjectId, examId }) => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'exam-topics', examId, subjectId] });
     },
     onError: (err) => showMutationError('Update Topic', err),
   });
@@ -401,11 +401,11 @@ export function useUpdateTopic() {
 export function useDeleteTopic() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ subjectId, topicId }: { subjectId: string; topicId: string }) => {
-      await adminApi.delete(`/subjects/${subjectId}/topics/${topicId}`);
+    mutationFn: async ({ subjectId, examId, topicId }: { subjectId: string; examId: string; topicId: string }) => {
+      await adminApi.delete(`/exams/${examId}/subjects/${subjectId}/topics/${topicId}`);
     },
-    onSuccess: (_data, { subjectId }) => {
-      void qc.invalidateQueries({ queryKey: ['admin', 'subject-topics', subjectId] });
+    onSuccess: (_data, { subjectId, examId }) => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'exam-topics', examId, subjectId] });
     },
     onError: (err) => showMutationError('Delete Topic', err),
   });
@@ -426,14 +426,14 @@ export function useAdminBulkImportTopics() {
     }
   >({
     mutationFn: async ({ subjectId, examId, topics }) => {
-      const { data } = await adminApi.post(`/subjects/${subjectId}/topics/bulk`, {
-        examId,
-        topics,
-      });
+      const { data } = await adminApi.post(
+        `/exams/${examId}/subjects/${subjectId}/topics/bulk`,
+        { topics },
+      );
       return data.data as { inserted: number; skipped: number; requested: number };
     },
-    onSuccess: (_data, { subjectId }) => {
-      void qc.invalidateQueries({ queryKey: ['admin', 'subject-topics', subjectId] });
+    onSuccess: (_data, { subjectId, examId }) => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'exam-topics', examId, subjectId] });
     },
     onError: (err) => showMutationError('Bulk Import Topics', err),
   });
@@ -441,8 +441,8 @@ export function useAdminBulkImportTopics() {
 
 
 /**
- * Fetch topics for an exam+subject pair (exam-scoped, new hierarchy endpoint).
- * Prefer this over useAdminSubjectTopics for exam-specific admin screens.
+ * Fetch topics for an exam+subject pair (exam-scoped, admin-authenticated).
+ * Uses the new /admin/exams/:examId/subjects/:subjectId/topics endpoint.
  */
 export function useAdminExamTopics(examId: string, subjectId: string) {
   return useQuery<{ subjectName: string; topics: TopicEntry[] }>({
@@ -531,6 +531,7 @@ export function useAdminPYQMeta(examId?: string, subjectId?: string) {
 }
 
 export interface PYQBulkImportPayload {
+  examId: string;
   subjectId: string;
   topicSlug: string;
   level: string;

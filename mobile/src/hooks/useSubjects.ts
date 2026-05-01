@@ -18,7 +18,7 @@ import { gamificationKeys } from './useGamification';
 export const subjectKeys = {
   all: ['subjects'] as const,
   byExam: (examId: string) => ['subjects', 'exam', examId] as const,
-  topics: (subjectId: string) => ['subjects', 'topics', subjectId] as const,
+  topics: (examId: string, subjectId: string) => ['subjects', 'topics', examId, subjectId] as const,
   levelSummary: (examId: string, subjectId: string, topicSlug: string) =>
     ['subjects', 'levelSummary', examId, subjectId, topicSlug] as const,
   examProgress: (examId: string) => ['subjects', 'examProgress', examId] as const,
@@ -57,14 +57,14 @@ export function useExamProgress(examId: string, subjectIds: string[]) {
 }
 
 /** Fetch all topics for a subject from the dynamic MongoDB endpoint. */
-export function useSubjectTopics(subjectId: string) {
+export function useSubjectTopics(examId: string, subjectId: string) {
   return useQuery<{ slug: string; displayName: string }[]>({
-    queryKey: subjectKeys.topics(subjectId),
+    queryKey: subjectKeys.topics(examId, subjectId),
     queryFn: async () => {
-      const { data } = await api.get(`/subjects/${subjectId}/topics`);
+      const { data } = await api.get(`/exams/${examId}/subjects/${subjectId}/topics`);
       return (data.data as { topics: { slug: string; displayName: string }[] }).topics;
     },
-    enabled: !!subjectId,
+    enabled: !!examId && !!subjectId,
     staleTime: 300_000, // 5 min — topics rarely change
   });
 }

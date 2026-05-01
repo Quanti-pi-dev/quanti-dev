@@ -36,6 +36,7 @@ import {
   type PYQCard,
   type PYQFilters,
 } from '../../src/hooks/useAdminContent';
+import { useExamSubjects } from '../../src/hooks/useSubjects';
 
 // ─── Sub-components ───────────────────────────────────────────
 
@@ -194,6 +195,7 @@ function PYQImportSheet({
   const queryClient = useQueryClient();
   const bulkImport = useAdminPYQBulkImport();
 
+  const [examId, setExamId] = useState('');
   const [subjectId, setSubjectId] = useState(preSelectedSubjectId ?? '');
   const [topicSlug, setTopicSlug] = useState(preSelectedTopicSlug ?? '');
   const [level, setLevel] = useState(preSelectedLevel ?? 'Rookie');
@@ -202,7 +204,12 @@ function PYQImportSheet({
   const [examLabel, setExamLabel] = useState('');
   const [showFilePicker, setShowFilePicker] = useState(false);
 
-  const metaComplete = subjectId.trim() && topicSlug.trim() && level && sourceYear.trim();
+  const { data: examsData } = useAdminExams(1);
+  const exams = examsData?.data ?? [];
+  const { data: subjects } = useExamSubjects(examId);
+  const subjectsList = subjects ?? [];
+
+  const metaComplete = examId && subjectId.trim() && topicSlug.trim() && level && sourceYear.trim();
 
   async function handleImport(cards: ParsedFlashcard[]) {
     const year = parseInt(sourceYear, 10);
@@ -211,6 +218,7 @@ function PYQImportSheet({
       return;
     }
     const result = await bulkImport.mutateAsync({
+      examId,
       subjectId: subjectId.trim(),
       topicSlug: topicSlug.trim(),
       level,
@@ -274,13 +282,47 @@ function PYQImportSheet({
                   <Typography variant="label">Target Location</Typography>
                 </View>
 
-                <Input
-                  label="Subject ID"
-                  value={subjectId}
-                  onChangeText={setSubjectId}
-                  placeholder="MongoDB ObjectId of the subject"
-                  autoCapitalize="none"
-                />
+              {/* Exam picker */}
+                <View style={{ gap: spacing.xs }}>
+                  <Typography variant="label" color={theme.textSecondary}>Exam</Typography>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                      {exams.map((e: { id: string; title: string }) => (
+                        <FilterChip
+                          key={e.id} label={e.title}
+                          selected={examId === e.id}
+                          onPress={() => { setExamId(e.id); setSubjectId(''); }}
+                        />
+                      ))}
+                    </View>
+                  </ScrollView>
+                </View>
+
+                {/* Subject picker (loads after exam selected) */}
+                {examId ? (
+                  <View style={{ gap: spacing.xs }}>
+                    <Typography variant="label" color={theme.textSecondary}>Subject</Typography>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                        {subjectsList.map((s) => (
+                          <FilterChip
+                            key={s.id} label={s.name}
+                            selected={subjectId === s.id}
+                            onPress={() => setSubjectId(s.id)}
+                          />
+                        ))}
+                      </View>
+                    </ScrollView>
+                  </View>
+                ) : (
+                  <Input
+                    label="Subject ID"
+                    value={subjectId}
+                    onChangeText={setSubjectId}
+                    placeholder="Select an exam first"
+                    editable={false}
+                  />
+                )}
                 <Input
                   label="Topic Slug"
                   value={topicSlug}
