@@ -10,6 +10,8 @@
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "test:load": "artillery run tests/load/artillery.yml",
+    "db:migrate": "tsx --env-file=.env db/scripts/migrate.ts",
+    "db:migrate:dry": "tsx --env-file=.env db/scripts/migrate.ts --dry-run",
     "db:seed": "tsx --env-file=.env db/scripts/seed.ts",
     "db:indexes": "tsx --env-file=.env db/scripts/create-mongo-indexes.ts",
     "db:seed:jee-neet": "tsx --env-file=../.env db/seeds/jee-neet/seed.ts"

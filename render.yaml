@@ -6,7 +6,7 @@ services:
     region: oregon
     buildCommand: "npm ci --include=dev && npm run build --workspace=@kd/shared && npm run build --workspace=@kd/server"
     # We execute migrations, indexing, and the admin script in startCommand since preDeploy is paid
-    startCommand: "npm --workspace=@kd/server exec -- tsx db/scripts/create-mongo-indexes.ts && npm --workspace=@kd/server exec -- tsx db/scripts/make-admin.ts dharmakd01@gmail.com && npm run start --workspace=@kd/server"
+    startCommand: "npm --workspace=@kd/server exec -- tsx db/scripts/migrate.ts && npm --workspace=@kd/server exec -- tsx db/scripts/create-mongo-indexes.ts && npm --workspace=@kd/server exec -- tsx db/scripts/make-admin.ts dharmakd01@gmail.com && npm run start --workspace=@kd/server"
     envVars:
       - key: NODE_ENV
         value: production
