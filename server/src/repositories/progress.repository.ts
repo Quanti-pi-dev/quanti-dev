@@ -4,9 +4,12 @@
 
 import { getRedisClient, getPostgresPool, getMongoDb } from '../lib/database.js';
 import { ObjectId } from 'mongodb';
+import { createServiceLogger } from '../lib/logger.js';
 import type { ProgressRecord, StudyStreak, StudySession, ProgressSummary, DailyActivity, LevelProgress, SubjectLevelSummary, ExamProgress, LevelAnswerResult } from '@kd/shared';
 import type { AdvancedInsights, ChronotypeData, Chronotype, HourlyAccuracy, SpeedAccuracyPoint, SubjectStrength, SubjectTopicDistribution, TopicDistributionEntry } from '@kd/shared';
 import { SUBJECT_LEVELS, LEVEL_UNLOCK_THRESHOLD } from '@kd/shared';
+
+const log = createServiceLogger('ProgressRepository');
 
 class ProgressRepository {
   private get redis() {
@@ -636,7 +639,7 @@ class ProgressRepository {
         }
       }
     } catch (err) {
-      console.error('Failed to process standalone sessions:', err);
+      log.warn({ err }, 'Failed to process standalone sessions — subject strengths may be incomplete');
     }
 
     // 4. Process Redis Level Progress
@@ -691,7 +694,7 @@ class ProgressRepository {
           nameMap.set(sub._id.toString(), sub.name);
         }
       } catch (err) {
-        console.error('Failed to enrich subject names from Mongo:', err);
+        log.warn({ err }, 'Failed to enrich subject names from Mongo — raw IDs will be used');
       }
     }
 

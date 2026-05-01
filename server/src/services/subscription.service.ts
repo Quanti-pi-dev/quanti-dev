@@ -1,6 +1,7 @@
 // ─── Subscription Service ─────────────────────────────────────
 // Core lifecycle logic: create, activate, cancel, renew, expire.
 
+import { createServiceLogger } from '../lib/logger.js';
 import { getRedisClient } from '../lib/database.js';
 import { planRepository } from '../repositories/plan.repository.js';
 import { subscriptionRepository } from '../repositories/subscription.repository.js';
@@ -20,6 +21,7 @@ import type {
   SubscriptionContext,
 } from '@kd/shared';
 
+const log = createServiceLogger('SubscriptionService');
 const SUBSCRIPTION_CACHE_TTL = 300; // 5 minutes
 
 function computeDaysRemaining(periodEnd: string): number {
@@ -447,7 +449,7 @@ class SubscriptionService {
         );
       } catch (err) {
         // Log but don't block the local cancel — the cron job will expire the sub anyway.
-        console.error('[subscription.service] Failed to cancel Razorpay mandate:', err);
+        log.warn({ err, razorpaySubscriptionId: sub.razorpaySubscriptionId }, 'Failed to cancel Razorpay mandate — subscription will expire via cron');
       }
     }
 
@@ -549,7 +551,7 @@ class SubscriptionService {
           await paymentService.cancelRazorpaySubscription(existing.razorpaySubscriptionId, 0); // 0 = immediate cancel
         } catch (err) {
           // Log but don't block the manual grant
-          console.error('[subscription.service] Failed to cancel Razorpay mandate during manual override:', err);
+          log.warn({ err, razorpaySubscriptionId: existing.razorpaySubscriptionId }, 'Failed to cancel Razorpay mandate during manual override — continuing with grant');
         }
       }
 

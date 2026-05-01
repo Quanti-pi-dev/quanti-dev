@@ -13,6 +13,9 @@
 import { ObjectId } from 'mongodb';
 import { getMongoDb, getPostgresPool, getRedisClient } from '../lib/database.js';
 import { geminiGenerateJSON } from '../lib/gemini.js';
+import { createServiceLogger } from '../lib/logger.js';
+
+const log = createServiceLogger('AIService');
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -256,7 +259,7 @@ export class RecommendationService {
         aiRecommendations = Array.isArray(aiResult.recommendations) ? aiResult.recommendations.slice(0, 4) : [];
       } catch (err) {
         // Gemini failure is non-fatal — fall back to heuristic data
-        console.warn('[ai.service] Gemini insight generation failed:', err instanceof Error ? err.message : err);
+        log.warn({ err }, 'Gemini insight generation failed — using heuristic fallback');
       }
     }
 

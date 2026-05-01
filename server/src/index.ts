@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import sensible from '@fastify/sensible';
 
 import { config, validateConfig } from './config.js';
+import { buildFastifyLoggerOptions } from './lib/logger.js';
 import { connectDatabases, disconnectDatabases } from './lib/database.js';
 import { authPlugin } from './middleware/auth.js';
 import { errorHandlerPlugin } from './middleware/error-handler.js';
@@ -36,27 +37,12 @@ import { withCronLock } from './lib/cron-lock.js';
 
 // ─── Fastify Instance ───────────────────────────────────────
 
-const prettyTransport = {
-  target: 'pino-pretty',
-  options: {
-    colorize:      true,
-    translateTime: 'SYS:standard',
-    ignore:        'pid,hostname,reqId,responseTime,req,res',
-    messageFormat: '{msg}',
-    customColors:  'fatal:bgRed,error:red,warn:yellow,info:cyan,debug:gray,trace:white',
-    singleLine:    false,
-  },
-};
-
 const server = Fastify({
   trustProxy: true, // Crucial for Cloudflare to pass X-Forwarded-For IPs correctly
   // Suppress Fastify's built-in per-request noise — our requestLoggerPlugin
   // emits a single clean line per request instead.
   disableRequestLogging: true,
-  logger: {
-    level: config.logLevel,
-    transport: prettyTransport,
-  },
+  logger: { ...buildFastifyLoggerOptions(), level: config.logLevel },
   genReqId: () => crypto.randomUUID(),
 });
 
