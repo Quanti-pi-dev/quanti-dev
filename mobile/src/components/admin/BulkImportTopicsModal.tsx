@@ -180,11 +180,54 @@ export function BulkImportTopicsModal({ visible, onClose, onSubmit }: BulkImport
               <Typography variant="label" color={theme.primary}>
                 {format === 'csv' ? '📊 CSV Format' : '📋 JSON Format'}
               </Typography>
-              <Typography variant="caption" color={theme.textTertiary}>
-                {format === 'csv'
-                  ? 'Required: displayName\nOptional: slug, order\n\nIf slug is omitted, it will be auto-generated from the display name.\nExample:\ndisplayName,slug,order\nKinematics,kinematics,0\nLaws of Motion,,1'
-                  : '[{ "displayName": "Kinematics", "slug": "kinematics", "order": 0 },\n { "displayName": "Laws of Motion" }]\n\nslug and order are optional. Slugs are auto-generated if omitted.'}
-              </Typography>
+              {format === 'csv' ? (
+                <View style={{ gap: spacing.xs }}>
+                  {/* Required */}
+                  <Typography variant="caption" color={theme.textSecondary} style={{ fontWeight: '600' }}>
+                    Required columns:
+                  </Typography>
+                  <Typography variant="caption" color={theme.textTertiary} style={{ fontFamily: 'monospace' }}>
+                    displayName
+                  </Typography>
+                  {/* Optional */}
+                  <Typography variant="caption" color={theme.textSecondary} style={{ fontWeight: '600', marginTop: spacing.xs }}>
+                    Optional columns:
+                  </Typography>
+                  <Typography variant="caption" color={theme.textTertiary} style={{ fontFamily: 'monospace' }}>
+                    slug, order
+                  </Typography>
+                  <Typography variant="caption" color={theme.textTertiary} style={{ marginTop: spacing.xs }}>
+                    If slug is omitted, it will be auto-generated from the display name.
+                  </Typography>
+                  <View style={{ marginTop: spacing.xs, backgroundColor: theme.background, padding: spacing.sm, borderRadius: radius.md, borderWidth: 1, borderColor: theme.border }}>
+                    <Typography variant="caption" color={theme.textTertiary} style={{ fontFamily: 'monospace' }}>
+                      {`displayName,slug,order
+Kinematics,kinematics,0
+Laws of Motion,,1`}
+                    </Typography>
+                  </View>
+                </View>
+              ) : (
+                <View style={{ gap: spacing.xs }}>
+                  <Typography variant="caption" color={theme.textTertiary}>
+                    <Typography variant="caption" style={{ fontWeight: 'bold' }}>slug</Typography> and <Typography variant="caption" style={{ fontWeight: 'bold' }}>order</Typography> are optional. Slugs are auto-generated if omitted.
+                  </Typography>
+                  <View style={{ backgroundColor: theme.background, padding: spacing.sm, borderRadius: radius.md, borderWidth: 1, borderColor: theme.border }}>
+                    <Typography variant="caption" color={theme.textTertiary} style={{ fontFamily: 'monospace' }}>
+                      {`[
+  {
+    "displayName": "Kinematics",
+    "slug": "kinematics",
+    "order": 0
+  },
+  {
+    "displayName": "Laws of Motion"
+  }
+]`}
+                    </Typography>
+                  </View>
+                </View>
+              )}
             </View>
           </Card>
 

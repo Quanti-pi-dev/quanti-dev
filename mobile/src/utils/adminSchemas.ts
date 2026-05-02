@@ -135,6 +135,7 @@ export const flashcardFormSchema = z
     }),
     correctKey: z.enum(['A', 'B', 'C', 'D']),
     explanation: z.string(),
+    imageUrl: z.string(),
   })
   .superRefine((data, ctx) => {
     const filled = (['A', 'B', 'C', 'D'] as const).filter((k) => data.options[k].trim());

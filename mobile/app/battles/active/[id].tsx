@@ -28,6 +28,7 @@ import { useGlobalUI } from '../../../src/contexts/GlobalUIContext';
 import { useChallengeDetail, useSubmitAnswer } from '../../../src/hooks/useChallenge';
 import { useChallengeSSE } from '../../../src/hooks/useChallengeSSE';
 import { fetchDeckCards } from '../../../src/services/api-contracts';
+import { Image } from 'expo-image';
 import type { Flashcard } from '@kd/shared';
 
 const OPTION_KEYS = ['A', 'B', 'C', 'D'] as const;
@@ -334,10 +335,31 @@ export default function ActiveChallengeScreen() {
               borderColor: theme.border,
               minHeight: 100,
               justifyContent: 'center',
+              gap: spacing.sm,
               ...shadows.sm,
               shadowColor: theme.shadow,
             }}
           >
+            {/* Optional question image (diagrams / graphs) */}
+            {currentCard.imageUrl ? (
+              <View
+                style={{
+                  borderRadius: radius.lg,
+                  overflow: 'hidden',
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  maxHeight: 140,
+                }}
+              >
+                <Image
+                  source={{ uri: currentCard.imageUrl }}
+                  style={{ width: '100%', height: 130 }}
+                  contentFit="contain"
+                  transition={{ duration: 250, effect: 'cross-dissolve' }}
+                  cachePolicy="memory-disk"
+                />
+              </View>
+            ) : null}
             <Typography variant="label" style={{ fontSize: 15, lineHeight: 22 }}>
               {currentCard.question}
             </Typography>

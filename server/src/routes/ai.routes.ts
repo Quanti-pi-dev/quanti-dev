@@ -105,12 +105,19 @@ export async function aiRoutes(fastify: FastifyInstance): Promise<void> {
 
       return reply.send({
         success: true,
-        data: { explanation: explanation.trim() },
+        data: { explanation: explanation.trim(), source: 'gemini' },
       });
     } catch (err) {
-      // Return a proper error so the client can distinguish a real AI response
-      // from a Gemini failure and fall back to the seed explanation on its own.
-      fastify.log.warn({ err, cardId }, 'Gemini explain failed — returning 502 to client');
+      // Gemini unavailable (quota, network, etc.) — return seed explanation as fallback
+      fastify.log.warn({ err, cardId }, 'Gemini explain failed — falling back to seed explanation');
+
+      if (seedExplanation && seedExplanation.trim().length > 0) {
+        return reply.send({
+          success: true,
+          data: { explanation: seedExplanation.trim(), source: 'seed' },
+        });
+      }
+
       return reply.status(502).send({
         success: false,
         message: 'AI explanation temporarily unavailable. Please try again.',
@@ -126,4 +133,8 @@ When given a multiple-choice question and its correct answer, explain WHY that a
 - Focus on the conceptual reasoning, not just restating the answer.
 - Use plain language suitable for a student learning this topic.
 - Do not start with "The correct answer is..." — start directly with the explanation.
-- Do not use markdown, bullet points, or headers. Plain prose only.`;
+- You may use basic markdown: **bold** for key terms, *italic* for emphasis, and short bullet lists when listing steps.
+- Do not use headers (#) or horizontal rules (---).
+- Wrap ALL mathematical expressions, variables, equations, and units in LaTeX dollar-sign delimiters.
+  Use $...$ for inline math (e.g. $v = u + at$) and $$...$$ for standalone equations on their own line.
+- Examples of correct LaTeX: $F = ma$, $v^2 = u^2 + 2as$, $s = \\frac{1}{2}at^2$, $\\sqrt{2gh}$, $[LT^{-1}]$.`;

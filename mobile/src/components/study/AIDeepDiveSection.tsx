@@ -2,8 +2,8 @@
 // Contextual AI explanation card shown after answering a flashcard.
 //
 // Behaviour:
-//   - Correct / skipped: explanation auto-expands immediately.
-//   - Incorrect: shows a prominent CTA; user taps to request explanation.
+//   - Always starts in standby (CTA button visible) regardless of answer.
+//   - User must explicitly tap the CTA to expand and generate an explanation.
 //   - On tap (if ai_explanations gate is open): calls Gemini live via
 //     POST /ai/explain and shows the response. Falls back to seed text.
 //   - Explanation is cached per-card-per-session in a local Map ref
@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
 import { spacing, radius } from '../../theme/tokens';
 import { Typography } from '../ui/Typography';
+import { RichContent } from '../ui/RichContent';
 import { useExplainCard } from '../../hooks/useAI';
 import { useSubscriptionGate } from '../../hooks/useSubscriptionGate';
 
@@ -50,20 +51,21 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
 
   const explainCard = useExplainCard();
 
+  // Stable ref so mutateAsync never appears in useCallback/useEffect deps,
+  // preventing the infinite loop: mutation fires → isPending changes →
+  // new explainCard object → fetchExplanation rebuilt → useEffect fires again.
+  const mutateAsyncRef = useRef(explainCard.mutateAsync);
+  useEffect(() => { mutateAsyncRef.current = explainCard.mutateAsync; });
+
   // Reset on card change
   useEffect(() => {
     setShowDeepDive(false);
     setLiveExplanation(null);
   }, [cardIndex]);
 
-  // Auto-expand for correct / skipped answers
-  useEffect(() => {
-    if (answer === true || answer === 'skipped') {
-      setShowDeepDive(true);
-    }
-  }, [answer]);
-
   // Fetch live explanation from Gemini (premium) or reveal seed explanation (free).
+  // NOTE: mutateAsyncRef (not explainCard) is used here to keep this callback
+  // stable across mutation state changes and avoid an infinite re-render loop.
   const fetchExplanation = useCallback(async () => {
     setShowDeepDive(true);
 
@@ -79,7 +81,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
 
     if (cardId) {
       try {
-        const text = await explainCard.mutateAsync(cardId);
+        const text = await mutateAsyncRef.current(cardId);
         // Guard against empty string — a blank response is not a valid AI explanation.
         if (text && text.trim().length > 0) {
           cacheRef.current.set(cardId, text);
@@ -89,7 +91,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
         // Fall through to seed explanation on network / quota errors
       }
     }
-  }, [cardId, hasAIExplanations, explainCard]);
+  }, [cardId, hasAIExplanations]); // ← explainCard intentionally excluded
 
   if (answer === undefined) return null;
 
@@ -99,8 +101,8 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
 
   return (
     <View style={{ paddingHorizontal: spacing.xl, paddingBottom: spacing.sm }}>
-      {/* Incorrect + not expanded: prominent CTA */}
-      {answer === false && !showDeepDive && (
+      {/* Standby CTA — shown for all answer states until user taps */}
+      {!showDeepDive && (
         <Animated.View entering={FadeInDown.delay(700).duration(320)}>
           <TouchableOpacity
             onPress={fetchExplanation}
@@ -207,13 +209,12 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                   </Typography>
                 </View>
               ) : (
-                <Typography
+                <RichContent
                   variant="bodySmall"
                   color={theme.textSecondary}
-                  style={{ lineHeight: 20 }}
                 >
                   {displayText || 'No additional explanation is available for this card.'}
-                </Typography>
+                </RichContent>
               )}
             </View>
 
@@ -225,7 +226,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                   cacheRef.current.delete(cardId);
                   setLiveExplanation(null);
                   try {
-                    const text = await explainCard.mutateAsync(cardId);
+                    const text = await mutateAsyncRef.current(cardId);
                     if (text) {
                       cacheRef.current.set(cardId, text);
                       setLiveExplanation(text);

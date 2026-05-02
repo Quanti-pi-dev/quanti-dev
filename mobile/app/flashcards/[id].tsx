@@ -12,7 +12,7 @@
 //   - CoinToast            (floating "+coins" indicator)
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { View } from 'react-native';
+import { View, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
 
@@ -38,10 +38,19 @@ import { useRecordLevelAnswer } from '../../src/hooks/useSubjects';
 import { useStudySession } from '../../src/hooks/useStudySession';
 import { useSubmitTournamentScore } from '../../src/hooks/useTournaments';
 import { useExamsUsedToday } from '../../src/hooks/useExamsUsedToday';
+import { loadStudyState, saveStudyState, clearStudyState } from '../../src/services/studyStateStorage';
 import type { Flashcard, SubjectLevel } from '@kd/shared';
 
 // Answer state per card
 type CardAnswer = boolean | 'skipped' | undefined;
+
+// In-memory cache to preserve study state if the user navigates away temporarily.
+// This is the fast path; AsyncStorage is the durable path (survives app kill).
+const studyStateCache: Record<string, {
+  currentIdx: number;
+  answered: CardAnswer[];
+  sessionCoinsEarned: number;
+}> = {};
 
 // ─── Screen ───────────────────────────────────────────────────
 
@@ -121,9 +130,52 @@ export default function FlashcardStudyScreen() {
   }, [isLoading, cards, incrementExamsUsedToday]);
 
   // ─── Card navigation state ────────────────────────────────
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [answered, setAnswered] = useState<CardAnswer[]>([]);
-  const [sessionCoinsEarned, setSessionCoinsEarned] = useState(0);
+  const cacheKey = isLevelMode ? `${examId}-${subjectId}-${level}-${topicSlug}` : id;
+
+  const [currentIdx, setCurrentIdx] = useState(() => studyStateCache[cacheKey]?.currentIdx ?? 0);
+  const [answered, setAnswered] = useState<CardAnswer[]>(() => studyStateCache[cacheKey]?.answered ?? []);
+  const [sessionCoinsEarned, setSessionCoinsEarned] = useState(() => studyStateCache[cacheKey]?.sessionCoinsEarned ?? 0);
+  // Whether we've attempted to restore state from AsyncStorage yet
+  const [restoredFromStorage, setRestoredFromStorage] = useState(!!studyStateCache[cacheKey]);
+
+  // ─── Restore persisted state from AsyncStorage on mount ───
+  useEffect(() => {
+    // Skip if the in-memory cache already had data (fast-path for back-navigation)
+    if (studyStateCache[cacheKey]) {
+      setRestoredFromStorage(true);
+      return;
+    }
+    let cancelled = false;
+    loadStudyState(cacheKey).then((saved) => {
+      if (cancelled) return;
+      if (saved && saved.answered.length > 0) {
+        setCurrentIdx(saved.currentIdx);
+        setAnswered(saved.answered);
+        setSessionCoinsEarned(saved.sessionCoinsEarned);
+      }
+      setRestoredFromStorage(true);
+    });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cacheKey]);
+
+  // ─── Sync in-memory cache + persist to AsyncStorage on change ─
+  useEffect(() => {
+    studyStateCache[cacheKey] = {
+      currentIdx,
+      answered,
+      sessionCoinsEarned,
+    };
+    // Only persist after initial restore is complete to avoid overwriting
+    if (restoredFromStorage) {
+      void saveStudyState(cacheKey, {
+        currentIdx,
+        answered,
+        sessionCoinsEarned,
+        totalCards: cards?.length ?? 0,
+      });
+    }
+  }, [cacheKey, currentIdx, answered, sessionCoinsEarned, restoredFromStorage, cards?.length]);
   const [unlockModal, setUnlockModal] = useState<{
     visible: boolean;
     newLevel: SubjectLevel | null;
@@ -280,7 +332,7 @@ export default function FlashcardStudyScreen() {
   }, [answeredCount, isComplete, router, showAlert]);
 
   // ─── Loading state ────────────────────────────────────────
-  if (isLoading) {
+  if (isLoading || !restoredFromStorage) {
     return (
       <ScreenWrapper>
         <Header showBack title={title ?? 'Study'} />
@@ -330,7 +382,13 @@ export default function FlashcardStudyScreen() {
         incorrectCount={incorrectCount}
         skippedCount={skippedCount}
         sessionCoinsEarned={sessionCoinsEarned}
-        onStudyAgain={() => { setCurrentIdx(0); setAnswered([]); setSessionCoinsEarned(0); }}
+        onStudyAgain={() => {
+          setCurrentIdx(0);
+          setAnswered([]);
+          setSessionCoinsEarned(0);
+          delete studyStateCache[cacheKey];
+          void clearStudyState(cacheKey);
+        }}
       />
     );
   }
@@ -359,25 +417,28 @@ export default function FlashcardStudyScreen() {
         correctCount={correctCount}
       />
 
-      {/* Flashcard */}
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing['2xl'] }}>
-        <FlashCard
-          key={card.id}
-          question={card.question}
-          options={cardOptions}
-          correctKey={correctLetterKey}
-          explanation={card.explanation ?? ''}
-          onAnswer={handleAnswer}
-          onSkip={handleSkip}
-        />
-      </View>
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+        {/* Flashcard */}
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing['2xl'] }}>
+          <FlashCard
+            key={card.id}
+            question={card.question}
+            options={cardOptions}
+            correctKey={correctLetterKey}
+            explanation={card.explanation ?? ''}
+            imageUrl={card.imageUrl}
+            onAnswer={handleAnswer}
+            onSkip={handleSkip}
+          />
+        </View>
 
-      <AIDeepDiveSection
-        answer={answered[currentIdx]}
-        explanation={card.explanation ?? ''}
-        cardIndex={currentIdx}
-        cardId={card.id}
-      />
+        <AIDeepDiveSection
+          answer={answered[currentIdx]}
+          explanation={card.explanation ?? ''}
+          cardIndex={currentIdx}
+          cardId={card.id}
+        />
+      </ScrollView>
 
       <StudyNavBar
         currentIdx={currentIdx}

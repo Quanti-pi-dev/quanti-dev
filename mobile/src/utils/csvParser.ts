@@ -12,6 +12,8 @@ export interface ParsedFlashcard {
   options: { id: string; text: string }[];
   correctAnswerId: string;
   explanation: string | null;
+  /** Optional image URL for the question (e.g. diagram or graph). */
+  imageUrl?: string | null;
   // ── Optional PYQ / source metadata ──
   source?: FlashcardSource;
   sourceYear?: number | null;
@@ -36,6 +38,7 @@ export interface ParseResult {
 // - sourceYear: integer (e.g. 2022)
 // - sourcePaper: free text (e.g. "Paper 1")
 // - tags: comma-separated (e.g. "kinematics,motion")
+// - imageUrl: URL to a question image (diagram/graph)
 
 function splitCSVRow(line: string): string[] {
   const result: string[] = [];
@@ -115,6 +118,7 @@ export function parseCSV(text: string): ParseResult {
   const yearI    = headers.indexOf('sourceyear');
   const paperI   = headers.indexOf('sourcepaper');
   const tagsI    = headers.indexOf('tags');
+  const imgI     = headers.indexOf('imageurl');
 
   for (let row = 1; row < rows.length; row++) {
     const cols = splitCSVRow(rows[row]!);
@@ -131,6 +135,7 @@ export function parseCSV(text: string): ParseResult {
     const rawYear    = yearI >= 0 ? (cols[yearI]?.trim() ?? '') : '';
     const rawPaper   = paperI >= 0 ? (cols[paperI]?.trim() ?? '') : '';
     const rawTags    = tagsI >= 0 ? (cols[tagsI]?.trim() ?? '') : '';
+    const rawImgUrl  = imgI >= 0 ? (cols[imgI]?.trim() ?? '') : '';
 
     if (!question) {
       errors.push(`Row ${row + 1}: Question is empty — skipped.`);
@@ -170,6 +175,7 @@ export function parseCSV(text: string): ParseResult {
     const sourceYear = rawYear ? parseInt(rawYear, 10) || null : null;
     const sourcePaper = rawPaper || null;
     const tags = rawTags ? rawTags.split(',').map((t) => t.trim()).filter(Boolean) : undefined;
+    const imageUrl = rawImgUrl && (rawImgUrl.startsWith('http://') || rawImgUrl.startsWith('https://')) ? rawImgUrl : null;
 
     cards.push({
       question,
@@ -180,6 +186,7 @@ export function parseCSV(text: string): ParseResult {
       ...(sourceYear && { sourceYear }),
       ...(sourcePaper && { sourcePaper }),
       ...(tags && tags.length > 0 && { tags }),
+      ...(imageUrl && { imageUrl }),
     });
   }
 
@@ -197,7 +204,8 @@ export function parseCSV(text: string): ParseResult {
 //     "source": "pyq",             // optional: original | pyq | textbook
 //     "sourceYear": 2022,          // optional, integer
 //     "sourcePaper": "Paper 1",    // optional
-//     "tags": ["kinematics"]       // optional
+//     "tags": ["kinematics"],       // optional
+//     "imageUrl": "https://..."     // optional
 //   }
 // ]
 
@@ -235,6 +243,7 @@ export function parseJSON(text: string): ParseResult {
     const rawYear    = record['sourceYear'];
     const rawPaper   = record['sourcePaper'];
     const rawTags    = record['tags'];
+    const rawImgUrl  = record['imageUrl'];
 
     if (typeof q !== 'string' || !q.trim()) {
       errors.push(`${prefix}: Missing or empty "question" field — skipped.`);
@@ -278,6 +287,9 @@ export function parseJSON(text: string): ParseResult {
     const tags = Array.isArray(rawTags)
       ? (rawTags as unknown[]).filter((t): t is string => typeof t === 'string')
       : undefined;
+    const imageUrl = typeof rawImgUrl === 'string' && rawImgUrl.trim() &&
+      (rawImgUrl.startsWith('http://') || rawImgUrl.startsWith('https://'))
+      ? rawImgUrl.trim() : null;
 
     cards.push({
       question: q.trim(),
@@ -288,6 +300,7 @@ export function parseJSON(text: string): ParseResult {
       ...(sourceYear && { sourceYear }),
       ...(sourcePaper && { sourcePaper }),
       ...(tags && tags.length > 0 && { tags }),
+      ...(imageUrl && { imageUrl }),
     });
   }
 

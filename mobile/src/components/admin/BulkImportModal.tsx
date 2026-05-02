@@ -209,15 +209,55 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
 
           {/* ── Format Hint ── */}
           <Card>
-            <View style={{ gap: spacing.xs }}>
+            <View style={{ gap: spacing.sm }}>
               <Typography variant="label" color={theme.primary}>
                 {format === 'csv' ? '📊 CSV Format' : '📋 JSON Format'}
               </Typography>
-              <Typography variant="caption" color={theme.textTertiary}>
-                {format === 'csv'
-                  ? 'Required: question, optionA, optionB, optionC, optionD, correctAnswer\nOptional: explanation, source (original|pyq|ai_generated), sourceYear, sourcePaper, tags'
-                  : '[{ "question": "...", "options": [{"id": "A", "text": "..."}], "correctAnswerId": "A", "explanation": "...",\n  "source": "pyq", "sourceYear": 2022, "sourcePaper": "Paper 1", "tags": ["kinematics"] }]'}
-              </Typography>
+
+              {format === 'csv' ? (
+                <View style={{ gap: spacing.xs }}>
+                  {/* Required */}
+                  <Typography variant="caption" color={theme.textSecondary} style={{ fontWeight: '600' }}>
+                    Required columns:
+                  </Typography>
+                  <Typography variant="caption" color={theme.textTertiary} style={{ fontFamily: 'monospace' }}>
+                    question, optionA, optionB, optionC, optionD, correctAnswer
+                  </Typography>
+                  {/* Optional */}
+                  <Typography variant="caption" color={theme.textSecondary} style={{ fontWeight: '600', marginTop: spacing.xs }}>
+                    Optional columns:
+                  </Typography>
+                  <Typography variant="caption" color={theme.textTertiary} style={{ fontFamily: 'monospace' }}>
+                    explanation{'\n'}
+                    source — original | pyq | ai_generated{'\n'}
+                    sourceYear — integer (e.g. 2022){'\n'}
+                    sourcePaper — e.g. "Paper 1"{'\n'}
+                    tags — comma-separated (e.g. kinematics,motion){'\n'}
+                    imageUrl — URL to diagram/graph image
+                  </Typography>
+                </View>
+              ) : (
+                <View style={{ gap: spacing.xs, backgroundColor: theme.background, padding: spacing.sm, borderRadius: radius.md, borderWidth: 1, borderColor: theme.border }}>
+                  <Typography variant="caption" color={theme.textTertiary} style={{ fontFamily: 'monospace' }}>
+                    {`[
+  {
+    "question": "What is 2+2?",
+    "options": [
+      { "id": "A", "text": "3" },
+      { "id": "B", "text": "4" }
+    ],
+    "correctAnswerId": "B",
+    "explanation": "Optional explanation",
+    "imageUrl": "https://cdn.example.com/diagram.png",
+    "source": "ai_generated",
+    "sourceYear": 2024,
+    "sourcePaper": "Mock Test",
+    "tags": ["math"]
+  }
+]`}
+                  </Typography>
+                </View>
+              )}
             </View>
           </Card>
 
@@ -311,6 +351,18 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
                         <Typography variant="label" numberOfLines={2}>
                           {i + 1}. {card.question}
                         </Typography>
+                        {card.imageUrl ? (
+                          <View style={{
+                            flexDirection: 'row', alignItems: 'center', gap: 4,
+                            backgroundColor: theme.primaryMuted, paddingHorizontal: 6, paddingVertical: 2,
+                            borderRadius: 6, alignSelf: 'flex-start',
+                          }}>
+                            <Ionicons name="image" size={10} color={theme.primary} />
+                            <Typography variant="caption" color={theme.primary} style={{ fontSize: 10 }}>
+                              Has image
+                            </Typography>
+                          </View>
+                        ) : null}
                         {card.options.map((opt) => (
                           <View key={opt.id} style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
                             <Ionicons
@@ -326,6 +378,15 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
                             </Typography>
                           </View>
                         ))}
+                        {/* Explanation preview */}
+                        {card.explanation && (
+                          <View style={{ marginTop: spacing.xs, padding: spacing.xs, backgroundColor: theme.border + '44', borderRadius: radius.md }}>
+                            <Typography variant="caption" color={theme.textSecondary} style={{ fontStyle: 'italic' }}>
+                              <Typography variant="caption" color={theme.textSecondary} style={{ fontWeight: 'bold' }}>Exp: </Typography>
+                              {card.explanation}
+                            </Typography>
+                          </View>
+                        )}
                         {/* PYQ metadata badge */}
                         {(card.source || card.tags?.length) ? (
                           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs }}>

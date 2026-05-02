@@ -4,6 +4,7 @@
 
 import { useState, useCallback } from 'react';
 import { View, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
@@ -24,6 +25,7 @@ import {
   AdminFlashcard,
 } from '../../src/hooks/useAdminContent';
 import { BulkImportModal } from '../../src/components/admin/BulkImportModal';
+import { ImageUploadButton } from '../../src/components/admin/ImageUploadButton';
 import { ParsedFlashcard } from '../../src/utils/csvParser';
 import { adminApi } from '../../src/services/api';
 import { useQueryClient } from '@tanstack/react-query';
@@ -36,6 +38,7 @@ interface CardForm {
   options: Record<OptionKey, string>;
   correctKey: OptionKey;
   explanation: string;
+  imageUrl: string;
 }
 
 const BLANK_FORM: CardForm = {
@@ -43,6 +46,7 @@ const BLANK_FORM: CardForm = {
   options: { A: '', B: '', C: '', D: '' },
   correctKey: 'A',
   explanation: '',
+  imageUrl: '',
 };
 
 export default function FlashcardEditorScreen() {
@@ -95,7 +99,11 @@ export default function FlashcardEditorScreen() {
       : 'A';
 
     setEditingCard(card);
-    setForm({ question: card.question, options, correctKey, explanation: card.explanation ?? '' });
+    setForm({
+      question: card.question, options, correctKey,
+      explanation: card.explanation ?? '',
+      imageUrl: card.imageUrl ?? '',
+    });
     setFormError('');
     setShowForm(true);
   }
@@ -140,6 +148,7 @@ export default function FlashcardEditorScreen() {
       correctAnswerId: form.correctKey,
       // Send null explicitly — the backend schema is nullable, not optional-undefined
       explanation: form.explanation.trim() || null,
+      imageUrl: form.imageUrl.trim() || null,
     };
 
     try {
@@ -215,6 +224,25 @@ export default function FlashcardEditorScreen() {
       }}
     >
       <View style={{ padding: spacing.md, gap: spacing.xs }}>
+        {/* Thumbnail preview if card has image */}
+        {card.imageUrl ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs }}>
+            <Image
+              source={{ uri: card.imageUrl }}
+              style={{ width: 48, height: 32, borderRadius: radius.md }}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+            />
+            <View style={{
+              flexDirection: 'row', alignItems: 'center', gap: 3,
+              backgroundColor: theme.primaryMuted, paddingHorizontal: 6, paddingVertical: 2,
+              borderRadius: radius.sm,
+            }}>
+              <Ionicons name="image" size={10} color={theme.primary} />
+              <Typography variant="caption" color={theme.primary} style={{ fontSize: 10 }}>Has image</Typography>
+            </View>
+          </View>
+        ) : null}
         <Typography variant="label" numberOfLines={2}>{card.question}</Typography>
         {card.options.map((opt) => (
           <View key={opt.id} style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
@@ -313,6 +341,14 @@ export default function FlashcardEditorScreen() {
                   ))}
 
                   <Input label="Explanation" placeholder="One-line explanation of the correct answer…" value={form.explanation} onChangeText={(v) => setForm(f => ({ ...f, explanation: v }))} multiline numberOfLines={2} />
+
+                  <ImageUploadButton
+                    currentUrl={form.imageUrl}
+                    onUploaded={(cdnUrl) => setForm(f => ({ ...f, imageUrl: cdnUrl }))}
+                    onRemoved={() => setForm(f => ({ ...f, imageUrl: '' }))}
+                    label="Question Image (optional)"
+                    placeholder="Tap to upload diagram or graph"
+                  />
 
                   {formError ? <Typography variant="bodySmall" color={theme.error} align="center">{formError}</Typography> : null}
 

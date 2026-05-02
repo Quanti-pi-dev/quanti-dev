@@ -17,6 +17,7 @@ import {
   useWindowDimensions,
   ViewStyle,
 } from 'react-native';
+import { Image } from 'expo-image';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -28,6 +29,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import { radius, spacing, typography, shadows } from '../theme/tokens';
 import { Typography } from './ui/Typography';
+import { RichContent } from './ui/RichContent';
 import { useGlowPulse, TIMING_FLIP } from '../theme/animations';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -42,6 +44,8 @@ interface FlashCardProps {
   options: Option[];
   correctKey: 'A' | 'B' | 'C' | 'D';
   explanation?: string;
+  /** Optional image URL rendered above the question (e.g. diagrams, graphs). */
+  imageUrl?: string | null;
   style?: ViewStyle;
   onAnswer?: (correct: boolean, selectedKey: 'A' | 'B' | 'C' | 'D') => void;
   onSkip?: () => void;
@@ -56,6 +60,7 @@ export function FlashCard({
   options,
   correctKey,
   explanation,
+  imageUrl,
   style,
   onAnswer,
   onSkip,
@@ -210,15 +215,33 @@ export function FlashCard({
           },
         ]}
       >
-        {/* Question */}
-        <View style={{ flex: 1, justifyContent: 'center' }}>
-          <Typography
-            variant="h4"
+        {/* Question (with optional diagram/graph image) */}
+        <View style={{ flex: 1, justifyContent: imageUrl ? 'flex-start' : 'center', gap: spacing.sm }}>
+          {imageUrl ? (
+            <View
+              style={{
+                borderRadius: radius.lg,
+                overflow: 'hidden',
+                borderWidth: 1,
+                borderColor: theme.border,
+                maxHeight: cardHeight * 0.3,
+              }}
+            >
+              <Image
+                source={{ uri: imageUrl }}
+                style={{ width: '100%', height: cardHeight * 0.28 }}
+                contentFit="contain"
+                transition={{ duration: 250, effect: 'cross-dissolve' }}
+                cachePolicy="memory-disk"
+              />
+            </View>
+          ) : null}
+          <RichContent
+            variant={imageUrl ? 'bodySmall' : 'h4'}
             align="center"
-            style={{ lineHeight: typography.lg * 1.4 }}
           >
             {question}
-          </Typography>
+          </RichContent>
         </View>
 
         {/* Options */}
@@ -268,9 +291,9 @@ export function FlashCard({
                   )}
                 </View>
 
-                <Typography variant="bodySmall" color={s.textColor} style={{ flex: 1 }}>
+                <RichContent variant="bodySmall" color={s.textColor} style={{ flex: 1 }}>
                   {opt.text}
-                </Typography>
+                </RichContent>
 
                 {/* Trailing icon for correct/selected */}
                 {showCheckmark && (
@@ -384,9 +407,9 @@ export function FlashCard({
             </Typography>
           </View>
           {explanation && (
-            <Typography variant="bodySmall" color={theme.textSecondary} style={{ lineHeight: typography.sm * 1.5 }}>
+            <RichContent variant="bodySmall" color={theme.textSecondary}>
               {explanation}
-            </Typography>
+            </RichContent>
           )}
         </View>
       </Animated.View>

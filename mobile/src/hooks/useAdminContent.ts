@@ -276,6 +276,7 @@ export function useAddLevelCard() {
         options: { id: string; text: string }[];
         correctAnswerId: string;
         explanation?: string | null;
+        imageUrl?: string | null;
         tags?: string[];
       };
     }) => {
@@ -302,7 +303,7 @@ export function useUpdateLevelCard() {
       examId, subjectId, level, topicSlug: _topicSlug, cardId, updates,
     }: {
       examId: string; subjectId: string; level: string; topicSlug: string; cardId: string;
-      updates: Partial<{ question: string; options: { id: string; text: string }[]; correctAnswerId: string; explanation: string | null }>;
+      updates: Partial<{ question: string; options: { id: string; text: string }[]; correctAnswerId: string; explanation: string | null; imageUrl: string | null }>;
     }) => {
       await adminApi.put(`/flashcards/${cardId}`, updates);
     },

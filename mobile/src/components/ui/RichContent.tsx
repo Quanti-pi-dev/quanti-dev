@@ -6,14 +6,13 @@
 // Performance design:
 //   - Plain text → native <Typography> (zero WebView overhead)
 //   - Rich content → single WebView per section (not per element)
-//   - KaTeX + marked are bundled locally (offline-first, zero latency)
+//   - KaTeX + marked are loaded via CDN (WebView requires internet for AI anyway)
 //   - WebView reports its rendered height via postMessage for auto-sizing
 //   - pointerEvents="none" on WebView so touch events pass to parent
 
 import { useState, useMemo, useCallback } from 'react';
 import { View, ViewStyle, TextStyle, StyleProp } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { Asset } from 'expo-asset';
 import { useTheme } from '../../theme';
 import { typography as tokens } from '../../theme/tokens';
 import { Typography } from './Typography';
@@ -61,12 +60,13 @@ const VARIANT_FONT_SIZE: Record<VariantKey, number> = {
   overline: tokens.xs,
 };
 
-// Asset paths resolved at runtime to avoid hardcoded paths
-// expo-asset ensures these are available even after bundling
-const KATEX_JS_PATH = require('../../../assets/katex/katex.min.js');
-const KATEX_CSS_PATH = require('../../../assets/katex/katex.min.css');
-const AUTO_RENDER_PATH = require('../../../assets/katex/contrib/auto-render.min.js');
-const MARKED_PATH = require('../../../assets/marked/marked.min.js');
+// CDN URLs for KaTeX and marked.
+// The WebView is only shown after the user requests an AI explanation,
+// which already requires an active internet connection (Gemini API call).
+const KATEX_CSS = 'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css';
+const KATEX_JS  = 'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js';
+const AUTO_RENDER_JS = 'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js';
+const MARKED_JS = 'https://cdn.jsdelivr.net/npm/marked@15/marked.min.js';
 
 // ─── HTML Builder ─────────────────────────────────────────────
 
@@ -75,19 +75,14 @@ function buildRichHtml(
   fontSize: number,
   color: string,
   align: string,
-  katexJsUri: string,
-  katexCssUri: string,
-  autoRenderUri: string,
-  markedUri: string,
 ): string {
-  // Safely encode content as a JSON string for inline script injection
   const contentJson = JSON.stringify(content);
 
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <link rel="stylesheet" href="${katexCssUri}">
+  <link rel="stylesheet" href="${KATEX_CSS}">
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     html, body {
@@ -100,6 +95,8 @@ function buildRichHtml(
       overflow: hidden;
       word-break: break-word;
     }
+    /* Hide MathML immediately to prevent "ghosting" while CDN CSS loads */
+    .katex-mathml { display: none; }
     .katex { font-size: 1.1em; }
     .katex-display { margin: 6px 0; overflow-x: auto; }
     ul, ol { padding-left: 1.3em; margin: 4px 0; }
@@ -110,27 +107,30 @@ function buildRichHtml(
   </style>
 </head>
 <body>
-<script src="${markedUri}"></script>
-<script src="${katexJsUri}"></script>
-<script src="${autoRenderUri}"></script>
+<div id="wrapper"></div>
+<script src="${MARKED_JS}"></script>
+<script src="${KATEX_JS}"></script>
+<script src="${AUTO_RENDER_JS}"></script>
 <script>
   (function() {
     var content = ${contentJson};
-    // Parse markdown first
     var html = marked.parse(content, { breaks: false, gfm: true });
-    document.body.innerHTML = html;
-    // Then render math in the resulting DOM
-    renderMathInElement(document.body, {
+    var wrapper = document.getElementById('wrapper');
+    wrapper.innerHTML = html;
+    renderMathInElement(wrapper, {
       delimiters: [
         { left: '$$', right: '$$', display: true },
         { left: '$',  right: '$',  display: false }
       ],
       throwOnError: false
     });
-    // Report rendered height so React Native can size the View correctly
-    window.ReactNativeWebView.postMessage(
-      JSON.stringify({ type: 'height', value: document.body.scrollHeight })
-    );
+    
+    // Send height after a small delay to ensure rendering and font-loading are complete
+    setTimeout(function() {
+      window.ReactNativeWebView.postMessage(
+        JSON.stringify({ type: 'height', value: wrapper.offsetHeight })
+      );
+    }, 50);
   })();
 </script>
 </body>
@@ -180,36 +180,20 @@ interface RichWebViewProps {
 }
 
 function RichWebView({ content, fontSize, color, align, style }: RichWebViewProps) {
-  const [height, setHeight] = useState(fontSize * 1.55 * 2); // reasonable initial estimate
-
-  // Resolve asset URIs once
-  const assetUris = useMemo(() => {
-    const katexJs = Asset.fromModule(KATEX_JS_PATH).uri;
-    const katexCss = Asset.fromModule(KATEX_CSS_PATH).uri;
-    const autoRender = Asset.fromModule(AUTO_RENDER_PATH).uri;
-    const marked = Asset.fromModule(MARKED_PATH).uri;
-    return { katexJs, katexCss, autoRender, marked };
-  }, []);
+  const [height, setHeight] = useState(fontSize * 1.55 * 2);
 
   const html = useMemo(
-    () => buildRichHtml(
-      content,
-      fontSize,
-      color,
-      align,
-      assetUris.katexJs,
-      assetUris.katexCss,
-      assetUris.autoRender,
-      assetUris.marked,
-    ),
-    [content, fontSize, color, align, assetUris],
+    () => buildRichHtml(content, fontSize, color, align),
+    [content, fontSize, color, align],
   );
+
+  const source = useMemo(() => ({ html }), [html]);
 
   const handleMessage = useCallback((event: { nativeEvent: { data: string } }) => {
     try {
       const msg = JSON.parse(event.nativeEvent.data) as { type: string; value: number };
       if (msg.type === 'height' && msg.value > 0) {
-        setHeight(msg.value + 4); // +4px buffer for subpixel rounding
+        setHeight(msg.value + 4);
       }
     } catch {
       // ignore malformed messages
@@ -219,7 +203,7 @@ function RichWebView({ content, fontSize, color, align, style }: RichWebViewProp
   return (
     <View style={[{ height, width: '100%' }, style]}>
       <WebView
-        source={{ html }}
+        source={source}
         style={{ flex: 1, backgroundColor: 'transparent' }}
         scrollEnabled={false}
         showsVerticalScrollIndicator={false}
