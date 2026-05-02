@@ -15,6 +15,7 @@ import { api } from '../services/api';
 import { enqueue } from '../services/offlineQueue';
 import { progressKeys } from './useProgress';
 import { gamificationKeys } from './useGamification';
+import { sessionsKeys } from './useExamsUsedToday';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -119,6 +120,7 @@ export function useStudySession({ deckId, startedAt }: UseStudySessionConfig): U
       queryClient.invalidateQueries({ queryKey: ['progress', 'levelSummary'] });
       queryClient.invalidateQueries({ queryKey: gamificationKeys.coins() });
       queryClient.invalidateQueries({ queryKey: gamificationKeys.coinsToday() });
+      queryClient.invalidateQueries({ queryKey: sessionsKeys.today() });
     } catch {
       // Server unreachable — persist to offline queue for later retry
       await enqueue({

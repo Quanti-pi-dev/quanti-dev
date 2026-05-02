@@ -263,21 +263,64 @@ class ProgressRepository {
 
   // ─── Study Session (PostgreSQL write-behind) ──────────
   async saveSession(session: Omit<StudySession, 'id'>): Promise<void> {
-    await this.pg.query(
-      `INSERT INTO study_sessions
-         (user_id, deck_id, cards_studied, correct_answers, incorrect_answers, avg_response_time_ms, started_at, ended_at)
-       SELECT id, $2, $3, $4, $5, $6, $7, $8 FROM users WHERE firebase_uid = $1`,
-      [
-        session.userId,
-        session.deckId,
-        session.cardsStudied,
-        session.correctAnswers,
-        session.incorrectAnswers,
-        session.averageResponseTimeMs,
-        session.startedAt,
-        session.endedAt,
-      ],
-    );
+    const client = await this.pg.connect();
+    try {
+      await client.query('BEGIN');
+      
+      const userRes = await client.query('SELECT id FROM users WHERE firebase_uid = $1', [session.userId]);
+      if (userRes.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return; // User not synced yet, cannot save session
+      }
+      const pgUserId = userRes.rows[0].id;
+
+      // Try to update an existing session from the same start time
+      const updateRes = await client.query(
+        `UPDATE study_sessions
+         SET cards_studied = $4,
+             correct_answers = $5,
+             incorrect_answers = $6,
+             avg_response_time_ms = $7,
+             ended_at = $8
+         WHERE user_id = $1 AND deck_id = $2 AND started_at = $3`,
+        [
+          pgUserId,
+          session.deckId,
+          session.startedAt,
+          session.cardsStudied,
+          session.correctAnswers,
+          session.incorrectAnswers,
+          session.averageResponseTimeMs,
+          session.endedAt,
+        ]
+      );
+
+      // If no session existed, insert a new one
+      if (updateRes.rowCount === 0) {
+        await client.query(
+          `INSERT INTO study_sessions
+             (user_id, deck_id, cards_studied, correct_answers, incorrect_answers, avg_response_time_ms, started_at, ended_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            pgUserId,
+            session.deckId,
+            session.cardsStudied,
+            session.correctAnswers,
+            session.incorrectAnswers,
+            session.averageResponseTimeMs,
+            session.startedAt,
+            session.endedAt,
+          ]
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   // ─── Study History ───────────────────────────────────

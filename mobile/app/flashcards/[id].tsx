@@ -44,6 +44,16 @@ import type { Flashcard, SubjectLevel } from '@kd/shared';
 // Answer state per card
 type CardAnswer = boolean | 'skipped' | undefined;
 
+/** Fisher-Yates (Knuth) shuffle — returns a new array. */
+function shuffleArray<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j]!, copy[i]!];
+  }
+  return copy;
+}
+
 // In-memory cache to preserve study state if the user navigates away temporarily.
 // This is the fast path; AsyncStorage is the durable path (survives app kill).
 const studyStateCache: Record<string, {
@@ -94,10 +104,18 @@ export default function FlashcardStudyScreen() {
   const levelCards = levelData?.cards ?? null;
   const levelDeckId = levelData?.deckId ?? null;
 
-  const cards = isLevelMode ? levelCards : deckCards;
+  const rawCards = isLevelMode ? levelCards : deckCards;
   const isLoading = isLevelMode ? levelLoading : deckLoading;
   const isError = isLevelMode ? levelError : deckIsError;
   const refetch = isLevelMode ? refetchLevel : refetchDeck;
+
+  // ─── Shuffle cards on each session / "Study Again" ────────
+  const [shuffleSeed, setShuffleSeed] = useState(0);
+  const cards = useMemo(
+    () => (rawCards ? shuffleArray(rawCards) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rawCards, shuffleSeed],
+  );
 
   // ─── Effective deckId ─────────────────────────────────────
   const effectiveDeckId = useMemo(() => {
@@ -386,6 +404,7 @@ export default function FlashcardStudyScreen() {
           setCurrentIdx(0);
           setAnswered([]);
           setSessionCoinsEarned(0);
+          setShuffleSeed((s) => s + 1); // re-shuffle cards
           delete studyStateCache[cacheKey];
           void clearStudyState(cacheKey);
         }}
