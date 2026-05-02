@@ -116,6 +116,7 @@ export function useStudySession({ deckId, startedAt }: UseStudySessionConfig): U
       // Invalidate caches so Home screen stats update immediately
       queryClient.invalidateQueries({ queryKey: progressKeys.summary() });
       queryClient.invalidateQueries({ queryKey: progressKeys.streak() });
+      queryClient.invalidateQueries({ queryKey: ['progress', 'levelSummary'] });
       queryClient.invalidateQueries({ queryKey: gamificationKeys.coins() });
       queryClient.invalidateQueries({ queryKey: gamificationKeys.coinsToday() });
     } catch {

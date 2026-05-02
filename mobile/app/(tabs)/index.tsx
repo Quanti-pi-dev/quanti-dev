@@ -36,9 +36,9 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { useSubscriptionGate } from '../../src/hooks/useSubscriptionGate';
 import { useSubscription } from '../../src/contexts/SubscriptionContext';
 import { useProgressSummary, useStudyStreak } from '../../src/hooks/useProgress';
-import { useCoinBalance } from '../../src/hooks/useGamification';
+import { useCoinBalance, useLevelProgressSummary } from '../../src/hooks/useGamification';
 import { useExams } from '../../src/hooks/useExams';
-import { fetchRecentSessions, fetchLevelProgressSummary } from '../../src/services/api-contracts';
+import { fetchRecentSessions } from '../../src/services/api-contracts';
 import { formatRelativeTime } from '../../src/utils/time';
 import { api } from '../../src/services/api';
 import type { Subject } from '@kd/shared';
@@ -195,12 +195,7 @@ export default function HomeScreen() {
   });
 
   // ─── Mastery data: correctAnswers + levelIndex per subject ───
-  const { data: levelProgress } = useQuery({
-    queryKey: ['home-level-progress-summary'],
-    queryFn: fetchLevelProgressSummary,
-    staleTime: 60_000,
-    enabled: isOnboarded,
-  });
+  const { data: levelProgress } = useLevelProgressSummary();
 
   const masteryMap = new Map<string, { correctAnswers: number; levelIndex: number }>();
   if (levelProgress) {

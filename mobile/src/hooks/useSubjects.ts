@@ -99,6 +99,9 @@ export function useRecordLevelAnswer() {
       queryClient.invalidateQueries({
         queryKey: subjectKeys.examProgress(variables.examId),
       });
+      // ← THE CRITICAL FIX: invalidate the global level-progress-summary so that
+      // Subject cards on Home and Study screens immediately reflect the new progress.
+      queryClient.invalidateQueries({ queryKey: ['progress', 'levelSummary'] });
       // Refresh coin balance in real-time when coins were awarded
       if (result.coinsEarned > 0) {
         queryClient.invalidateQueries({ queryKey: gamificationKeys.coins() });

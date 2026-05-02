@@ -8,7 +8,8 @@ import { loadSubscription } from '../middleware/feature-gate.js';
 import { progressRepository } from '../repositories/progress.repository.js';
 import { flashcardRepository } from '../repositories/content.repository.js';
 import { rewardService } from '../services/reward.service.js';
-import { getRedisClient, getPostgresPool } from '../lib/database.js';
+import { getRedisClient, getPostgresPool, getMongoDb } from '../lib/database.js';
+import { ObjectId } from 'mongodb';
 import { SUBJECT_LEVELS } from '@kd/shared';
 
 // ─── Validation Schemas ─────────────────────────────────────
@@ -314,7 +315,6 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/level-progress-summary', async (request: FastifyRequest, reply: FastifyReply) => {
     const userId = request.user!.id;
     const redis = getRedisClient();
-    const pg = getPostgresPool();
 
     // O(1) lookup: read the tracking SET that recordLevelAnswer() maintains
     // Each member has the format: "examId:subjectId:topicSlug:level"
@@ -389,22 +389,25 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
     const subjectIds = [...new Set([...entries.values()].map((e) => e.subjectId))];
     const examIds = [...new Set([...entries.values()].map((e) => e.examId))];
 
-    const [subjectRows, examRows] = await Promise.all([
-      pg.query(
-        `SELECT id, name FROM subjects WHERE id = ANY($1)`,
-        [subjectIds],
-      ),
-      pg.query(
-        `SELECT id, title FROM exams WHERE id = ANY($1)`,
-        [examIds],
-      ),
+    const mongo = getMongoDb();
+    
+    const validSubjectIds = subjectIds.filter(id => /^[0-9a-fA-F]{24}$/.test(id)).map(id => new ObjectId(id));
+    const validExamIds = examIds.filter(id => /^[0-9a-fA-F]{24}$/.test(id)).map(id => new ObjectId(id));
+
+    const [subjects, exams] = await Promise.all([
+      validSubjectIds.length > 0
+        ? mongo.collection('subjects').find({ _id: { $in: validSubjectIds } }).project({ name: 1 }).toArray()
+        : Promise.resolve([]),
+      validExamIds.length > 0
+        ? mongo.collection('exams').find({ _id: { $in: validExamIds } }).project({ title: 1 }).toArray()
+        : Promise.resolve([]),
     ]);
 
     const subjectMap = new Map<string, string>(
-      subjectRows.rows.map((r: { id: string; name: string }) => [r.id, r.name]),
+      subjects.map((s) => [s._id.toString(), s.name as string]),
     );
     const examMap = new Map<string, string>(
-      examRows.rows.map((r: { id: string; title: string }) => [r.id, r.title]),
+      exams.map((e) => [e._id.toString(), e.title as string]),
     );
 
     const data = [...entries.values()].map((e) => ({
