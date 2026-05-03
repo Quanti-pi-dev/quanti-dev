@@ -107,7 +107,7 @@ export default function CreateChallengeScreen() {
   const [step, setStep] = useState(0);
   const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
-  const [selectedLevel, setSelectedLevel] = useState<string>('Beginner');
+  const [selectedLevel, setSelectedLevel] = useState<string>('Emerging');
   const [betAmount, setBetAmount] = useState(50);
   const [durationSeconds, setDurationSeconds] = useState(300);
   const [isCustomDuration, setIsCustomDuration] = useState(false);

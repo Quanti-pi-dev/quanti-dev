@@ -371,9 +371,9 @@ class ProgressRepository {
 
   /**
    * Record one answer for a (userId, examId, subjectId, level) context.
-   * Beginner is always pre-seeded as unlocked on first call.
-   * Returns justUnlocked=true and newlyUnlockedLevel when 20 correct answers
-   * are reached for the first time in this level.
+   * Emerging is always pre-seeded as unlocked on first call.
+   * Returns justUnlocked=true and newlyUnlockedLevel when the threshold
+   * of correct answers is reached for the first time in this level.
    */
   async recordLevelAnswer(
     userId: string,
@@ -386,10 +386,10 @@ class ProgressRepository {
     const progressKey = `level_progress:${userId}:${examId}:${subjectId}:${topicSlug}:${level}`;
     const unlockKey = `unlocked_levels:${userId}:${examId}:${subjectId}:${topicSlug}`;
 
-    // Seed Beginner as unlocked on first ever call for this topic
-    const beginnerAlreadySeeded = await this.redis.sismember(unlockKey, 'Beginner');
-    if (!beginnerAlreadySeeded) {
-      await this.redis.sadd(unlockKey, 'Beginner');
+    // Seed Emerging as unlocked on first ever call for this topic
+    const emergingAlreadySeeded = await this.redis.sismember(unlockKey, 'Emerging');
+    if (!emergingAlreadySeeded) {
+      await this.redis.sadd(unlockKey, 'Emerging');
     }
 
     // Verify the requested level is currently unlocked
@@ -445,7 +445,7 @@ class ProgressRepository {
     return result;
   }
 
-  /** Returns all 6 LevelProgress records for a (userId, examId, subjectId, topicSlug). */
+  /** Returns all 4 LevelProgress records for a (userId, examId, subjectId, topicSlug). */
   async getSubjectLevelSummary(
     userId: string,
     examId: string,
@@ -454,10 +454,10 @@ class ProgressRepository {
   ): Promise<SubjectLevelSummary> {
     const unlockKey = `unlocked_levels:${userId}:${examId}:${subjectId}:${topicSlug}`;
 
-    // Ensure Beginner is seeded
-    const beginnerSeeded = await this.redis.sismember(unlockKey, 'Beginner');
-    if (!beginnerSeeded) {
-      await this.redis.sadd(unlockKey, 'Beginner');
+    // Ensure Emerging is seeded
+    const emergingSeeded = await this.redis.sismember(unlockKey, 'Emerging');
+    if (!emergingSeeded) {
+      await this.redis.sadd(unlockKey, 'Emerging');
     }
 
     const unlockedSet = await this.redis.smembers(unlockKey);
@@ -521,17 +521,17 @@ class ProgressRepository {
 
     // Also check unlocked_levels SETs for each (subject, topic) combo
     // to catch cases where a user has unlocked a level but not yet answered
-    // This is a fallback that ensures Beginner always shows as unlocked
+    // This is a fallback that ensures Emerging always shows as unlocked
     for (const subjectId of subjectIds) {
       if (!subjectMaxLevel.has(subjectId)) {
-        // Check if any topic has Beginner unlocked via the seeded keys
+        // Check if any topic has Emerging unlocked via the seeded keys
         // Use a scan of the allKeys to find any entry for this subject
         const hasAnyEntry = allKeys.some(k => {
           const parts = k.split(':');
           return parts[0] === examId && parts[1] === subjectId;
         });
         if (!hasAnyEntry) {
-          // Default: Beginner (index 0) for subjects with no progress
+          // Default: Emerging (index 0) for subjects with no progress
           subjectMaxLevel.set(subjectId, 0);
         }
       }

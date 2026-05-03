@@ -29,6 +29,7 @@ import { ActivityItem } from '../../src/components/ActivityItem';
 import { StudyInsightsCard } from '../../src/components/StudyInsightsCard';
 import { TargetSubjectCard, SUBJECT_ACCENT_PALETTE, getSubjectIcon } from '../../src/components/TargetSubjectCard';
 import { UpNextHeroCard } from '../../src/components/UpNextHeroCard';
+import { getEducatorMasteryLevel } from '../../src/utils/mastery';
 
 import { WeeklyHeatmap } from '../../src/components/WeeklyHeatmap';
 import { CoinDisplay } from '../../src/components/CoinDisplay';
@@ -54,11 +55,15 @@ function getGreeting(name: string) {
   return `Good ${time}, ${first}`;
 }
 
-function getSubtitle(examName?: string, streak?: number) {
-  if (streak && streak >= 7) return `🔥 ${streak}-day streak — keep it going!`;
-  if (streak && streak >= 3) return `${streak} days strong 💪`;
-  if (examName) return `Ready to conquer ${examName}?`;
-  return 'Ready to study today?';
+function getSubtitle(examName?: string, streak?: number, solved?: number) {
+  if (streak && streak >= 7) return `🔥 ${streak}-day streak — your consistency is building mastery!`;
+  if (streak && streak >= 3) return `${streak} days strong 💪 Your brain is forming connections`;
+  if (solved && solved > 50) {
+    const mastery = getEducatorMasteryLevel(Math.min(Math.round((solved / 120) * 100), 100));
+    return `${mastery.emoji} ${mastery.label} — ${mastery.sublabel.toLowerCase()}`;
+  }
+  if (examName) return `Let's build your ${examName} mastery today`;
+  return 'Ready to grow your understanding?';
 }
 
 // ─── Shimmer upgrade pill ─────────────────────────────────────
@@ -256,7 +261,7 @@ export default function HomeScreen() {
               {getGreeting(displayName)}
             </Typography>
             <Typography variant="caption" color={theme.textTertiary} style={{ marginTop: 2 }}>
-              {getSubtitle(primaryExam?.title, streak)}
+              {getSubtitle(primaryExam?.title, streak, solved)}
             </Typography>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
@@ -568,14 +573,14 @@ export default function HomeScreen() {
                         Let's establish your baseline
                       </Typography>
                       <Typography variant="body" color={theme.textSecondary} align="center">
-                        You've picked your subjects — answer a few questions to see where you stand and unlock personalised recommendations.
+                        You've picked your subjects — answer a few questions to calibrate your mastery level and unlock personalised learning paths.
                       </Typography>
                     </>
                   ) : (
                     <>
-                      <Typography variant="h4" align="center">Start your journey</Typography>
+                      <Typography variant="h4" align="center">Start your learning journey</Typography>
                       <Typography variant="body" color={theme.textSecondary} align="center">
-                        Pick an exam above and complete your first study session to see your progress here.
+                        Pick an exam above and complete your first session to build your mastery profile.
                       </Typography>
                     </>
                   )}
@@ -585,7 +590,7 @@ export default function HomeScreen() {
                   variant="primary"
                   size="sm"
                 >
-                  {isOnboarded ? 'Take a Baseline Quiz' : 'Browse Exams'}
+                  {isOnboarded ? 'Take a Baseline Assessment' : 'Browse Exams'}
                 </Button>
               </View>
             </FadeInView>

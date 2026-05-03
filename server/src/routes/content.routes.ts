@@ -13,6 +13,7 @@ import { topicRepository } from '../repositories/topic.repository.js';
 // questionRepository remains in legacy content.repository for now (Phase 7 cleanup)
 import { questionRepository } from '../repositories/content.repository.js';
 import { gamificationRepository } from '../repositories/gamification.repository.js';
+import { selectAdaptiveOrder } from '../services/card-selector.js';
 import type { PaginationQuery, SubjectLevel } from '@kd/shared';
 import { z } from 'zod';
 import { SUBJECT_LEVELS } from '@kd/shared';
@@ -303,7 +304,9 @@ export async function contentRoutes(fastify: FastifyInstance): Promise<void> {
     });
   });
 
-  // ─── GET /study/adaptive — Mix flashcards from decks ──
+  // ─── GET /study/adaptive — Intelligently ordered study mix ──
+  // Uses the BKT/IRT educator brain to select optimal card order.
+  // Falls back to Fisher-Yates shuffle if adaptive scoring fails.
   fastify.get('/study/adaptive', async (request: FastifyRequest, reply: FastifyReply) => {
     const parsed = adaptiveQuerySchema.parse(request.query);
     const deckIds = Array.isArray(parsed.decks) ? parsed.decks : [parsed.decks];
@@ -323,12 +326,26 @@ export async function contentRoutes(fastify: FastifyInstance): Promise<void> {
 
     const result = await flashcardRepository.findByDeckIds(deckIds, query);
 
-    // Unbiased Fisher-Yates shuffle for adaptive study mix
-    const shuffled = fisherYatesShuffle(result.data);
+    // Use the educator brain for intelligent ordering
+    let orderedCards = result.data;
+    try {
+      const userId = request.user?.id;
+      if (userId && result.data.length > 0) {
+        const adaptive = await selectAdaptiveOrder(result.data, userId);
+        orderedCards = adaptive.cards;
+      } else {
+        // No user context — fall back to shuffle
+        orderedCards = fisherYatesShuffle(result.data);
+      }
+    } catch (err) {
+      // Adaptive scoring failed — fall back to shuffle
+      request.log.warn({ err }, 'Adaptive card selection failed, falling back to shuffle');
+      orderedCards = fisherYatesShuffle(result.data);
+    }
 
     return reply.send({
       success: true,
-      data: shuffled,
+      data: orderedCards,
       pagination: result.pagination,
       timestamp: new Date().toISOString(),
     });

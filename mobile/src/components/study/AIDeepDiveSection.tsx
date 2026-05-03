@@ -6,6 +6,8 @@
 //   - User must explicitly tap the CTA to expand and generate an explanation.
 //   - On tap (if ai_explanations gate is open): calls Gemini live via
 //     POST /ai/explain and shows the response. Falls back to seed text.
+//   - When the student answered WRONG and selectedOptionId is available:
+//     calls POST /ai/explain-wrong for targeted misconception-aware feedback.
 //   - Explanation is cached per-card-per-session in a local Map ref
 //     to avoid redundant API calls on revisit.
 
@@ -18,8 +20,9 @@ import { useTheme } from '../../theme';
 import { spacing, radius } from '../../theme/tokens';
 import { Typography } from '../ui/Typography';
 import { RichContent } from '../ui/RichContent';
-import { useExplainCard } from '../../hooks/useAI';
+import { useExplainCard, useExplainWrong } from '../../hooks/useAI';
 import { useSubscriptionGate } from '../../hooks/useSubscriptionGate';
+import type { TargetedFeedbackResponse } from '../../services/api-contracts';
 
 type CardAnswer = boolean | 'skipped' | undefined;
 
@@ -31,6 +34,8 @@ interface AIDeepDiveSectionProps {
   cardIndex: number;
   /** The flashcard ID — used to fetch a live Gemini explanation. */
   cardId: string;
+  /** The option ID the student selected (for targeted feedback on wrong answers). */
+  selectedOptionId?: string;
 }
 
 export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
@@ -38,6 +43,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
   explanation,
   cardIndex,
   cardId,
+  selectedOptionId,
 }: AIDeepDiveSectionProps) {
   const { theme } = useTheme();
   const { canUseFeature } = useSubscriptionGate();
@@ -45,11 +51,14 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
 
   const [showDeepDive, setShowDeepDive] = useState(false);
   const [liveExplanation, setLiveExplanation] = useState<string | null>(null);
+  const [targetedFeedback, setTargetedFeedback] = useState<TargetedFeedbackResponse | null>(null);
 
   // Per-session cache: cardId → explanation text
   const cacheRef = useRef<Map<string, string>>(new Map());
+  const targetedCacheRef = useRef<Map<string, TargetedFeedbackResponse>>(new Map());
 
   const explainCard = useExplainCard();
+  const explainWrong = useExplainWrong();
 
   // Stable ref so mutateAsync never appears in useCallback/useEffect deps,
   // preventing the infinite loop: mutation fires → isPending changes →
@@ -57,22 +66,49 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
   const mutateAsyncRef = useRef(explainCard.mutateAsync);
   useEffect(() => { mutateAsyncRef.current = explainCard.mutateAsync; });
 
+  const mutateWrongRef = useRef(explainWrong.mutateAsync);
+  useEffect(() => { mutateWrongRef.current = explainWrong.mutateAsync; });
+
   // Reset on card change
   useEffect(() => {
     setShowDeepDive(false);
     setLiveExplanation(null);
+    setTargetedFeedback(null);
   }, [cardIndex]);
 
+  // The student answered wrong and we have their selected option
+  const isWrongAnswer = answer === false && !!selectedOptionId;
+
   // Fetch live explanation from Gemini (premium) or reveal seed explanation (free).
-  // NOTE: mutateAsyncRef (not explainCard) is used here to keep this callback
-  // stable across mutation state changes and avoid an infinite re-render loop.
+  // For wrong answers, tries targeted misconception-aware feedback first.
   const fetchExplanation = useCallback(async () => {
     setShowDeepDive(true);
 
     // Free users: just reveal the seed explanation — no API call needed.
     if (!hasAIExplanations) return;
 
-    // Serve from session cache if available
+    // ── Targeted feedback for wrong answers (all users with AI access) ──
+    if (isWrongAnswer && selectedOptionId) {
+      // Check session cache
+      const cachedTargeted = targetedCacheRef.current.get(`${cardId}:${selectedOptionId}`);
+      if (cachedTargeted) {
+        setTargetedFeedback(cachedTargeted);
+        return;
+      }
+
+      try {
+        const feedback = await mutateWrongRef.current({ cardId, selectedOptionId });
+        if (feedback) {
+          targetedCacheRef.current.set(`${cardId}:${selectedOptionId}`, feedback);
+          setTargetedFeedback(feedback);
+          return;
+        }
+      } catch {
+        // Fall through to generic explanation
+      }
+    }
+
+    // ── Generic explanation (correct answers or targeted failed) ──
     const cached = cacheRef.current.get(cardId);
     if (cached) {
       setLiveExplanation(cached);
@@ -91,13 +127,14 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
         // Fall through to seed explanation on network / quota errors
       }
     }
-  }, [cardId, hasAIExplanations]); // ← explainCard intentionally excluded
+  }, [cardId, hasAIExplanations, isWrongAnswer, selectedOptionId]);
 
   if (answer === undefined) return null;
 
   const displayText = liveExplanation ?? explanation;
-  const isLoadingLive = explainCard.isPending;
+  const isLoadingLive = explainCard.isPending || explainWrong.isPending;
   const isOpen = showDeepDive;
+  const hasTargeted = !!targetedFeedback;
 
   return (
     <View style={{ paddingHorizontal: spacing.xl, paddingBottom: spacing.sm }}>
@@ -111,7 +148,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
             accessibilityLabel="Show AI explanation for this answer"
           >
             <LinearGradient
-              colors={['#6366F1', '#8B5CF6']}
+              colors={isWrongAnswer ? ['#EF4444', '#F97316'] : ['#6366F1', '#8B5CF6']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={{ borderRadius: radius.xl, padding: 1.5 }}
@@ -130,23 +167,29 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                 <View
                   style={{
                     width: 36, height: 36, borderRadius: radius.full,
-                    backgroundColor: '#6366F118',
+                    backgroundColor: isWrongAnswer ? '#EF444418' : '#6366F118',
                     alignItems: 'center', justifyContent: 'center',
                   }}
                 >
-                  <Ionicons name="sparkles" size={18} color="#6366F1" />
+                  <Ionicons
+                    name={isWrongAnswer ? 'school' : 'sparkles'}
+                    size={18}
+                    color={isWrongAnswer ? '#EF4444' : '#6366F1'}
+                  />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Typography variant="label" color="#6366F1">
-                    AI Deep Dive
+                  <Typography variant="label" color={isWrongAnswer ? '#EF4444' : '#6366F1'}>
+                    {isWrongAnswer ? 'Why Was I Wrong?' : 'AI Deep Dive'}
                   </Typography>
                   <Typography variant="caption" color={theme.textTertiary}>
-                    {hasAIExplanations
-                      ? 'Tap to get a Gemini-powered explanation'
-                      : 'Tap to see the explanation'}
+                    {isWrongAnswer
+                      ? 'Tap to understand your specific mistake'
+                      : hasAIExplanations
+                        ? 'Tap to get a Gemini-powered explanation'
+                        : 'Tap to see the explanation'}
                   </Typography>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color="#6366F1" />
+                <Ionicons name="chevron-forward" size={16} color={isWrongAnswer ? '#EF4444' : '#6366F1'} />
               </View>
             </LinearGradient>
           </TouchableOpacity>
@@ -161,12 +204,12 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
               borderRadius: radius.xl,
               overflow: 'hidden',
               borderWidth: 1,
-              borderColor: '#6366F130',
+              borderColor: hasTargeted ? '#EF444430' : '#6366F130',
             }}
           >
             {/* Header stripe */}
             <LinearGradient
-              colors={['#6366F1CC', '#8B5CF6CC']}
+              colors={hasTargeted ? ['#EF4444CC', '#F97316CC'] : ['#6366F1CC', '#8B5CF6CC']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={{
@@ -177,11 +220,15 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                 paddingVertical: spacing.sm,
               }}
             >
-              <Ionicons name="sparkles" size={14} color="#FFF" />
+              <Ionicons
+                name={hasTargeted ? 'school' : 'sparkles'}
+                size={14}
+                color="#FFF"
+              />
               <Typography variant="captionBold" color="#FFF" style={{ fontSize: 11, letterSpacing: 0.4, flex: 1 }}>
-                {hasAIExplanations && liveExplanation ? 'Gemini Explanation' : 'AI Deep Dive'}
+                {hasTargeted ? 'Your Mistake Explained' : hasAIExplanations && liveExplanation ? 'Gemini Explanation' : 'AI Deep Dive'}
               </Typography>
-              {hasAIExplanations && liveExplanation && (
+              {hasAIExplanations && (liveExplanation || hasTargeted) && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Ionicons name="logo-google" size={10} color="rgba(255,255,255,0.7)" />
                   <Typography variant="caption" color="rgba(255,255,255,0.7)" style={{ fontSize: 9 }}>
@@ -194,7 +241,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
             {/* Body */}
             <View
               style={{
-                backgroundColor: '#6366F108',
+                backgroundColor: hasTargeted ? '#EF444408' : '#6366F108',
                 paddingHorizontal: spacing.md,
                 paddingVertical: spacing.md,
                 minHeight: 60,
@@ -203,12 +250,63 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
             >
               {isLoadingLive ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                  <ActivityIndicator size="small" color="#6366F1" />
+                  <ActivityIndicator size="small" color={hasTargeted ? '#EF4444' : '#6366F1'} />
                   <Typography variant="bodySmall" color={theme.textTertiary}>
-                    Generating explanation…
+                    {isWrongAnswer ? 'Analyzing your mistake…' : 'Generating explanation…'}
                   </Typography>
                 </View>
+              ) : hasTargeted && targetedFeedback ? (
+                // ── Targeted misconception feedback ──────────────
+                <View style={{ gap: spacing.sm }}>
+                  {/* Misconception callout */}
+                  <View
+                    style={{
+                      backgroundColor: '#EF444412',
+                      borderRadius: radius.lg,
+                      padding: spacing.sm,
+                      borderLeftWidth: 3,
+                      borderLeftColor: '#EF4444',
+                    }}
+                  >
+                    <Typography variant="captionBold" color="#EF4444" style={{ marginBottom: 2 }}>
+                      What went wrong
+                    </Typography>
+                    <Typography variant="bodySmall" color={theme.textSecondary}>
+                      {targetedFeedback.misconception}
+                    </Typography>
+                  </View>
+
+                  {/* Targeted explanation */}
+                  <RichContent variant="bodySmall" color={theme.textSecondary}>
+                    {targetedFeedback.explanation}
+                  </RichContent>
+
+                  {/* Memory trick */}
+                  {targetedFeedback.memoryTrick && (
+                    <View
+                      style={{
+                        backgroundColor: '#10B98112',
+                        borderRadius: radius.lg,
+                        padding: spacing.sm,
+                        flexDirection: 'row',
+                        alignItems: 'flex-start',
+                        gap: spacing.xs,
+                      }}
+                    >
+                      <Typography style={{ fontSize: 14 }}>💡</Typography>
+                      <View style={{ flex: 1 }}>
+                        <Typography variant="captionBold" color="#10B981">
+                          Memory Trick
+                        </Typography>
+                        <Typography variant="bodySmall" color={theme.textSecondary}>
+                          {targetedFeedback.memoryTrick}
+                        </Typography>
+                      </View>
+                    </View>
+                  )}
+                </View>
               ) : (
+                // ── Generic explanation ──────────────────────────
                 <RichContent
                   variant="bodySmall"
                   color={theme.textSecondary}
@@ -223,22 +321,42 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
               <TouchableOpacity
                 onPress={async () => {
                   // Force-refresh: clear cache entry and re-fetch
+                  // Keep old text visible during refetch to avoid blank flash
                   cacheRef.current.delete(cardId);
+                  if (selectedOptionId) {
+                    targetedCacheRef.current.delete(`${cardId}:${selectedOptionId}`);
+                  }
+                  setTargetedFeedback(null);
                   setLiveExplanation(null);
+
+                  // Re-fetch
+                  if (isWrongAnswer && selectedOptionId) {
+                    try {
+                      const feedback = await mutateWrongRef.current({ cardId, selectedOptionId });
+                      if (feedback) {
+                        targetedCacheRef.current.set(`${cardId}:${selectedOptionId}`, feedback);
+                        setTargetedFeedback(feedback);
+                        return;
+                      }
+                    } catch {
+                      // Fall through
+                    }
+                  }
+
                   try {
                     const text = await mutateAsyncRef.current(cardId);
-                    if (text) {
+                    if (text && text.trim().length > 0) {
                       cacheRef.current.set(cardId, text);
                       setLiveExplanation(text);
                     }
                   } catch {
-                    // ignore
+                    // Keep existing explanation on failure
                   }
                 }}
                 style={{
-                  backgroundColor: '#6366F108',
+                  backgroundColor: hasTargeted ? '#EF444408' : '#6366F108',
                   borderTopWidth: 1,
-                  borderTopColor: '#6366F120',
+                  borderTopColor: hasTargeted ? '#EF444420' : '#6366F120',
                   paddingHorizontal: spacing.md,
                   paddingVertical: spacing.sm,
                   flexDirection: 'row',
@@ -246,8 +364,8 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                   gap: spacing.xs,
                 }}
               >
-                <Ionicons name="refresh-outline" size={12} color="#6366F1" />
-                <Typography variant="caption" color="#6366F1">
+                <Ionicons name="refresh-outline" size={12} color={hasTargeted ? '#EF4444' : '#6366F1'} />
+                <Typography variant="caption" color={hasTargeted ? '#EF4444' : '#6366F1'}>
                   Regenerate
                 </Typography>
               </TouchableOpacity>

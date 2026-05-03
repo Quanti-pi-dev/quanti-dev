@@ -8,6 +8,8 @@ import { loadSubscription } from '../middleware/feature-gate.js';
 import { progressRepository } from '../repositories/progress.repository.js';
 import { flashcardRepository } from '../repositories/content.repository.js';
 import { rewardService } from '../services/reward.service.js';
+import { updateCardMemory } from '../services/learning-intelligence.service.js';
+import { updateKnowledgeModel } from '../services/card-selector.js';
 import { getRedisClient, getPostgresPool, getMongoDb } from '../lib/database.js';
 import { ObjectId } from 'mongodb';
 import { SUBJECT_LEVELS } from '@kd/shared';
@@ -183,6 +185,17 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
         correct,
         input.topicSlug,
       );
+
+      // ── SM-2 card memory tracking (fire-and-forget) ──────────
+      void updateCardMemory(
+        userId, input.cardId, correct, input.responseTimeMs,
+        input.topicSlug, input.subjectId,
+      ).catch((err) => request.log.error({ err }, 'SM-2 card memory update failed'));
+
+      // ── BKT + IRT knowledge model update (fire-and-forget) ──
+      void updateKnowledgeModel(
+        userId, input.cardId, card.tags ?? [], correct,
+      ).catch((err) => request.log.error({ err }, 'Knowledge model update failed'));
 
       // ── Await rewards so we can surface earnings in the response ──
       let coinsEarned = 0;
@@ -416,7 +429,7 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
       subjectId: e.subjectId,
       subjectName: subjectMap.get(e.subjectId) ?? e.subjectId,
       highestLevel: e.level,
-      levelIndex: e.levelIndex,   // 0=Beginner … 5=Master
+      levelIndex: e.levelIndex,   // 0=Emerging … 3=Master
       correctAnswers: e.correctAnswers,  // total correct across ALL levels
       totalAnswers: e.totalAnswers,      // total attempts across ALL levels
     }));
@@ -432,5 +445,28 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
     const userId = request.user!.id;
     const insights = await progressRepository.getAdvancedInsights(userId);
     return reply.send({ success: true, data: insights, timestamp: new Date().toISOString() });
+  });
+
+  // ─── GET /progress/learning-profile ──────────────────────────
+  // Returns the full learning intelligence profile: study plan,
+  // knowledge health, exam readiness, velocity, and topic forecasts.
+  // Available to ALL users (free tier included) for engagement.
+  fastify.get('/learning-profile', async (request: FastifyRequest, reply: FastifyReply) => {
+    const userId = request.user!.id;
+
+    // Lazy backfill: if user has level progress but no card memory, seed it
+    const redis = getRedisClient();
+    const hasMemory = await redis.scard(`card_memory_keys:${userId}`);
+    const hasProgress = await redis.scard(`level_progress_keys:${userId}`);
+    if (hasMemory === 0 && hasProgress > 0) {
+      const { backfillCardMemory } = await import('../services/learning-intelligence.service.js');
+      await backfillCardMemory(userId).catch((err) =>
+        request.log.error({ err }, 'Card memory backfill failed'),
+      );
+    }
+
+    const { buildLearningProfile } = await import('../services/learning-intelligence.service.js');
+    const profile = await buildLearningProfile(userId);
+    return reply.send({ success: true, data: profile, timestamp: new Date().toISOString() });
   });
 }

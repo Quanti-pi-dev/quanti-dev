@@ -414,8 +414,8 @@ export default function StudyScreen() {
               </View>
               <Typography variant="body" color={theme.textSecondary}>
                 {hasSubjects
-                  ? `Studying ${mergedSubjects.length} subject${mergedSubjects.length > 1 ? 's' : ''}. Keep it up!`
-                  : 'Start exploring exams to build your study plan.'}
+                  ? `Tracking ${mergedSubjects.length} subject${mergedSubjects.length > 1 ? 's' : ''} — building your mastery profile`
+                  : 'Start exploring exams to build your learning profile.'}
               </Typography>
             </View>
           </View>

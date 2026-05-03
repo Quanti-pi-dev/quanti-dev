@@ -1,7 +1,8 @@
 // ─── Progress / Analytics Screen ─────────────────────────────
-// Tiered analytics experience:
+// Redesigned analytics with Learning Intelligence at the top:
+// • All users: Study Plan, Knowledge Health, Exam Readiness, Velocity
 // • Free: Streak, insights, stat grid, coin activity, level progress, badges
-// • Paid: Charts, heatmap, topic distribution, weekly comparison
+// • Paid: Charts, heatmap, topic distribution
 // • Pro+: Chronotype + Speed vs Accuracy
 // • Master: Subject Mastery Radar + AI Study Recommendations
 
@@ -26,11 +27,16 @@ import { SpeedAccuracyChart } from '../../src/components/analytics/SpeedAccuracy
 import { SubjectRadarChart } from '../../src/components/analytics/SubjectRadarChart';
 import { TopicSunburstChart } from '../../src/components/analytics/TopicSunburstChart';
 import { AIInsightsCard } from '../../src/components/analytics/AIInsightsCard';
+import { TodaysStudyPlan } from '../../src/components/analytics/TodaysStudyPlan';
+import { KnowledgeHealthMap } from '../../src/components/analytics/KnowledgeHealthMap';
+import { ExamReadinessScore } from '../../src/components/analytics/ExamReadinessScore';
+import { LearningVelocityCard } from '../../src/components/analytics/LearningVelocityCard';
 
 import { useSubscriptionGate } from '../../src/hooks/useSubscriptionGate';
 import { useProgressSummary, useStudyStreak, useAdvancedInsights } from '../../src/hooks/useProgress';
 import { useCoinBalance, useCoinsToday, useUserBadges } from '../../src/hooks/useGamification';
 import { useProgressAnalytics, LEVEL_COLORS, CARDS_PER_SUBJECT } from '../../src/hooks/useProgressAnalytics';
+import { useLearningProfile } from '../../src/hooks/useLearningProfile';
 import type { UserBadge } from '@kd/shared';
 
 // ─── Screen ──────────────────────────────────────────────────
@@ -53,6 +59,7 @@ export default function ProgressScreen() {
   const { data: coinData } = useCoinBalance();
   const { data: coinsTodayData } = useCoinsToday();
   const { data: advancedData } = useAdvancedInsights(hasAdvancedAnalytics);
+  const { data: learningProfile } = useLearningProfile();
 
   const {
     accuracyChartData,
@@ -95,7 +102,48 @@ export default function ProgressScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ padding: spacing.xl, gap: spacing.xl, paddingBottom: spacing['4xl'] }}
       >
-        <Typography variant="h3">Analytics</Typography>
+        <Typography variant="h3">Your Learning Profile</Typography>
+
+        {/* ══════════════════════════════════════════════════════════
+            LEARNING INTELLIGENCE — Available to ALL users (free)
+            Study Plan, Knowledge Health, Exam Readiness, Velocity
+            ══════════════════════════════════════════════════════════ */}
+
+        {/* ── Today's Study Plan (Hero) ── */}
+        {learningProfile?.studyPlan && (
+          <TodaysStudyPlan
+            plan={learningProfile.studyPlan}
+            chronotypePeakHour={advancedData?.chronotype?.peakHour}
+          />
+        )}
+
+        {/* ── Knowledge Health Map ── */}
+        {learningProfile && (
+          <KnowledgeHealthMap
+            data={learningProfile.knowledgeHealth}
+            totalOverdue={learningProfile.totalOverdueCards}
+            totalDueSoon={learningProfile.knowledgeHealth.reduce((s, sub) => s + sub.totalDueSoon, 0)}
+          />
+        )}
+
+        {/* ── Exam Readiness Score ── */}
+        {learningProfile?.examReadiness && (
+          <ExamReadinessScore data={learningProfile.examReadiness} />
+        )}
+
+        {/* ── Learning Velocity ── */}
+        {learningProfile?.velocity && (
+          <LearningVelocityCard data={learningProfile.velocity} />
+        )}
+
+        {/* ═══════════ Section Divider: Study Patterns ═══════════ */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+          <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
+          <Typography variant="caption" color={theme.textTertiary} style={{ letterSpacing: 1, textTransform: 'uppercase', fontSize: 10 }}>
+            Study Patterns
+          </Typography>
+          <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
+        </View>
 
         {/* ── Streak ── */}
         <StreakWidget streak={streak} freezes={freezes} />
@@ -146,76 +194,7 @@ export default function ProgressScreen() {
           </View>
         )}
 
-        {/* ── Weekly Comparison (free for all) ── */}
-        {weeklyComparison && (weeklyComparison.thisCards > 0 || weeklyComparison.lastCards > 0) && (
-          <Card>
-            <View style={{ gap: spacing.md }}>
-              <SectionHeader title="📊 Weekly Comparison" />
-              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                {/* This week */}
-                <View
-                  style={{
-                    flex: 1,
-                    backgroundColor: theme.primary + '12',
-                    borderRadius: 12,
-                    padding: spacing.md,
-                    gap: spacing.xs,
-                  }}
-                >
-                  <Typography variant="caption" color={theme.textTertiary}>
-                    This Week
-                  </Typography>
-                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.xs }}>
-                    <Typography variant="h3" color={theme.text}>
-                      {weeklyComparison.thisCards}
-                    </Typography>
-                    <Typography variant="caption" color={theme.textTertiary}>
-                      cards
-                    </Typography>
-                    {weeklyComparison.cardsDelta !== 0 && (
-                      <Typography
-                        variant="caption"
-                        color={weeklyComparison.cardsDelta > 0 ? '#10B981' : '#EF4444'}
-                        style={{ fontWeight: '700' }}
-                      >
-                        {weeklyComparison.cardsDelta > 0 ? '↑' : '↓'}{' '}
-                        {Math.abs(weeklyComparison.cardsDelta)}%
-                      </Typography>
-                    )}
-                  </View>
-                  <Typography variant="caption" color={theme.textSecondary}>
-                    {weeklyComparison.thisAcc}% accuracy
-                  </Typography>
-                </View>
-                {/* Last week */}
-                <View
-                  style={{
-                    flex: 1,
-                    backgroundColor: theme.cardAlt,
-                    borderRadius: 12,
-                    padding: spacing.md,
-                    gap: spacing.xs,
-                  }}
-                >
-                  <Typography variant="caption" color={theme.textTertiary}>
-                    Last Week
-                  </Typography>
-                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.xs }}>
-                    <Typography variant="h3" color={theme.textSecondary}>
-                      {weeklyComparison.lastCards}
-                    </Typography>
-                    <Typography variant="caption" color={theme.textTertiary}>
-                      cards
-                    </Typography>
-                  </View>
-                  <Typography variant="caption" color={theme.textSecondary}>
-                    {weeklyComparison.lastAcc}% accuracy
-                  </Typography>
-                </View>
-              </View>
-            </View>
-          </Card>
-        )}
+        {/* Weekly Comparison replaced by LearningVelocityCard above */}
 
         {/* ── Coin Activity card (free for all) ── */}
         <Card>
@@ -315,9 +294,20 @@ export default function ProgressScreen() {
         {!hasAdvancedAnalytics && (
           <UpgradeCTABanner
             icon="analytics-outline"
-            title="Unlock Detailed Analytics"
-            subtitle="Charts, heatmaps & deep insights — subscribe to access"
+            title="Unlock Deep Analytics"
+            subtitle="Charts, heatmaps & detailed pattern insights — subscribe to access"
           />
+        )}
+
+        {/* ═══════════ Section Divider: Deep Analytics ═══════════ */}
+        {hasAdvancedAnalytics && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
+            <Typography variant="caption" color={theme.textTertiary} style={{ letterSpacing: 1, textTransform: 'uppercase', fontSize: 10 }}>
+              Deep Analytics
+            </Typography>
+            <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
+          </View>
         )}
 
         {/* ══════════════════════════════════════════════════════════
@@ -603,27 +593,16 @@ export default function ProgressScreen() {
           );
         })()}
 
-        {/* ── Level Mastery — overall knowledge depth per subject (free for all) ── */}
-        {levelSummary.length > 0 && (
-          <Card>
-            <View style={{ gap: spacing.md }}>
-              <SectionHeader title="Subject Mastery" sub="Overall knowledge depth" />
-              <Typography variant="caption" color={theme.textTertiary}>
-                Track how many cards you've mastered across all levels for each subject
-              </Typography>
-              {levelSummary.map((s: any, i: number) => (
-                <ProgressBar
-                  key={`${s.examId}-${s.subjectId}-mastery`}
-                  progress={Math.min(s.correctAnswers / CARDS_PER_SUBJECT, 1)}
-                  label={`${s.subjectName} · ${s.correctAnswers}/${CARDS_PER_SUBJECT}`}
-                  showLabel
-                  height={8}
-                  color={LEVEL_COLORS[i % LEVEL_COLORS.length]}
-                />
-              ))}
-            </View>
-          </Card>
-        )}
+        {/* Subject Mastery replaced by KnowledgeHealthMap above */}
+
+        {/* ═══════════ Section Divider: Rewards ═══════════ */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+          <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
+          <Typography variant="caption" color={theme.textTertiary} style={{ letterSpacing: 1, textTransform: 'uppercase', fontSize: 10 }}>
+            Rewards
+          </Typography>
+          <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
+        </View>
 
         {/* ── Badges (free for all) ── */}
         <View style={{ gap: spacing.md }}>

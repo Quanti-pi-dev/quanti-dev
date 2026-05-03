@@ -35,12 +35,10 @@ import type { SubjectLevel } from '@kd/shared';
 // ─── Level meta ───────────────────────────────────────────────
 
 const LEVEL_META: Record<SubjectLevel, { icon: string; colour: string }> = {
-  Beginner:  { icon: 'leaf-outline',    colour: '#10B981' },
-  Rookie:    { icon: 'rocket-outline',  colour: '#6366F1' },
-  Skilled:   { icon: 'flash-outline',   colour: '#8B5CF6' },
-  Competent: { icon: 'trophy-outline',  colour: '#F59E0B' },
-  Expert:    { icon: 'star-outline',    colour: '#EC4899' },
-  Master:    { icon: 'diamond-outline', colour: '#EF4444' },
+  Emerging:    { icon: 'leaf-outline',    colour: '#F97316' },
+  Developing:  { icon: 'rocket-outline',  colour: '#F59E0B' },
+  Proficient:  { icon: 'trophy-outline',  colour: '#10B981' },
+  Master:      { icon: 'diamond-outline', colour: '#6366F1' },
 };
 
 // ─── Slug helper (auto-generate from display name) ────────────
@@ -415,7 +413,7 @@ export default function SubjectLevelsScreen() {
         {/* Instruction + Add button row */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
           <Typography variant="bodySmall" color={theme.textTertiary} style={{ flex: 1 }}>
-            Manage topics for this subject. Tap a topic to expand its 6 level decks.
+            Manage topics for this subject. Tap a topic to expand its 4 mastery level decks.
           </Typography>
           <TouchableOpacity
             onPress={() => setShowBulkImport(true)}

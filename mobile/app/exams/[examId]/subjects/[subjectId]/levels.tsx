@@ -33,12 +33,10 @@ import { LEVEL_COLOURS } from '../../../../../src/utils/constants';
 // ─── Level config ─────────────────────────────────────────────
 
 const LEVEL_ICONS: Record<SubjectLevel, string> = {
-  Beginner:  'leaf-outline',
-  Rookie:    'rocket-outline',
-  Skilled:   'flash-outline',
-  Competent: 'trophy-outline',
-  Expert:    'star-outline',
-  Master:    'diamond-outline',
+  Emerging:    'leaf-outline',
+  Developing:  'rocket-outline',
+  Proficient:  'trophy-outline',
+  Master:      'diamond-outline',
 };
 
 // ─── Single topic accordion ──────────────────────────────────
@@ -114,7 +112,7 @@ function TopicAccordion({
           <Typography variant="label">{topic.displayName}</Typography>
           {!open && summary && (
             <Typography variant="caption" color={theme.textTertiary}>
-              {summary.levels.filter(l => l.isUnlocked).length}/6 levels unlocked
+              {summary.levels.filter(l => l.isUnlocked).length}/{SUBJECT_LEVELS.length} levels unlocked
             </Typography>
           )}
         </View>
@@ -229,7 +227,7 @@ function TopicAccordion({
           {hasTierLockedLevels && (
             <View style={{ marginTop: spacing.xs }}>
               <LockedFeatureBanner
-                feature="Upgrade to unlock Expert & Master levels"
+                feature="Upgrade to unlock Proficient & Master levels"
                 minTier={2}
               />
             </View>

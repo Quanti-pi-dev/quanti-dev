@@ -310,15 +310,15 @@ export function TodaysFocusSection() {
                   <View>
                     <Typography variant="label" style={{ fontSize: 14 }}>
                       {goalComplete
-                        ? '🎉 Daily goal hit!'
+                        ? '🎉 Daily mastery goal achieved!'
                         : todayCards > 0
-                          ? 'Keep going!'
-                          : 'Start your day'}
+                          ? 'Building your knowledge...'
+                          : 'Start building mastery'}
                     </Typography>
                     <Typography variant="caption" color={theme.textSecondary} style={{ fontSize: 11 }}>
                       {goalComplete
-                        ? `You studied ${todayCards} cards today`
-                        : `${DAILY_CARD_GOAL - todayCards} cards to reach today's goal`}
+                        ? `${todayCards} cards reviewed — your retention is strengthening`
+                        : `${DAILY_CARD_GOAL - todayCards} cards to strengthen today's retention`}
                     </Typography>
                   </View>
 
@@ -444,10 +444,10 @@ export function TodaysFocusSection() {
                 </View>
                 <View style={{ flex: 1, gap: 2 }}>
                   <Typography variant="label" color="#6366F1">
-                    Begin your study journey
+                    Begin your learning journey
                   </Typography>
                   <Typography variant="caption" color={theme.textSecondary} style={{ fontSize: 11 }}>
-                    Pick an exam and complete your first quiz to unlock daily goals, streaks, and insights.
+                    Pick an exam and complete your first quiz to unlock your personalised mastery profile.
                   </Typography>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color="#6366F1AA" />

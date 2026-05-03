@@ -199,6 +199,29 @@ export async function fetchExplainCard(cardId: string): Promise<string> {
   return data?.data?.explanation ?? '';
 }
 
+/**
+ * Request a targeted, misconception-aware explanation for a wrong answer.
+ * Tells the student WHY their specific choice was wrong, not just what's right.
+ */
+export interface TargetedFeedbackResponse {
+  selectedOptionText: string;
+  misconception: string;
+  explanation: string;
+  memoryTrick?: string;
+  reviewConcept?: string;
+}
+
+export async function fetchExplainWrong(
+  cardId: string,
+  selectedOptionId: string,
+): Promise<TargetedFeedbackResponse | null> {
+  const { data } = await api.post<ApiResponse<{ feedback: TargetedFeedbackResponse | null }>>(
+    '/ai/explain-wrong',
+    { cardId, selectedOptionId },
+  );
+  return data?.data?.feedback ?? null;
+}
+
 // ─── Admin ─────────────────────────────────────────────────
 
 export async function adminCreateExam(exam: Partial<Exam>): Promise<{ id: string }> {
@@ -267,7 +290,7 @@ export interface LevelProgressSummaryItem {
   subjectId: string;
   subjectName: string;
   highestLevel: string;
-  levelIndex: number; // 0=Beginner … 5=Master
+  levelIndex: number; // 0=Emerging … 3=Master
   correctAnswers: number; // total correct across ALL levels for this subject
   totalAnswers: number;   // total attempts across ALL levels for this subject
 }
@@ -281,6 +304,14 @@ export async function fetchLevelProgressSummary(): Promise<LevelProgressSummaryI
 
 export async function fetchAdvancedInsights(): Promise<AdvancedInsights> {
   return apiGet<AdvancedInsights>('/progress/advanced-insights');
+}
+
+// ─── Learning Profile (Intelligence Engine) ───────────────────
+
+import type { LearningProfile } from '@kd/shared';
+
+export async function fetchLearningProfile(): Promise<LearningProfile> {
+  return apiGet<LearningProfile>('/progress/learning-profile');
 }
 
 

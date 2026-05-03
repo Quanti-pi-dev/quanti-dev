@@ -10,7 +10,7 @@ export interface PlanFeatures {
   max_decks: number;           // -1 = unlimited
   max_exams_per_day: number;   // -1 = unlimited
   max_subjects_per_exam: number; // -1 = unlimited; 0 = no access
-  max_level: number;           // 1=Beginner only … 6=all levels; -1 = unlimited
+  max_level: number;           // 1=Emerging only … 4=all levels; -1 = unlimited
   ai_explanations: boolean;
   offline_access: boolean;
   priority_support: boolean;

@@ -240,7 +240,7 @@ export function FlashCard({
             variant={imageUrl ? 'bodySmall' : 'h4'}
             align="center"
           >
-            {question}
+            {question || 'Question not available'}
           </RichContent>
         </View>
 
@@ -292,7 +292,7 @@ export function FlashCard({
                 </View>
 
                 <RichContent variant="bodySmall" color={s.textColor} style={{ flex: 1 }}>
-                  {opt.text}
+                  {opt.text || opt.key}
                 </RichContent>
 
                 {/* Trailing icon for correct/selected */}
@@ -406,11 +406,11 @@ export function FlashCard({
               Correct answer: {correctKey}
             </Typography>
           </View>
-          {explanation && (
+          {explanation ? (
             <RichContent variant="bodySmall" color={theme.textSecondary}>
               {explanation}
             </RichContent>
-          )}
+          ) : null}
         </View>
       </Animated.View>
     </View>

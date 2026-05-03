@@ -20,8 +20,8 @@ import { useTheme } from '../theme';
 import { radius, spacing } from '../theme/tokens';
 import { Typography } from './ui/Typography';
 
-// 5-stage mastery dots (Beginner → Master)
-const MASTERY_STAGES = ['Beginner', 'Elementary', 'Developing', 'Proficient', 'Advanced'];
+// Educator Brain mastery stages — matches BKT classification
+const MASTERY_STAGES = ['Emerging', 'Developing', 'Proficient', 'Master'];
 
 interface UpNextHeroCardProps {
   subjectName: string;
@@ -189,7 +189,7 @@ export function UpNextHeroCard({
               );
             })}
             <Typography variant="caption" color="rgba(255,255,255,0.7)" style={{ marginLeft: 4 }}>
-              {MASTERY_STAGES[currentStage] ?? 'Beginner'}
+              {MASTERY_STAGES[currentStage] ?? 'Emerging'}
             </Typography>
           </View>
         </LinearGradient>

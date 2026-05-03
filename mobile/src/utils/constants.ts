@@ -5,14 +5,12 @@
 
 // ─── Level System ────────────────────────────────────────────
 
-/** Colour palette for subject levels, indexed 0–5 (Beginner → Master). */
+/** Colour palette for subject levels, indexed 0–3 (Emerging → Master). */
 export const LEVEL_COLOURS = [
-  '#22C55E', // 0 — Beginner (green)
-  '#3B82F6', // 1 — Rookie (blue)
-  '#A855F7', // 2 — Intermediate (purple)
-  '#F59E0B', // 3 — Advanced (amber)
-  '#EF4444', // 4 — Expert (red)
-  '#E11D48', // 5 — Master (rose)
+  '#F97316', // 0 — Emerging (orange)
+  '#F59E0B', // 1 — Developing (amber)
+  '#10B981', // 2 — Proficient (green)
+  '#6366F1', // 3 — Master (indigo)
 ];
 
 /** Human-readable labels for subscription tier gates. */

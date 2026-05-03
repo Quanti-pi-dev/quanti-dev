@@ -63,7 +63,7 @@ export interface SubjectProgressCardProps {
   subjectName: string;
   /** Exam name e.g. "CAT 2025" */
   examName?: string;
-  /** 0-5 index (0=Beginner … 5=Master) */
+  /** 0-3 index (0=Emerging … 3=Master) */
   levelIndex: number;
   /** Correct answers used to derive mastery 0–1 ring fill */
   correctAnswers: number;
@@ -91,7 +91,8 @@ export function SubjectProgressCard({
   const icon = getSubjectIcon(subjectName);
 
   // Canonical mastery computation from shared utility
-  const { label: levelLabel, badge, progress: masteryProgress, pct } = getMasteryDisplayInfo(correctAnswers, levelIndex);
+  const mastery = getMasteryDisplayInfo(correctAnswers, levelIndex);
+  const { label: levelLabel, badge, progress: masteryProgress, pct, educator } = mastery;
   const isStarted = correctAnswers > 0;
 
   // ── Entrance animation ────────────────────────────────────
@@ -146,23 +147,27 @@ export function SubjectProgressCard({
             >
               <Ionicons name={icon} size={20} color={accent.bg} />
             </View>
-            {/* Level badge */}
+            {/* Educator mastery badge */}
             <View
               style={{
-                backgroundColor: accent.bg + '22',
+                backgroundColor: educator.color + '18',
                 borderRadius: radius.full,
                 borderWidth: 1,
-                borderColor: accent.bg + '55',
+                borderColor: educator.color + '40',
                 paddingHorizontal: 7,
                 paddingVertical: 2,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 3,
               }}
             >
+              <Typography style={{ fontSize: 8 }}>{educator.emoji}</Typography>
               <Typography
                 variant="captionBold"
-                color={accent.bg}
-                style={{ fontSize: 9, letterSpacing: 0.5 }}
+                color={educator.color}
+                style={{ fontSize: 9, letterSpacing: 0.3 }}
               >
-                {badge}
+                {educator.label}
               </Typography>
             </View>
           </View>
@@ -218,8 +223,8 @@ export function SubjectProgressCard({
 
           {/* Label + mini bar */}
           <View style={{ flex: 1, gap: 3 }}>
-            <Typography variant="captionBold" color={theme.text} style={{ fontSize: 10 }}>
-              {levelLabel}
+            <Typography variant="captionBold" color={educator.color} style={{ fontSize: 10 }}>
+              {educator.sublabel}
             </Typography>
             <View
               style={{

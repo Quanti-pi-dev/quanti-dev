@@ -184,7 +184,7 @@ interface PYQImportSheetProps {
   preSelectedLevel?: string;
 }
 
-const LEVELS = ['Beginner', 'Rookie', 'Skilled', 'Competent', 'Expert', 'Master'];
+const LEVELS = ['Emerging', 'Developing', 'Proficient', 'Master'];
 
 function PYQImportSheet({
   visible, onClose,
@@ -198,7 +198,7 @@ function PYQImportSheet({
   const [examId, setExamId] = useState('');
   const [subjectId, setSubjectId] = useState(preSelectedSubjectId ?? '');
   const [topicSlug, setTopicSlug] = useState(preSelectedTopicSlug ?? '');
-  const [level, setLevel] = useState(preSelectedLevel ?? 'Rookie');
+  const [level, setLevel] = useState(preSelectedLevel ?? 'Developing');
   const [sourceYear, setSourceYear] = useState(new Date().getFullYear().toString());
   const [sourcePaper, setSourcePaper] = useState('');
   const [examLabel, setExamLabel] = useState('');

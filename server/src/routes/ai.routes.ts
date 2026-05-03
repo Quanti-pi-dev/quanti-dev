@@ -5,8 +5,10 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { requireAuth } from '../middleware/rbac.js';
 import { recommendationService } from '../services/ai.service.js';
 import { geminiGenerate } from '../lib/gemini.js';
+import { generateTargetedFeedback } from '../services/targeted-feedback.service.js';
 import { getMongoDb } from '../lib/database.js';
 import { ObjectId } from 'mongodb';
+import type { Flashcard } from '@kd/shared';
 
 export async function aiRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook('preHandler', requireAuth());
@@ -123,6 +125,69 @@ export async function aiRoutes(fastify: FastifyInstance): Promise<void> {
         message: 'AI explanation temporarily unavailable. Please try again.',
       });
     }
+  });
+
+  // ─── POST /ai/explain-wrong ──────────────────────────────
+  // Targeted misconception-aware explanation for a wrong answer.
+  // Body: { cardId: string, selectedOptionId: string }
+  // Returns: { feedback: TargetedFeedback }
+  //
+  // This is the Socratic educator — it doesn't just say "X is right",
+  // it says "you chose Y because you likely confused A with B".
+  fastify.post('/explain-wrong', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { cardId, selectedOptionId } = request.body as {
+      cardId?: string;
+      selectedOptionId?: string;
+    };
+
+    if (!cardId || !selectedOptionId) {
+      return reply.status(400).send({
+        success: false,
+        message: 'cardId and selectedOptionId are required',
+      });
+    }
+
+    const db = getMongoDb();
+    let cardDoc: Record<string, unknown> | null = null;
+    try {
+      cardDoc = await db.collection('flashcards').findOne({ _id: new ObjectId(cardId) }) as Record<string, unknown> | null;
+    } catch {
+      return reply.status(400).send({ success: false, message: 'Invalid cardId' });
+    }
+
+    if (!cardDoc) {
+      return reply.status(404).send({ success: false, message: 'Card not found' });
+    }
+
+    // Map MongoDB doc to Flashcard shape for the service
+    const card: Flashcard = {
+      id: cardDoc['_id']!.toString(),
+      deckId: (cardDoc['deckId'] as ObjectId)?.toString() ?? '',
+      question: cardDoc['question'] as string ?? '',
+      options: cardDoc['options'] as Flashcard['options'] ?? [],
+      correctAnswerId: cardDoc['correctAnswerId'] as string ?? '',
+      explanation: cardDoc['explanation'] as string | null ?? null,
+      imageUrl: cardDoc['imageUrl'] as string | null ?? null,
+      source: (cardDoc['source'] as Flashcard['source']) ?? 'original',
+      tags: cardDoc['tags'] as string[] ?? [],
+      createdAt: '',
+      updatedAt: '',
+    };
+
+    const isCorrect = selectedOptionId === card.correctAnswerId;
+    const feedback = await generateTargetedFeedback(card, selectedOptionId, isCorrect);
+
+    if (!feedback) {
+      return reply.send({
+        success: true,
+        data: { feedback: null, message: 'No targeted feedback needed for correct answers' },
+      });
+    }
+
+    return reply.send({
+      success: true,
+      data: { feedback },
+    });
   });
 }
 

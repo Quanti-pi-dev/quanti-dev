@@ -6,13 +6,15 @@ import {
   fetchInsights,
   fetchRecommendations,
   fetchExplainCard,
+  fetchExplainWrong,
   type InsightsResponse,
   type Recommendation as RecommendationType,
+  type TargetedFeedbackResponse,
 } from '../services/api-contracts';
 
 // ─── Re-exports for consumers ────────────────────────────────
 
-export type { InsightsResponse };
+export type { InsightsResponse, TargetedFeedbackResponse };
 export type AIRecommendation = RecommendationType;
 
 // ─── Query Keys ─────────────────────────────────────────────
@@ -71,3 +73,21 @@ export function useExplainCard() {
     mutationFn: (cardId: string) => fetchExplainCard(cardId),
   });
 }
+
+/**
+ * Mutation for requesting a targeted, misconception-aware explanation.
+ *
+ * When a student picks a wrong answer, this calls POST /ai/explain-wrong
+ * with both the cardId and the option they selected. The response explains
+ * WHY their specific choice was wrong — not just what the right answer is.
+ *
+ * Usage:
+ *   const explainWrong = useExplainWrong();
+ *   const feedback = await explainWrong.mutateAsync({ cardId, selectedOptionId });
+ */
+export function useExplainWrong() {
+  return useMutation<TargetedFeedbackResponse | null, Error, { cardId: string; selectedOptionId: string }>({
+    mutationFn: ({ cardId, selectedOptionId }) => fetchExplainWrong(cardId, selectedOptionId),
+  });
+}
+

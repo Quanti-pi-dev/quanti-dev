@@ -1,20 +1,21 @@
 // ─── Content: Exams, Subjects, Topics, Decks, Flashcards ───
 
 // ─── Subject Levels (fixed, ordered) ────────────────────────
+// Aligned 1:1 with the Educator Brain's BKT mastery classification.
+// 4 progressive tiers that match the knowledge model.
 
-export type SubjectLevel = 'Beginner' | 'Rookie' | 'Skilled' | 'Competent' | 'Expert' | 'Master';
+export type SubjectLevel = 'Emerging' | 'Developing' | 'Proficient' | 'Master';
 
 export const SUBJECT_LEVELS: SubjectLevel[] = [
-  'Beginner',
-  'Rookie',
-  'Skilled',
-  'Competent',
-  'Expert',
+  'Emerging',
+  'Developing',
+  'Proficient',
   'Master',
 ];
 
-/** Minimum correct answers required to unlock the next level. */
-export const LEVEL_UNLOCK_THRESHOLD = 20;
+/** Minimum correct answers required to unlock the next level.
+ *  30 × 4 levels = 120 total (same progression length as old 20 × 6). */
+export const LEVEL_UNLOCK_THRESHOLD = 30;
 
 export interface Exam {
   id: string;
@@ -81,6 +82,8 @@ export interface Deck {
 export interface FlashcardOption {
   id: string;
   text: string;
+  /** What the student likely misunderstands if they pick this wrong option. */
+  misconception?: string;
 }
 
 // ─── Flashcard Source ────────────────────────────────────────

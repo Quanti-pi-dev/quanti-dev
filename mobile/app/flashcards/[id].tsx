@@ -31,6 +31,7 @@ import {
   CoinToast,
 } from '../../src/components/study';
 import { RouteErrorBoundary } from '../../src/components/ui/RouteErrorBoundary';
+import { CardErrorBoundary } from '../../src/components/ui/CardErrorBoundary';
 import { useDeckCards } from '../../src/hooks/useDecks';
 import { useLevelCards } from '../../src/hooks/useLevelCards';
 import { useRecordCompletion } from '../../src/hooks/useProgress';
@@ -43,6 +44,9 @@ import type { Flashcard, SubjectLevel } from '@kd/shared';
 
 // Answer state per card
 type CardAnswer = boolean | 'skipped' | undefined;
+
+/** Tracks which option (A/B/C/D → original optionId) was selected per card index. */
+type SelectedOptionMap = Record<number, string>;
 
 /** Fisher-Yates (Knuth) shuffle — returns a new array. */
 function shuffleArray<T>(arr: T[]): T[] {
@@ -153,6 +157,7 @@ export default function FlashcardStudyScreen() {
   const [currentIdx, setCurrentIdx] = useState(() => studyStateCache[cacheKey]?.currentIdx ?? 0);
   const [answered, setAnswered] = useState<CardAnswer[]>(() => studyStateCache[cacheKey]?.answered ?? []);
   const [sessionCoinsEarned, setSessionCoinsEarned] = useState(() => studyStateCache[cacheKey]?.sessionCoinsEarned ?? 0);
+  const [selectedOptionIds, setSelectedOptionIds] = useState<SelectedOptionMap>({});
   // Whether we've attempted to restore state from AsyncStorage yet
   const [restoredFromStorage, setRestoredFromStorage] = useState(!!studyStateCache[cacheKey]);
 
@@ -292,6 +297,9 @@ export default function FlashcardStudyScreen() {
       next[currentIdx] = correct;
       return next;
     });
+
+    // Track which option was selected for targeted feedback
+    setSelectedOptionIds((prev) => ({ ...prev, [currentIdx]: selectedAnswerId }));
   }, [card, currentIdx, examId, id, isLevelMode, level, levelDeckId, recordCompletion, recordLevelAnswer, session, showCoinToast, subjectId, topicSlug]);
 
   // ─── Skip handler ─────────────────────────────────────────
@@ -404,6 +412,7 @@ export default function FlashcardStudyScreen() {
           setCurrentIdx(0);
           setAnswered([]);
           setSessionCoinsEarned(0);
+          setSelectedOptionIds({});
           setShuffleSeed((s) => s + 1); // re-shuffle cards
           delete studyStateCache[cacheKey];
           void clearStudyState(cacheKey);
@@ -437,26 +446,32 @@ export default function FlashcardStudyScreen() {
       />
 
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
-        {/* Flashcard */}
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing['2xl'] }}>
-          <FlashCard
-            key={card.id}
-            question={card.question}
-            options={cardOptions}
-            correctKey={correctLetterKey}
-            explanation={card.explanation ?? ''}
-            imageUrl={card.imageUrl}
-            onAnswer={handleAnswer}
-            onSkip={handleSkip}
-          />
-        </View>
+        {/* CardErrorBoundary catches render crashes from a single card
+            (e.g. malformed data, corrupt LaTeX) and lets the user skip it
+            instead of crashing the entire session. */}
+        <CardErrorBoundary onSkip={handleSkip}>
+          {/* Flashcard */}
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing['2xl'] }}>
+            <FlashCard
+              key={card.id}
+              question={card.question}
+              options={cardOptions}
+              correctKey={correctLetterKey}
+              explanation={card.explanation ?? ''}
+              imageUrl={card.imageUrl}
+              onAnswer={handleAnswer}
+              onSkip={handleSkip}
+            />
+          </View>
 
-        <AIDeepDiveSection
-          answer={answered[currentIdx]}
-          explanation={card.explanation ?? ''}
-          cardIndex={currentIdx}
-          cardId={card.id}
-        />
+          <AIDeepDiveSection
+            answer={answered[currentIdx]}
+            explanation={card.explanation ?? ''}
+            cardIndex={currentIdx}
+            cardId={card.id}
+            selectedOptionId={selectedOptionIds[currentIdx]}
+          />
+        </CardErrorBoundary>
       </ScrollView>
 
       <StudyNavBar

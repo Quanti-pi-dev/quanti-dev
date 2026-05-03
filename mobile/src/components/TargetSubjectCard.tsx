@@ -81,7 +81,7 @@ export interface TargetSubjectCardProps {
   accentIndex: number;
   /** Total correct answers across all levels for this subject */
   correctAnswers?: number;
-  /** Highest level index reached (0=Beginner … 5=Master) */
+  /** Highest level index reached (0=Emerging … 3=Master) */
   levelIndex?: number;
   animDelay?: number;
   onPress: () => void;
@@ -167,23 +167,27 @@ export function TargetSubjectCard({
                 <Ionicons name={icon} size={22} color={accent.bg} />
               </View>
 
-              {/* Level badge pill */}
+              {/* Educator mastery badge */}
               <View
                 style={{
-                  backgroundColor: accent.bg + '22',
+                  backgroundColor: mastery.educator.color + '18',
                   borderRadius: radius.full,
                   borderWidth: 1,
-                  borderColor: accent.bg + '55',
+                  borderColor: mastery.educator.color + '40',
                   paddingHorizontal: 8,
                   paddingVertical: 3,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 3,
                 }}
               >
+                <Typography style={{ fontSize: 9 }}>{mastery.educator.emoji}</Typography>
                 <Typography
                   variant="captionBold"
-                  color={accent.bg}
-                  style={{ fontSize: 9, letterSpacing: 0.5 }}
+                  color={mastery.educator.color}
+                  style={{ fontSize: 9, letterSpacing: 0.3 }}
                 >
-                  {mastery.badge}
+                  {mastery.educator.label}
                 </Typography>
               </View>
             </View>
@@ -230,8 +234,8 @@ export function TargetSubjectCard({
             </View>
 
             <View style={{ flex: 1, gap: 2 }}>
-              <Typography variant="captionBold" color={theme.text} style={{ fontSize: 10 }}>
-                {mastery.label}
+              <Typography variant="captionBold" color={mastery.educator.color} style={{ fontSize: 10 }}>
+                {mastery.educator.sublabel}
               </Typography>
               {/* Mini progress bar */}
               <View

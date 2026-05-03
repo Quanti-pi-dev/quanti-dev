@@ -8,3 +8,5 @@ export * from './types/gamification.js';
 export * from './types/api.js';
 export * from './types/subscription.js';
 export * from './types/analytics.js';
+export * from './types/learning-intelligence.js';
+export * from './types/knowledge-model.js';

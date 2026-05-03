@@ -62,7 +62,7 @@ export interface LevelProgress {
   level: SubjectLevel;
   correctAnswers: number;
   totalAnswers: number;
-  /** True if this level can be studied (Beginner is always unlocked). */
+  /** True if this level can be studied (Emerging is always unlocked). */
   isUnlocked: boolean;
   /** True if correctAnswers >= LEVEL_UNLOCK_THRESHOLD (next level granted). */
   isCompleted: boolean;
@@ -82,7 +82,7 @@ export interface SubjectLevelSummary {
 export interface ExamProgress {
   examId: string;
   subjectId: string;
-  /** Deepest level the user has unlocked (Beginner minimum). */
+  /** Deepest level the user has unlocked (Emerging minimum). */
   highestUnlockedLevel: SubjectLevel;
 }
 
