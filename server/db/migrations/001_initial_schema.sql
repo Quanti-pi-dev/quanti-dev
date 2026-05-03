@@ -1,7 +1,9 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- Migration 001 — Initial Schema (Consolidated)
--- Covers: users, plans, subscriptions, payments, coupons, gamification,
---         challenges, friendships, coin packs.
+-- Migration 001 — Consolidated Schema (Current State)
+-- Covers: users, preferences (with onboarding + exam/subject selection),
+--         plans, subscriptions, payments, coupons, gamification (badges,
+--         shop, coin packs, purchases), study_sessions, challenges,
+--         friendships.
 -- All statements use IF NOT EXISTS / DO NOTHING so this is safe to re-run.
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -25,9 +27,12 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS user_preferences (
-  user_id          UUID        PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  active_theme     TEXT,
-  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  user_id              UUID        PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  active_theme         TEXT,
+  onboarding_completed BOOLEAN     NOT NULL DEFAULT FALSE,
+  selected_exams       TEXT[]      NOT NULL DEFAULT '{}',
+  selected_subjects    TEXT[]      NOT NULL DEFAULT '{}',
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- ─── Plans ───────────────────────────────────────────────────────────────────
@@ -164,12 +169,13 @@ CREATE TABLE IF NOT EXISTS badges (
   id          TEXT        PRIMARY KEY,
   name        TEXT        NOT NULL,
   description TEXT        NOT NULL,
+  criteria    TEXT,
   icon_url    TEXT,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS user_badges (
-  user_id     TEXT        NOT NULL,
+  user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   badge_id    TEXT        NOT NULL REFERENCES badges(id),
   earned_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (user_id, badge_id)
@@ -181,16 +187,35 @@ CREATE TABLE IF NOT EXISTS shop_items (
   id           TEXT        PRIMARY KEY,
   name         TEXT        NOT NULL,
   description  TEXT,
+  image_url    TEXT,
   price        INTEGER     NOT NULL,
-  effect_type  TEXT        NOT NULL,  -- 'theme' | 'deck_unlock' | etc.
-  effect_data  JSONB       NOT NULL DEFAULT '{}',
-  is_available BOOLEAN     NOT NULL DEFAULT TRUE,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  category     TEXT        NOT NULL DEFAULT 'other'
+                           CHECK (category IN ('flashcard_pack', 'theme', 'power_up', 'other')),
+  deck_id      TEXT,        -- populated for flashcard_pack items
+  card_count   INTEGER,     -- populated for flashcard_pack items
+  theme_key    TEXT,        -- populated for theme items
+  effect_type  TEXT,        -- legacy field, prefer category
+  effect_data  JSONB        NOT NULL DEFAULT '{}',
+  is_available BOOLEAN      NOT NULL DEFAULT TRUE,
+  sort_order   SMALLINT     NOT NULL DEFAULT 0,
+  created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS user_purchases (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  item_id     TEXT        NOT NULL REFERENCES shop_items(id),
+  coins_spent INTEGER     NOT NULL,
+  purchased_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_purchases_user_id
+  ON user_purchases (user_id);
+
 CREATE TABLE IF NOT EXISTS user_unlocked_decks (
-  user_id   TEXT  NOT NULL,
-  deck_id   TEXT  NOT NULL,
+  user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  deck_id     TEXT        NOT NULL,
+  unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (user_id, deck_id)
 );
 
@@ -198,7 +223,7 @@ CREATE TABLE IF NOT EXISTS user_unlocked_decks (
 
 CREATE TABLE IF NOT EXISTS coin_transactions (
   id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id      TEXT        NOT NULL,
+  user_id      UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   amount       INTEGER     NOT NULL,
   reason       TEXT        NOT NULL,
   reference_id TEXT,
@@ -224,7 +249,7 @@ CREATE TABLE IF NOT EXISTS coin_packs (
 
 CREATE TABLE IF NOT EXISTS coin_pack_purchases (
   id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id             TEXT        NOT NULL,
+  user_id             UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   coin_pack_id        UUID        NOT NULL REFERENCES coin_packs(id),
   razorpay_order_id   TEXT        NOT NULL UNIQUE,
   amount_paise        INTEGER     NOT NULL,
@@ -238,6 +263,27 @@ CREATE TABLE IF NOT EXISTS coin_pack_purchases (
 
 CREATE INDEX IF NOT EXISTS idx_coin_pack_purchases_user_id
   ON coin_pack_purchases (user_id);
+
+-- ─── Study Sessions ──────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS study_sessions (
+  id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id               UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  deck_id               TEXT        NOT NULL,  -- MongoDB ObjectId hex
+  cards_studied         INTEGER     NOT NULL DEFAULT 0,
+  correct_answers       INTEGER     NOT NULL DEFAULT 0,
+  incorrect_answers     INTEGER     NOT NULL DEFAULT 0,
+  avg_response_time_ms  INTEGER     NOT NULL DEFAULT 0,
+  started_at            TIMESTAMPTZ NOT NULL,
+  ended_at              TIMESTAMPTZ,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_study_sessions_user_id
+  ON study_sessions (user_id);
+
+CREATE INDEX IF NOT EXISTS idx_study_sessions_started_at
+  ON study_sessions (user_id, started_at DESC);
 
 -- ─── Challenges ──────────────────────────────────────────────────────────────
 
