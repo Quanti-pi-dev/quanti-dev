@@ -196,6 +196,18 @@ async function run() {
     );
     console.log('  ✓ analytics_events indexes done');
 
+    // ─── 7. Mock Tests (admin-curated templates) ──────────────
+    console.log('📋 Creating indexes for mock_tests...');
+    await db.collection('mock_tests').createIndex(
+      { examId: 1, isActive: 1, sortOrder: 1 },
+      { name: 'mock_tests_exam_active_sorted' }
+    );
+    await db.collection('mock_tests').createIndex(
+      { sortOrder: 1, createdAt: -1 },
+      { name: 'mock_tests_admin_list' }
+    );
+    console.log('  ✓ mock_tests indexes done');
+
     console.log('\n✅ All MongoDB indexes created successfully!');
   } catch (error) {
     console.error('❌ Error creating MongoDB indexes:', error);

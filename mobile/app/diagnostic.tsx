@@ -17,6 +17,7 @@ import { spacing, radius } from '../src/theme/tokens';
 import { ScreenWrapper } from '../src/components/layout/ScreenWrapper';
 import { Header } from '../src/components/layout/Header';
 import { Typography } from '../src/components/ui/Typography';
+import { RichContent } from '../src/components/ui/RichContent';
 import { Skeleton } from '../src/components/ui/Skeleton';
 import { ProgressBar } from '../src/components/ui/ProgressBar';
 import {
@@ -103,9 +104,9 @@ function DiagnosticAnswerOption({
           {labels[index]}
         </Typography>
       </View>
-      <Typography variant="body" color={theme.text} style={{ flex: 1, fontSize: 14 }}>
+      <RichContent variant="body" color={theme.text} style={{ flex: 1, fontSize: 14 }}>
         {text}
-      </Typography>
+      </RichContent>
       {revealed && correct && <Ionicons name="checkmark-circle" size={18} color="#10B981" />}
       {revealed && selected && !correct && <Ionicons name="close-circle" size={18} color="#EF4444" />}
     </TouchableOpacity>
@@ -476,9 +477,9 @@ export default function DiagnosticScreen() {
       >
         {currentCard && (
           <Animated.View entering={FadeIn.duration(200)} key={currentIdx}>
-            <Typography variant="h4" color={theme.text} style={{ lineHeight: 26, marginBottom: spacing.md }}>
+            <RichContent variant="h4" color={theme.text} style={{ lineHeight: 26, marginBottom: spacing.md }}>
               {currentCard.question}
-            </Typography>
+            </RichContent>
 
             <View style={{ gap: spacing.sm }}>
               {currentCard.answers.map((ans, i) => (

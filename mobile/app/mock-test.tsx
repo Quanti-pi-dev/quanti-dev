@@ -20,8 +20,10 @@ import { Skeleton } from '../src/components/ui/Skeleton';
 import { ProgressBar } from '../src/components/ui/ProgressBar';
 import {
   fetchMockTest,
+  fetchAvailableMockTests,
   submitMockTestResult,
   type MockTestCard,
+  type AvailableMockTest,
 } from '../src/services/api-contracts';
 
 // ─── Timer display ───────────────────────────────────────────
@@ -337,15 +339,33 @@ export default function MockTestScreen() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [testKey, setTestKey] = useState(0);
   const resultSubmittedRef = useRef(false);
+  const [selectedMockTestId, setSelectedMockTestId] = useState<string | null>(null);
 
-  const { data: mockTest, isLoading, refetch } = useQuery({
-    queryKey: ['mockTest', examId, testKey],
-    queryFn: () => fetchMockTest(examId, 30),
+  // Fetch available curated mock tests
+  const { data: availableTests } = useQuery({
+    queryKey: ['availableMockTests', examId],
+    queryFn: () => fetchAvailableMockTests(examId),
+    staleTime: 60_000,
+  });
+
+  const { data: mockTest, isLoading } = useQuery({
+    queryKey: ['mockTest', examId, testKey, selectedMockTestId],
+    queryFn: () => fetchMockTest(examId, 30, selectedMockTestId ?? undefined),
     staleTime: 0, // Always fresh for each test
   });
 
   const cards = mockTest?.cards ?? [];
   const totalTime = (mockTest?.timeLimitMinutes ?? 45) * 60;
+
+  // Derive display info from selected template or defaults
+  const selectedTemplate = useMemo(() => {
+    if (!selectedMockTestId || !availableTests) return null;
+    return availableTests.find(t => t._id === selectedMockTestId) ?? null;
+  }, [selectedMockTestId, availableTests]);
+
+  const displayTitle = selectedTemplate?.title ?? 'Mock Test';
+  const displayCardCount = cards.length || selectedTemplate?.cardCount || 30;
+  const displayTimeLimit = mockTest?.timeLimitMinutes ?? selectedTemplate?.timeLimitMinutes ?? 45;
 
   // Timer
   useEffect(() => {
@@ -440,6 +460,7 @@ export default function MockTestScreen() {
     setFinished(false);
     setCurrentIdx(0);
     setAnswers(new Map());
+    setSelectedMockTestId(null);
     resultSubmittedRef.current = false;
   }, []);
 
@@ -479,6 +500,8 @@ export default function MockTestScreen() {
 
   // ─── Pre-start state ───────────────────────────────────────
   if (!started) {
+    const hasCuratedTests = (availableTests ?? []).length > 0;
+
     return (
       <ScreenWrapper>
         <Header showBack title="Mock Test" />
@@ -487,8 +510,7 @@ export default function MockTestScreen() {
           contentContainerStyle={{
             padding: spacing.xl,
             gap: spacing.lg,
-            justifyContent: 'center',
-            flex: 1,
+            paddingBottom: spacing['4xl'],
           }}
         >
           <Animated.View entering={FadeInDown.duration(400)} style={{ alignItems: 'center', gap: spacing.lg }}>
@@ -505,12 +527,126 @@ export default function MockTestScreen() {
               <Ionicons name="document-text" size={36} color={theme.primary} />
             </View>
 
-            <Typography variant="h2" align="center">Mock Test</Typography>
+            <Typography variant="h2" align="center">{displayTitle}</Typography>
             <Typography variant="body" color={theme.textSecondary} align="center">
               A timed, mixed-subject exam simulation. No hints, no AI assistance — just like the real thing.
             </Typography>
+          </Animated.View>
 
-            {/* Test info */}
+          {/* ── Test Picker ─────────────────────────────────── */}
+          {hasCuratedTests && (
+            <Animated.View entering={FadeInDown.delay(100).duration(300)}>
+              <Typography variant="overline" color={theme.textTertiary} style={{ marginBottom: spacing.sm }}>
+                Choose a Test
+              </Typography>
+              <View style={{ gap: spacing.sm }}>
+                {(availableTests ?? []).map(test => {
+                  const isSelected = selectedMockTestId === test._id;
+                  return (
+                    <TouchableOpacity
+                      key={test._id}
+                      onPress={() => setSelectedMockTestId(isSelected ? null : test._id)}
+                      activeOpacity={0.7}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: spacing.md,
+                        padding: spacing.md,
+                        borderRadius: radius.xl,
+                        backgroundColor: isSelected
+                          ? (isDark ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.06)')
+                          : theme.card,
+                        borderWidth: 1.5,
+                        borderColor: isSelected ? theme.primary + '60' : theme.border,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 20,
+                          backgroundColor: isSelected
+                            ? theme.primary + '18'
+                            : (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'),
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Ionicons
+                          name={isSelected ? 'checkmark-circle' : 'document-text-outline'}
+                          size={20}
+                          color={isSelected ? theme.primary : theme.textTertiary}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Typography variant="label" color={theme.text}>{test.title}</Typography>
+                        {test.description ? (
+                          <Typography variant="caption" color={theme.textTertiary} numberOfLines={1}>
+                            {test.description}
+                          </Typography>
+                        ) : null}
+                        <Typography variant="caption" color={theme.textTertiary} style={{ marginTop: 2 }}>
+                          {test.cardCount} questions · {test.timeLimitMinutes > 0 ? `${test.timeLimitMinutes} min` : 'Untimed'}
+                        </Typography>
+                      </View>
+                      {isSelected && (
+                        <Ionicons name="checkmark" size={18} color={theme.primary} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+
+                {/* Random option */}
+                <TouchableOpacity
+                  onPress={() => setSelectedMockTestId(null)}
+                  activeOpacity={0.7}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing.md,
+                    padding: spacing.md,
+                    borderRadius: radius.xl,
+                    backgroundColor: !selectedMockTestId
+                      ? (isDark ? 'rgba(245,158,11,0.1)' : 'rgba(245,158,11,0.06)')
+                      : theme.card,
+                    borderWidth: 1.5,
+                    borderColor: !selectedMockTestId ? '#F59E0B60' : theme.border,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: !selectedMockTestId
+                        ? '#F59E0B18'
+                        : (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'),
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons
+                      name={!selectedMockTestId ? 'shuffle' : 'shuffle-outline'}
+                      size={20}
+                      color={!selectedMockTestId ? '#F59E0B' : theme.textTertiary}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Typography variant="label" color={theme.text}>Random Mix</Typography>
+                    <Typography variant="caption" color={theme.textTertiary}>
+                      Random questions from all your subjects
+                    </Typography>
+                  </View>
+                  {!selectedMockTestId && (
+                    <Ionicons name="checkmark" size={18} color="#F59E0B" />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          )}
+
+          {/* ── Test Info Card ───────────────────────────────── */}
+          <Animated.View entering={FadeInDown.delay(hasCuratedTests ? 200 : 100).duration(300)}>
             <View
               style={{
                 width: '100%',
@@ -527,7 +663,7 @@ export default function MockTestScreen() {
                   <Ionicons name="help-circle-outline" size={18} color={theme.textSecondary} />
                   <Typography variant="body" color={theme.textSecondary}>Questions</Typography>
                 </View>
-                <Typography variant="label" color={theme.text}>{cards.length}</Typography>
+                <Typography variant="label" color={theme.text}>{displayCardCount}</Typography>
               </View>
               <View style={{ height: 1, backgroundColor: theme.border }} />
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -535,7 +671,7 @@ export default function MockTestScreen() {
                   <Ionicons name="timer-outline" size={18} color={theme.textSecondary} />
                   <Typography variant="body" color={theme.textSecondary}>Time Limit</Typography>
                 </View>
-                <Typography variant="label" color={theme.text}>{mockTest?.timeLimitMinutes ?? 45} min</Typography>
+                <Typography variant="label" color={theme.text}>{displayTimeLimit} min</Typography>
               </View>
               <View style={{ height: 1, backgroundColor: theme.border }} />
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -546,11 +682,15 @@ export default function MockTestScreen() {
                 <Typography variant="label" color={theme.text}>+4 / −1 / 0</Typography>
               </View>
             </View>
+          </Animated.View>
 
-            {/* Rules */}
-            <View style={{ gap: spacing.xs, width: '100%' }}>
+          {/* Rules */}
+          <Animated.View entering={FadeInDown.delay(hasCuratedTests ? 300 : 200).duration(300)}>
+            <View style={{ gap: spacing.xs }}>
               {[
-                'Questions are randomly sampled across all your subjects',
+                selectedMockTestId
+                  ? 'Questions are from a curated exam template'
+                  : 'Questions are randomly sampled across all your subjects',
                 'Timer auto-submits when time expires',
                 'No going back to change answers (exam mode)',
                 'Results show NEET-style scoring breakdown',
@@ -563,17 +703,20 @@ export default function MockTestScreen() {
                 </View>
               ))}
             </View>
+          </Animated.View>
 
+          {/* Start button */}
+          <Animated.View entering={FadeInDown.delay(hasCuratedTests ? 400 : 300).duration(300)}>
             <TouchableOpacity
               onPress={startTest}
               activeOpacity={0.8}
-              disabled={cards.length === 0}
+              disabled={cards.length === 0 && !isLoading}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: spacing.sm,
-                backgroundColor: cards.length > 0 ? theme.primary : theme.border,
+                backgroundColor: (cards.length > 0 || isLoading) ? theme.primary : theme.border,
                 borderRadius: radius.xl,
                 paddingVertical: spacing.md + 4,
                 width: '100%',
@@ -581,7 +724,7 @@ export default function MockTestScreen() {
             >
               <Ionicons name="play-circle" size={20} color="#FFFFFF" />
               <Typography variant="label" color="#FFFFFF">
-                {cards.length > 0 ? 'Start Test' : 'No cards available'}
+                {isLoading ? 'Loading…' : cards.length > 0 ? 'Start Test' : 'No cards available'}
               </Typography>
             </TouchableOpacity>
           </Animated.View>

@@ -132,6 +132,17 @@ export default function AdminDashboard() {
             </View>
           </Card>
 
+          <Card pressable onPress={() => router.push('/(admin)/mock-tests' as never)} variant="outlined">
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+              <Icon name="document-text-outline" size={22} color="#F97316" />
+              <View style={{ flex: 1 }}>
+                <Typography variant="label">Mock Tests</Typography>
+                <Typography variant="caption" color={theme.textTertiary}>Create curated exam simulations with fixed card pools</Typography>
+              </View>
+              <Icon name="chevron-forward" size={18} color={theme.textTertiary} />
+            </View>
+          </Card>
+
           <Card pressable onPress={() => router.push('/(admin)/decks' as never)} variant="outlined">
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
               <Icon name="layers-outline" size={22} color="#3B82F6" />

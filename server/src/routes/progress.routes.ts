@@ -272,6 +272,9 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
         userId, input.cardId, card.tags ?? [], correct,
       ).catch((err) => request.log.error({ err }, 'Knowledge model update failed'));
 
+      // ── Daily activity tracking (time spent) ──
+      void progressRepository.updateDailyActivity(userId, input.responseTimeMs).catch(() => {});
+
       // ── Error Journal: track wrong answers for review ──
       if (!correct) {
         const redis = getRedisClient();
@@ -747,8 +750,17 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
         };
       });
 
-      // Sort: lowest mastery first (weakest topics at top)
-      topics.sort((a, b) => a.masteryPercent - b.masteryPercent);
+      // Sort: started topics first (by ascending mastery), then not-started.
+      // This surfaces topics the student is actively struggling with above
+      // topics they haven't touched yet — which is more actionable.
+      topics.sort((a, b) => {
+        const aStarted = a.highestLevelIndex >= 0 ? 1 : 0;
+        const bStarted = b.highestLevelIndex >= 0 ? 1 : 0;
+        // Started topics come first
+        if (aStarted !== bStarted) return bStarted - aStarted;
+        // Within each group, lowest mastery first
+        return a.masteryPercent - b.masteryPercent;
+      });
 
       return reply.send({ success: true, data: topics, timestamp: new Date().toISOString() });
     },
@@ -1121,18 +1133,145 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
   });
 
   // ─── GET /progress/mock-test ─────────────────────────────────
-  // Generates a mixed-subject mock test by sampling flashcards
-  // across the student's selected subjects. Returns shuffled cards
-  // with a suggested time limit. ?count=30&examId=...
+  // Serves a mock test. Two modes:
+  //   1. Curated: ?mockTestId=... → loads a pre-built template from
+  //      the `mock_tests` collection (admin-managed).
+  //   2. Random:  ?examId=...&count=30 → legacy random sampling from
+  //      the student's selected subjects (auto-generated).
   fastify.get('/mock-test', async (request: FastifyRequest<{
-    Querystring: { examId?: string; count?: string };
+    Querystring: { examId?: string; count?: string; mockTestId?: string };
   }>, reply: FastifyReply) => {
     const userId = request.user!.id;
     const requestedCount = Math.min(parseInt((request.query as { count?: string }).count ?? '30', 10), 50);
     const examIdFilter = (request.query as { examId?: string }).examId;
+    const mockTestId = (request.query as { mockTestId?: string }).mockTestId;
 
     const mongo = getMongoDb();
     const pg = getPostgresPool();
+
+    // ── Curated mock test path ────────────────────────────────
+    if (mockTestId && ObjectId.isValid(mockTestId)) {
+      const template = await mongo.collection('mock_tests').findOne({
+        _id: new ObjectId(mockTestId),
+        isActive: true,
+      });
+
+      if (!template) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Mock test not found or inactive' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const templateCardIds = (template.cardIds as string[]) ?? [];
+      const templateSubjectIds = ((template.subjectIds ?? []) as (ObjectId | string)[]).map(id => id.toString());
+      const templateCardCount = (template.cardCount as number) ?? 30;
+      const templateExamId = (template.examId as ObjectId | string)?.toString();
+
+      let cards: unknown[];
+
+      if (templateCardIds.length > 0) {
+        // Fixed card pool — load specific cards
+        const validIds = templateCardIds
+          .filter(id => /^[0-9a-fA-F]{24}$/.test(id))
+          .map(id => new ObjectId(id));
+
+        cards = validIds.length > 0
+          ? await mongo.collection('flashcards')
+              .find({ _id: { $in: validIds } })
+              .project({
+                question: 1, options: 1, correctAnswerId: 1,
+                explanation: 1, source: 1, sourceYear: 1,
+                sourcePaper: 1, topicDisplayName: 1, deckId: 1,
+              })
+              .toArray()
+          : [];
+      } else {
+        // Subject-scoped sampling
+        const subjectFilter = templateSubjectIds
+          .filter(id => /^[0-9a-fA-F]{24}$/.test(id))
+          .map(id => new ObjectId(id));
+
+        const matchStage: Record<string, unknown> = {};
+        if (subjectFilter.length > 0) matchStage['subjectId'] = { $in: subjectFilter };
+        if (templateExamId && /^[0-9a-fA-F]{24}$/.test(templateExamId)) {
+          matchStage['examId'] = new ObjectId(templateExamId);
+        }
+
+        const deckIds = await mongo.collection('decks')
+          .find(matchStage).project({ _id: 1 }).toArray();
+
+        cards = deckIds.length > 0
+          ? await mongo.collection('flashcards')
+              .aggregate([
+                { $match: { deckId: { $in: deckIds.map(d => d._id) } } },
+                { $sample: { size: templateCardCount } },
+                {
+                  $project: {
+                    question: 1, options: 1, correctAnswerId: 1,
+                    explanation: 1, source: 1, sourceYear: 1,
+                    sourcePaper: 1, topicDisplayName: 1, deckId: 1,
+                  },
+                },
+              ])
+              .toArray()
+          : [];
+      }
+
+      // Enrich with subject names
+      const deckIds = [...new Set(cards.map((c: any) => c.deckId).filter(Boolean))];
+      const validDeckIds = deckIds
+        .filter((id: any) => ObjectId.isValid(id))
+        .map((id: any) => (id instanceof ObjectId ? id : new ObjectId(id.toString())));
+
+      const enrichDecks = validDeckIds.length > 0
+        ? await mongo.collection('decks')
+            .find({ _id: { $in: validDeckIds } })
+            .project({ subjectId: 1, topicSlug: 1 })
+            .toArray()
+        : [];
+
+      const deckMap = new Map(enrichDecks.map(d => [d._id.toString(), {
+        subjectId: d.subjectId?.toString() ?? '',
+        topicSlug: (d.topicSlug as string) ?? '',
+      }]));
+
+      const subjectIds = [...new Set(enrichDecks.map(d => d.subjectId?.toString()).filter(Boolean))] as string[];
+      const validSubIds = subjectIds.filter(id => /^[0-9a-fA-F]{24}$/.test(id)).map(id => new ObjectId(id));
+      const subjects = validSubIds.length > 0
+        ? await mongo.collection('subjects').find({ _id: { $in: validSubIds } }).project({ name: 1 }).toArray()
+        : [];
+      const subjectNameMap = new Map(subjects.map(s => [s._id.toString(), s.name as string]));
+
+      const data = {
+        mockTestId: template._id.toString(),
+        title: (template.title as string) ?? 'Mock Test',
+        cards: cards.map((c: any) => {
+          const answers = (c.options as { id: string; text: string }[]) ?? [];
+          const deck = deckMap.get(c.deckId?.toString() ?? '');
+          return {
+            cardId: c._id.toString(),
+            question: (c.question as string) ?? '',
+            answers,
+            correctAnswerId: (c.correctAnswerId as string) ?? '',
+            explanation: (c.explanation as string) ?? null,
+            source: (c.source as string) ?? 'original',
+            sourceYear: (c.sourceYear as number) ?? null,
+            sourcePaper: (c.sourcePaper as string) ?? null,
+            topicName: (c.topicDisplayName as string) ?? '',
+            subjectName: deck ? (subjectNameMap.get(deck.subjectId) ?? '') : '',
+          };
+        }),
+        timeLimitMinutes: (template.timeLimitMinutes as number) ?? 45,
+        totalCards: cards.length,
+      };
+
+      return reply.send({ success: true, data, timestamp: new Date().toISOString() });
+    }
+
+    // ── Random sampling fallback (original behaviour) ─────────
+
 
     // Get user's selected subjects from preferences
     const prefResult = await pg.query(
@@ -1237,6 +1376,38 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
       timeLimitMinutes,
       totalCards: cards.length,
     };
+
+    return reply.send({ success: true, data, timestamp: new Date().toISOString() });
+  });
+
+  // ─── GET /progress/mock-tests/available ────────────────────────
+  // Returns active mock test templates for the student to choose from.
+  // Lightweight listing — no card content, just metadata.
+  fastify.get('/mock-tests/available', async (request: FastifyRequest<{
+    Querystring: { examId?: string };
+  }>, reply: FastifyReply) => {
+    const examIdParam = (request.query as { examId?: string }).examId;
+    const mongo = getMongoDb();
+
+    const filter: Record<string, unknown> = { isActive: true };
+    if (examIdParam && /^[0-9a-fA-F]{24}$/.test(examIdParam)) {
+      filter['examId'] = new ObjectId(examIdParam);
+    }
+
+    const tests = await mongo.collection('mock_tests')
+      .find(filter)
+      .sort({ sortOrder: 1, createdAt: -1 })
+      .project({ title: 1, description: 1, cardCount: 1, timeLimitMinutes: 1, examId: 1 })
+      .toArray();
+
+    const data = tests.map(doc => ({
+      _id: doc._id.toString(),
+      title: (doc.title as string) ?? 'Mock Test',
+      description: (doc.description as string) ?? '',
+      cardCount: (doc.cardCount as number) ?? 30,
+      timeLimitMinutes: (doc.timeLimitMinutes as number) ?? 45,
+      examId: (doc.examId as ObjectId | string)?.toString() ?? '',
+    }));
 
     return reply.send({ success: true, data, timestamp: new Date().toISOString() });
   });

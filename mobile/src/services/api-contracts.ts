@@ -395,14 +395,35 @@ export interface MockTestResponse {
   cards: MockTestCard[];
   timeLimitMinutes: number;
   totalCards: number;
+  /** Present when serving a curated mock test template. */
+  mockTestId?: string;
+  /** Template title (curated tests only). */
+  title?: string;
 }
 
-export async function fetchMockTest(examId?: string, count?: number): Promise<MockTestResponse> {
+export async function fetchMockTest(examId?: string, count?: number, mockTestId?: string): Promise<MockTestResponse> {
   const params: Record<string, string> = {};
   if (examId) params.examId = examId;
   if (count) params.count = String(count);
+  if (mockTestId) params.mockTestId = mockTestId;
   const { data } = await api.get<ApiResponse<MockTestResponse>>('/progress/mock-test', { params });
   return (data?.data ?? { cards: [], timeLimitMinutes: 0, totalCards: 0 }) as MockTestResponse;
+}
+
+export interface AvailableMockTest {
+  _id: string;
+  title: string;
+  description: string;
+  cardCount: number;
+  timeLimitMinutes: number;
+  examId: string;
+}
+
+export async function fetchAvailableMockTests(examId?: string): Promise<AvailableMockTest[]> {
+  const params: Record<string, string> = {};
+  if (examId) params.examId = examId;
+  const { data } = await api.get<ApiResponse<AvailableMockTest[]>>('/progress/mock-tests/available', { params });
+  return (data?.data ?? []) as AvailableMockTest[];
 }
 
 export async function submitMockTestResult(payload: {

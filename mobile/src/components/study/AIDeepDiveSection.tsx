@@ -140,7 +140,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
     <View style={{ paddingHorizontal: spacing.xl, paddingBottom: spacing.sm }}>
       {/* Standby CTA — shown for all answer states until user taps */}
       {!showDeepDive && (
-        <Animated.View entering={FadeInDown.delay(700).duration(320)}>
+        <Animated.View entering={FadeInDown.duration(320)}>
           <TouchableOpacity
             onPress={fetchExplanation}
             activeOpacity={0.8}

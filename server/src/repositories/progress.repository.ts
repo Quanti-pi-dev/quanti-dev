@@ -171,7 +171,7 @@ class ProgressRepository {
   }
 
   // ─── Daily Activity ───────────────────────────────────
-  private async updateDailyActivity(userId: string, responseTimeMs: number): Promise<void> {
+  async updateDailyActivity(userId: string, responseTimeMs: number): Promise<void> {
     const today = new Date().toISOString().split('T')[0]!;
     const key = `daily_activity:${userId}:${today}`;
 
@@ -230,6 +230,23 @@ class ProgressRepository {
         for (const [err, data] of results) {
           if (!err && data && typeof data === 'object') {
             totalCards += parseInt((data as Record<string, string>)['completed_cards'] ?? '0', 10);
+          }
+        }
+      }
+    }
+
+    // Include Level progress cards
+    const levelKeys = await this.redis.smembers(`level_progress_keys:${userId}`);
+    if (levelKeys.length > 0) {
+      const pipeline = this.redis.pipeline();
+      for (const key of levelKeys) {
+        pipeline.hgetall(`level_progress:${userId}:${key}`);
+      }
+      const results = await pipeline.exec();
+      if (results) {
+        for (const [err, data] of results) {
+          if (!err && data && typeof data === 'object') {
+            totalCards += parseInt((data as Record<string, string>)['total'] ?? '0', 10);
           }
         }
       }
