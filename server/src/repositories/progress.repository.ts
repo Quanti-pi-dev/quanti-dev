@@ -646,25 +646,46 @@ class ProgressRepository {
     }));
   }
 
-  /** Per-subject strength from Redis level progress, enriched with PG names. */
-  /** Per-subject strength from Redis level progress + standalone sessions + user selected subjects */
+  /** Per-subject strength from Redis level progress + Postgres sessions (deduplicated).
+   *  Uses ABSOLUTE accuracy (correct/total) — not relative normalization.
+   *  Subjects with zero answers are excluded from the radar. */
   private async getSubjectStrengths(userId: string): Promise<SubjectStrength[]> {
-    // 1. Fetch user's selected subjects from preferences
-    const prefsResult = await this.pg.query(
-      `SELECT selected_subjects FROM user_preferences WHERE user_id = (SELECT id FROM users WHERE firebase_uid = $1)`,
-      [userId]
-    );
-    const selectedSubjectIds: string[] = prefsResult.rows[0]?.selected_subjects ?? [];
-
-    // 2. Aggregate correct/total per subject
-    const subjectAgg = new Map<string, { correct: number; total: number }>();
-    
-    // Initialize with selected subjects (so they always show on the radar)
-    for (const subId of selectedSubjectIds) {
-       subjectAgg.set(subId, { correct: 0, total: 0 });
+    // ── 1. Primary source: Redis Level Progress (per-card, authoritative) ──
+    const trackedMembers = await this.redis.smembers(`level_progress_keys:${userId}`);
+    type ParsedKey = { examId: string; subjectId: string; topicSlug: string; level: string };
+    const parsed: ParsedKey[] = [];
+    for (const m of trackedMembers) {
+      const seg = m.split(':');
+      if (seg.length !== 4) continue;
+      parsed.push({ examId: seg[0]!, subjectId: seg[1]!, topicSlug: seg[2]!, level: seg[3]! });
     }
 
-    // 3. Process standalone study sessions
+    // Subjects covered by level progress (used to avoid double-counting)
+    const levelSubjectIds = new Set(parsed.map(p => p.subjectId));
+    const subjectAgg = new Map<string, { correct: number; total: number }>();
+
+    if (parsed.length > 0) {
+      const pipeline = this.redis.pipeline();
+      for (const p of parsed) {
+        pipeline.hgetall(`level_progress:${userId}:${p.examId}:${p.subjectId}:${p.topicSlug}:${p.level}`);
+      }
+      const pipelineResults = await pipeline.exec();
+
+      for (let i = 0; i < parsed.length; i++) {
+        const p = parsed[i]!;
+        const [err, rawData] = pipelineResults?.[i] ?? [null, {}];
+        const data = (!err && rawData ? rawData : {}) as Record<string, string>;
+        const correct = parseInt(data['correct'] ?? '0', 10);
+        const total = parseInt(data['total'] ?? '0', 10);
+
+        const existing = subjectAgg.get(p.subjectId) ?? { correct: 0, total: 0 };
+        existing.correct += correct;
+        existing.total += total;
+        subjectAgg.set(p.subjectId, existing);
+      }
+    }
+
+    // ── 2. Secondary source: Postgres sessions (only for subjects NOT in level progress) ──
     try {
       const sessionsResult = await this.pg.query(
         `SELECT deck_id, SUM(correct_answers) as correct, SUM(cards_studied) as total
@@ -691,7 +712,8 @@ class ProgressRepository {
 
       for (const r of sessionsResult.rows) {
         const subId = deckToSubject.get(r.deck_id);
-        if (subId) {
+        // Only add if this subject has NO level-progress data (avoid double-counting)
+        if (subId && !levelSubjectIds.has(subId)) {
           const existing = subjectAgg.get(subId) ?? { correct: 0, total: 0 };
           existing.correct += Number(r.correct || 0);
           existing.total += Number(r.total || 0);
@@ -702,40 +724,9 @@ class ProgressRepository {
       log.warn({ err }, 'Failed to process standalone sessions — subject strengths may be incomplete');
     }
 
-    // 4. Process Redis Level Progress
-    const trackedMembers = await this.redis.smembers(`level_progress_keys:${userId}`);
-    type ParsedKey = { examId: string; subjectId: string; topicSlug: string; level: string };
-    const parsed: ParsedKey[] = [];
-    for (const m of trackedMembers) {
-      const seg = m.split(':');
-      if (seg.length !== 4) continue;
-      parsed.push({ examId: seg[0]!, subjectId: seg[1]!, topicSlug: seg[2]!, level: seg[3]! });
-    }
-
-    if (parsed.length > 0) {
-      const pipeline = this.redis.pipeline();
-      for (const p of parsed) {
-        pipeline.hgetall(`level_progress:${userId}:${p.examId}:${p.subjectId}:${p.topicSlug}:${p.level}`);
-      }
-      const pipelineResults = await pipeline.exec();
-
-      for (let i = 0; i < parsed.length; i++) {
-        const p = parsed[i]!;
-        const [err, rawData] = pipelineResults?.[i] ?? [null, {}];
-        const data = (!err && rawData ? rawData : {}) as Record<string, string>;
-        const correct = parseInt(data['correct'] ?? '0', 10);
-        const total = parseInt(data['total'] ?? '0', 10);
-
-        const existing = subjectAgg.get(p.subjectId) ?? { correct: 0, total: 0 };
-        existing.correct += correct;
-        existing.total += total;
-        subjectAgg.set(p.subjectId, existing);
-      }
-    }
-
     if (subjectAgg.size === 0) return [];
 
-    // 5. Enrich with names from MongoDB
+    // ── 3. Enrich with names from MongoDB ──
     const subjectIds = [...subjectAgg.keys()];
     const nameMap = new Map<string, string>();
     
@@ -758,24 +749,18 @@ class ProgressRepository {
       }
     }
 
-    // Normalize strength scores 0–100
-    const entries = [...subjectAgg.entries()].map(([subjectId, agg]) => ({
-      subjectId,
-      subjectName: nameMap.get(subjectId) ?? subjectId,
-      rawScore: agg.total > 0 ? (agg.correct / agg.total) * 100 : 0,
-      totalCorrect: agg.correct,
-      totalAnswers: agg.total,
-    }));
-
-    const maxScore = Math.max(...entries.map(e => e.rawScore), 1);
-
-    return entries.map(e => ({
-      subjectId: e.subjectId,
-      subjectName: e.subjectName,
-      strengthScore: maxScore > 0 ? Math.round((e.rawScore / maxScore) * 100) : 0,
-      totalCorrect: e.totalCorrect,
-      totalAnswers: e.totalAnswers,
-    }));
+    // ── 4. Absolute accuracy: correct/total * 100 (no relative normalization) ──
+    // Filter out subjects with zero answers — they add noise to the radar.
+    return [...subjectAgg.entries()]
+      .filter(([, agg]) => agg.total > 0)
+      .map(([subjectId, agg]) => ({
+        subjectId,
+        subjectName: nameMap.get(subjectId) ?? subjectId,
+        strengthScore: Math.round((agg.correct / agg.total) * 100),
+        totalCorrect: agg.correct,
+        totalAnswers: agg.total,
+      }))
+      .sort((a, b) => b.strengthScore - a.strengthScore);
   }
 
   /** Aggregates correct/total answers per (subject → topic) from Redis level progress,

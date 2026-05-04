@@ -6,7 +6,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { View, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
@@ -16,6 +16,7 @@ import { spacing, radius } from '../src/theme/tokens';
 import { ScreenWrapper } from '../src/components/layout/ScreenWrapper';
 import { Header } from '../src/components/layout/Header';
 import { Typography } from '../src/components/ui/Typography';
+import { RichContent } from '../src/components/ui/RichContent';
 import { Skeleton } from '../src/components/ui/Skeleton';
 import { ProgressBar } from '../src/components/ui/ProgressBar';
 import {
@@ -25,6 +26,7 @@ import {
   type MockTestCard,
   type AvailableMockTest,
 } from '../src/services/api-contracts';
+import { progressKeys } from '../src/hooks/useProgress';
 
 // ─── Timer display ───────────────────────────────────────────
 
@@ -129,9 +131,9 @@ function AnswerOption({
           {labels[index]}
         </Typography>
       </View>
-      <Typography variant="body" color={theme.text} style={{ flex: 1, fontSize: 14 }}>
+      <RichContent variant="body" color={theme.text} style={{ flex: 1 }}>
         {text}
-      </Typography>
+      </RichContent>
       {showResult && correct && <Ionicons name="checkmark-circle" size={18} color="#10B981" />}
       {showResult && selected && !correct && <Ionicons name="close-circle" size={18} color="#EF4444" />}
     </TouchableOpacity>
@@ -339,6 +341,7 @@ export default function MockTestScreen() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [testKey, setTestKey] = useState(0);
   const resultSubmittedRef = useRef(false);
+  const queryClient = useQueryClient();
   const [selectedMockTestId, setSelectedMockTestId] = useState<string | null>(null);
 
   // Fetch available curated mock tests
@@ -421,10 +424,12 @@ export default function MockTestScreen() {
       timeElapsedSeconds: timeElapsed,
       timeLimitSeconds: totalTime,
       answers: answersArray,
+    }).then(() => {
+      void queryClient.invalidateQueries({ queryKey: progressKeys.all });
     }).catch(() => {
       // Best-effort — don't block the results screen
     });
-  }, [finished, cards, answers, timeElapsed, totalTime, examId]);
+  }, [finished, cards, answers, timeElapsed, totalTime, examId, queryClient]);
 
   const selectAnswer = useCallback((optionId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -794,9 +799,9 @@ export default function MockTestScreen() {
               </View>
             ) : null}
 
-            <Typography variant="h4" color={theme.text} style={{ lineHeight: 26 }}>
+            <RichContent variant="h4" color={theme.text}>
               {currentCard.question}
-            </Typography>
+            </RichContent>
 
             {/* Answer options */}
             <View style={{ gap: spacing.sm }}>

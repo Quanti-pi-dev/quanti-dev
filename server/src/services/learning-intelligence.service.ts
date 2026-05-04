@@ -15,6 +15,10 @@ import type {
 
 const log = createServiceLogger('LearningIntelligence');
 
+/** Redis key for the cached learning profile. TTL: 5 minutes. */
+const PROFILE_CACHE_KEY = (userId: string) => `learning_profile_cache:${userId}`;
+const PROFILE_CACHE_TTL = 300; // 5 minutes
+
 // ─── Card Memory Redis Operations ────────────────────────────
 
 /**
@@ -59,12 +63,28 @@ export async function updateCardMemory(
   });
   // Track in the user's card memory SET for O(1) enumeration
   pipeline.sadd(`card_memory_keys:${userId}`, cardId);
+  // Invalidate the cached learning profile so next fetch recomputes
+  pipeline.del(PROFILE_CACHE_KEY(userId));
   await pipeline.exec();
 }
 
 // ─── Learning Profile Builder ────────────────────────────────
 
 export async function buildLearningProfile(userId: string): Promise<LearningProfile> {
+  const redis = getRedisClient();
+  const cacheKey = PROFILE_CACHE_KEY(userId);
+
+  // ── Cache hit: return immediately (turns 500ms+ → ~5ms) ──
+  try {
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached) as LearningProfile;
+    }
+  } catch (err) {
+    log.warn({ err }, 'Learning profile cache read failed, recomputing');
+  }
+
+  // ── Cache miss: full computation ──
   const [knowledgeHealth, velocity, cardStates] = await Promise.all([
     buildKnowledgeHealth(userId),
     buildLearningVelocity(userId),
@@ -77,7 +97,7 @@ export async function buildLearningProfile(userId: string): Promise<LearningProf
 
   const totalOverdueCards = knowledgeHealth.reduce((s, sub) => s + sub.totalOverdue, 0);
 
-  return {
+  const profile: LearningProfile = {
     studyPlan,
     knowledgeHealth,
     examReadiness,
@@ -86,6 +106,13 @@ export async function buildLearningProfile(userId: string): Promise<LearningProf
     totalTrackedCards: cardStates.length,
     totalOverdueCards,
   };
+
+  // ── Write to cache (best-effort, don't block response) ──
+  redis.setex(cacheKey, PROFILE_CACHE_TTL, JSON.stringify(profile)).catch((err) => {
+    log.warn({ err }, 'Learning profile cache write failed');
+  });
+
+  return profile;
 }
 
 // ─── Card Memory States ──────────────────────────────────────

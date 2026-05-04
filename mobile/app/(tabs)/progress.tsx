@@ -6,7 +6,8 @@
 // • Pro+: Chronotype + Speed vs Accuracy
 // • Master: Subject Mastery Radar + AI Study Recommendations
 
-import { View, ScrollView, useWindowDimensions, TouchableOpacity } from 'react-native';
+import { useState, useCallback } from 'react';
+import { View, ScrollView, useWindowDimensions, TouchableOpacity, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
@@ -15,9 +16,7 @@ import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';
 import { Card } from '../../src/components/ui/Card';
 import { ProgressBar } from '../../src/components/ui/ProgressBar';
-import { BadgeItem } from '../../src/components/BadgeItem';
 import { StatTile } from '../../src/components/StatTile';
-import { StreakWidget } from '../../src/components/StreakWidget';
 import { StudyInsightsCard } from '../../src/components/StudyInsightsCard';
 
 import { UpgradeCTABanner } from '../../src/components/subscription/UpgradeCTABanner';
@@ -39,10 +38,8 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../src/services/api';
 import { progressKeys } from '../../src/hooks/useProgress';
-import { useCoinBalance, useCoinsToday, useUserBadges } from '../../src/hooks/useGamification';
 import { useProgressAnalytics, LEVEL_COLORS, CARDS_PER_SUBJECT } from '../../src/hooks/useProgressAnalytics';
 import { useLearningProfile } from '../../src/hooks/useLearningProfile';
-import type { UserBadge } from '@kd/shared';
 
 // ─── Screen ──────────────────────────────────────────────────
 
@@ -54,6 +51,14 @@ export default function ProgressScreen() {
   const hasDeepInsights = canUseFeature('deep_insights');
   const hasMasteryRadar = canUseFeature('mastery_radar');
 
+  // PERF: Lazy-render heavy below-fold sections (charts, heatmap, radar)
+  const [belowFoldReady, setBelowFoldReady] = useState(false);
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (!belowFoldReady && e.nativeEvent.contentOffset.y > 500) {
+      setBelowFoldReady(true);
+    }
+  }, [belowFoldReady]);
+
   const { width: SCREEN_WIDTH } = useWindowDimensions();
   const CHART_W = SCREEN_WIDTH - spacing.xl * 2 - spacing.base * 2;
 
@@ -61,9 +66,6 @@ export default function ProgressScreen() {
   const { preferences } = useAuth();
   const { data: progressData } = useProgressSummary();
   const { data: streakData } = useStudyStreak();
-  const { data: userBadges } = useUserBadges();
-  const { data: coinData } = useCoinBalance();
-  const { data: coinsTodayData } = useCoinsToday();
   const { data: advancedData } = useAdvancedInsights(hasAdvancedAnalytics);
   const { data: learningProfile } = useLearningProfile();
 
@@ -95,30 +97,19 @@ export default function ProgressScreen() {
   const totalCards = progressData?.totalCardsCompleted ?? 0;
   const accuracy =
     progressData?.overallAccuracy != null ? `${Math.round(progressData.overallAccuracy)}%` : '—';
-  const coins = coinData?.balance ?? 0;
-  const earnedToday = coinsTodayData?.earnedToday ?? 0;
-  const dailyCap = coinsTodayData?.dailyCap ?? 500;
-  const lifetimeEarned = coinData?.lifetimeEarned ?? 0;
   const longestStreak = streakData?.longestStreak ?? 0;
   const freezes = streakData?.streakFreezes ?? 0;
   const isPersonalBestStreak = streak > 1 && streak >= longestStreak;
 
-  // ── Badges ─────────────────────────────────────────────────
-  const badgeList = ((userBadges ?? []) as UserBadge[]).map((b) => ({
-    id: b.badgeId,
-    name: b.badge?.name ?? 'Badge',
-    icon: (b.badge?.iconUrl ?? 'ribbon-outline') as React.ComponentProps<
-      typeof import('@expo/vector-icons').Ionicons
-    >['name'],
-    earned: b.earnedAt != null,
-    accent: '#F59E0B',
-  }));
+
 
   return (
     <ScreenWrapper>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ padding: spacing.xl, gap: spacing.xl, paddingBottom: spacing['4xl'] }}
+        onScroll={handleScroll}
+        scrollEventThrottle={200}
       >
         <Typography variant="h3">Your Learning Profile</Typography>
 
@@ -170,9 +161,6 @@ export default function ProgressScreen() {
           </Typography>
           <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
         </View>
-
-        {/* ── Streak ── */}
-        <StreakWidget streak={streak} freezes={freezes} />
 
         {/* ── Study Insights ── */}
         <StudyInsightsCard
@@ -269,7 +257,6 @@ export default function ProgressScreen() {
           <StatTile value={String(totalCards)} label="Cards Solved" color="#6366F1" />
           <StatTile value={accuracy} label="Accuracy" color="#10B981" />
           <StatTile value={`${streak}d`} label="Streak" color="#EF4444" />
-          <StatTile value={String(coins)} label="Coins" color={theme.coin ?? '#F59E0B'} />
         </View>
 
         {/* ── Personal Best chips ── */}
@@ -291,55 +278,6 @@ export default function ProgressScreen() {
             </Typography>
           </View>
         )}
-
-        {/* Weekly Comparison replaced by LearningVelocityCard above */}
-
-        {/* ── Coin Activity card (free for all) ── */}
-        <Card>
-          <View style={{ gap: spacing.md }}>
-            <SectionHeader
-              title="🪙 Coin Activity"
-              action={
-                <TouchableOpacity
-                  onPress={() => router.push('/coins-history')}
-                  accessibilityLabel="View coin history"
-                  accessibilityRole="button"
-                >
-                  <Typography variant="label" color={theme.primary}>
-                    View History →
-                  </Typography>
-                </TouchableOpacity>
-              }
-            />
-            {/* Today's earning progress */}
-            <View style={{ gap: spacing.xs }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Typography variant="caption" color={theme.textSecondary}>
-                  Earned today
-                </Typography>
-                <Typography variant="label" color={theme.coin ?? theme.primary}>
-                  {earnedToday} / {dailyCap}
-                </Typography>
-              </View>
-              <ProgressBar
-                progress={dailyCap > 0 ? earnedToday / dailyCap : 0}
-                height={8}
-                color={theme.coin ?? theme.primary}
-              />
-            </View>
-            {/* Lifetime stat */}
-            <View
-              style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
-            >
-              <Typography variant="caption" color={theme.textTertiary}>
-                Lifetime earned
-              </Typography>
-              <Typography variant="label" color={theme.textSecondary}>
-                {lifetimeEarned} coins
-              </Typography>
-            </View>
-          </View>
-        </Card>
 
         {/* ── Level Progress — current level per subject (free for all) ── */}
         {levelSummary.length > 0 && (
@@ -398,7 +336,7 @@ export default function ProgressScreen() {
         )}
 
         {/* ═══════════ Section Divider: Deep Analytics ═══════════ */}
-        {hasAdvancedAnalytics && (
+        {hasAdvancedAnalytics && belowFoldReady && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
             <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
             <Typography variant="caption" color={theme.textTertiary} style={{ letterSpacing: 1, textTransform: 'uppercase', fontSize: 10 }}>
@@ -412,7 +350,7 @@ export default function ProgressScreen() {
             ADVANCED ANALYTICS — Available to all paid tiers
             ══════════════════════════════════════════════════════════ */}
 
-        {hasAdvancedAnalytics && (
+        {hasAdvancedAnalytics && belowFoldReady && (
           <>
             {/* ── Accuracy Trend ── */}
             <Card>
@@ -691,85 +629,6 @@ export default function ProgressScreen() {
           );
         })()}
 
-        {/* Subject Mastery replaced by KnowledgeHealthMap above */}
-
-        {/* ═══════════ Section Divider: Rewards ═══════════ */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-          <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
-          <Typography variant="caption" color={theme.textTertiary} style={{ letterSpacing: 1, textTransform: 'uppercase', fontSize: 10 }}>
-            Rewards
-          </Typography>
-          <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
-        </View>
-
-        {/* ── Badges (free for all) ── */}
-        <View style={{ gap: spacing.md }}>
-          <SectionHeader
-            title="Badges"
-            sub={
-              badgeList.length > 0
-                ? `${badgeList.filter((b) => b.earned).length}/${badgeList.length} earned`
-                : undefined
-            }
-          />
-          {badgeList.length > 0 ? (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg }}>
-              {badgeList.map((b) => (
-                <BadgeItem
-                  key={b.id}
-                  name={b.name}
-                  icon={b.icon}
-                  earned={b.earned}
-                  accent={b.accent}
-                />
-              ))}
-            </View>
-          ) : (
-            <View
-              style={{
-                alignItems: 'center',
-                gap: spacing.md,
-                padding: spacing.xl,
-                backgroundColor: theme.cardAlt,
-                borderRadius: 16,
-              }}
-            >
-              <View
-                style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 26,
-                  backgroundColor: '#F59E0B18',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Ionicons name="ribbon-outline" size={24} color="#F59E0B" />
-              </View>
-              <Typography variant="label" align="center">
-                No Badges Yet
-              </Typography>
-              <Typography variant="caption" color={theme.textTertiary} align="center">
-                Complete study milestones to earn your first badge
-              </Typography>
-              <TouchableOpacity
-                onPress={() => router.push('/(tabs)/study')}
-                accessibilityLabel="Start studying to earn badges"
-                accessibilityRole="button"
-                style={{
-                  backgroundColor: theme.primary,
-                  borderRadius: 10,
-                  paddingHorizontal: spacing.lg,
-                  paddingVertical: spacing.sm,
-                }}
-              >
-                <Typography variant="label" color="#FFFFFF">
-                  Start Studying
-                </Typography>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
       </ScrollView>
     </ScreenWrapper>
   );

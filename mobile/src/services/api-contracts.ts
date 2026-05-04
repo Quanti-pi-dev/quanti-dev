@@ -376,6 +376,57 @@ export async function fetchReviewQueue(source?: 'pyq'): Promise<ReviewQueueCard[
   return (data?.data ?? []) as ReviewQueueCard[];
 }
 
+// ─── PYQ Practice ─────────────────────────────────────────────
+
+export interface PYQMeta {
+  years: number[];
+  papers: string[];
+  total: number;
+  subjects: { id: string; name: string }[];
+}
+
+export interface PYQPracticeCard {
+  cardId: string;
+  question: string;
+  answers: { id: string; text: string }[];
+  correctAnswerId: string;
+  explanation: string | null;
+  sourceYear: number | null;
+  sourcePaper: string | null;
+  topicName: string;
+  subjectName: string;
+}
+
+export interface PYQPracticeResponse {
+  cards: PYQPracticeCard[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+  };
+}
+
+export async function fetchPYQMeta(params?: {
+  examId?: string;
+  subjectId?: string;
+}): Promise<PYQMeta> {
+  const { data } = await api.get<ApiResponse<PYQMeta>>('/progress/pyq/meta', { params });
+  return (data?.data ?? { years: [], papers: [], total: 0, subjects: [] }) as PYQMeta;
+}
+
+export async function fetchPYQPractice(params?: {
+  examId?: string;
+  subjectId?: string;
+  year?: string;
+  paper?: string;
+  page?: string;
+  pageSize?: string;
+}): Promise<PYQPracticeResponse> {
+  const { data } = await api.get<ApiResponse<PYQPracticeResponse>>('/progress/pyq/practice', { params });
+  return (data?.data ?? { cards: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } }) as PYQPracticeResponse;
+}
+
 // ─── Mock Test ────────────────────────────────────────────────
 
 export interface MockTestCard {

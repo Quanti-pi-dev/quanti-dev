@@ -1,16 +1,15 @@
 // ─── TopicSunburstChart ──────────────────────────────────────
-// Interactive hierarchical sunburst chart inspired by disk-usage
-// visualizers (Baobab). Features:
-//   • Inner ring → Subjects (proportional by correct answers)
+// Premium hierarchical sunburst chart with:
+//   • Inner ring → Subjects (proportional by study effort)
 //   • Outer ring → Topics within each subject
-//   • Tap any segment to select it and see details
-//   • Center label updates with the selected item
+//   • Tap any segment to select — glow highlight + detail banner
 //   • Animated entrance with spring physics
+//   • Rich HSL color palette with luminance-shifted topic shades
 //   • Ghost skeleton for empty state
 
 import { useMemo, useState, useCallback } from 'react';
 import { View, Pressable } from 'react-native';
-import Svg, { Path, Circle, G, Text as SvgText } from 'react-native-svg';
+import Svg, { Path, Circle, G, Defs, RadialGradient, Stop, Text as SvgText } from 'react-native-svg';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -27,22 +26,30 @@ import type { SubjectTopicDistribution } from '@kd/shared';
 
 // ─── Constants ───────────────────────────────────────────────
 
-const SIZE = 300;
+const SIZE = 280;
 const CX = SIZE / 2;
 const CY = SIZE / 2;
 
-const CENTER_R = 44;
-const INNER_R = 50;
-const INNER_THICK = 38;
-const OUTER_R = INNER_R + INNER_THICK + 3;
-const OUTER_THICK = 28;
-const GAP_RAD = 0.02;
-const MIN_ARC = 0.04; // minimum arc radians for tiny segments
+const CENTER_R = 48;
+const INNER_R = 56;
+const INNER_THICK = 36;
+const OUTER_R = INNER_R + INNER_THICK + 4;
+const OUTER_THICK = 24;
+const GAP_RAD = 0.025;
+const MIN_ARC = 0.06;
 
-const SUBJECT_COLORS = [
-  '#EF4444', '#F59E0B', '#10B981',
-  '#6366F1', '#EC4899', '#8B5CF6',
-  '#14B8A6', '#0EA5E9',
+// ─── Premium Color Palette ───────────────────────────────────
+// Curated HSL-based hues — rich but not garish
+
+const SUBJECT_PALETTE = [
+  { base: '#7C5CFC', light: '#A78BFA', muted: '#7C5CFC20' }, // Violet
+  { base: '#3B82F6', light: '#60A5FA', muted: '#3B82F620' }, // Blue
+  { base: '#06B6D4', light: '#22D3EE', muted: '#06B6D420' }, // Cyan
+  { base: '#10B981', light: '#34D399', muted: '#10B98120' }, // Emerald
+  { base: '#F59E0B', light: '#FBBF24', muted: '#F59E0B20' }, // Amber
+  { base: '#F43F5E', light: '#FB7185', muted: '#F43F5E20' }, // Rose
+  { base: '#8B5CF6', light: '#A78BFA', muted: '#8B5CF620' }, // Purple
+  { base: '#EC4899', light: '#F472B6', muted: '#EC489920' }, // Pink
 ];
 
 // ─── Geometry Helpers ────────────────────────────────────────
@@ -72,16 +79,18 @@ function arcPath(
   ].join(' ');
 }
 
-function adjustColor(hex: string, amount: number): string {
+/** Shift hex color lightness by blending toward white (+) or black (-) */
+function shiftColor(hex: string, amount: number): string {
   const num = parseInt(hex.replace('#', ''), 16);
-  const r = Math.min(255, Math.max(0, (num >> 16) + amount));
-  const g = Math.min(255, Math.max(0, ((num >> 8) & 0xff) + amount));
-  const b = Math.min(255, Math.max(0, (num & 0xff) + amount));
-  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
-}
-
-function darkenColor(hex: string, amount: number): string {
-  return adjustColor(hex, -amount);
+  const r = (num >> 16) & 0xff;
+  const g = (num >> 8) & 0xff;
+  const b = num & 0xff;
+  const t = amount > 0 ? 255 : 0;
+  const p = Math.abs(amount) / 100;
+  const nr = Math.round(r + (t - r) * p);
+  const ng = Math.round(g + (t - g) * p);
+  const nb = Math.round(b + (t - b) * p);
+  return `#${((1 << 24) | (nr << 16) | (ng << 8) | nb).toString(16).slice(1)}`;
 }
 
 // ─── Types ────────────────────────────────────────────────────
@@ -90,15 +99,15 @@ interface SegmentInfo {
   id: string;
   path: string;
   color: string;
-  highlightColor: string;
+  glowColor: string;
   ring: 'inner' | 'outer';
   subjectIndex: number;
-  topicIndex: number; // -1 for subject
+  topicIndex: number;
   label: string;
   value: number;
   total: number;
   pct: number;
-  accuracy: number; // percentage
+  accuracy: number;
 }
 
 interface CenterInfo {
@@ -112,9 +121,9 @@ interface CenterInfo {
 const GHOST_SUBJECTS = 4;
 const GHOST_TOPICS = [3, 2, 3, 2];
 
-// ─── Legend Dot ──────────────────────────────────────────────
+// ─── Legend Item ─────────────────────────────────────────────
 
-function LegendDot({ color, label, pct, isSelected, onPress }: {
+function LegendItem({ color, label, pct, isSelected, onPress }: {
   color: string;
   label: string;
   pct: number;
@@ -129,21 +138,21 @@ function LegendDot({ color, label, pct, isSelected, onPress }: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.sm,
-        paddingVertical: 5,
-        paddingHorizontal: spacing.sm,
-        borderRadius: radius.md,
-        backgroundColor: isSelected ? color + '18' : 'transparent',
+        paddingVertical: 6,
+        paddingHorizontal: spacing.md,
+        borderRadius: radius.lg,
+        backgroundColor: isSelected ? color + '15' : 'transparent',
       }}
     >
       <View style={{
-        width: 10, height: 10, borderRadius: 5,
+        width: 12, height: 12, borderRadius: radius.xs,
         backgroundColor: color,
         ...(isSelected && {
           shadowColor: color,
           shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.7,
-          shadowRadius: 4,
-          elevation: 3,
+          shadowOpacity: 0.8,
+          shadowRadius: 6,
+          elevation: 4,
         }),
       }} />
       <Typography
@@ -154,7 +163,21 @@ function LegendDot({ color, label, pct, isSelected, onPress }: {
       >
         {label}
       </Typography>
-      <Typography variant="captionBold" color={color}>
+      {/* Mini bar */}
+      <View style={{
+        width: 48, height: 5, borderRadius: 3,
+        backgroundColor: theme.border,
+        overflow: 'hidden',
+      }}>
+        <View style={{
+          width: `${Math.min(pct, 100)}%` as any,
+          height: '100%',
+          borderRadius: 3,
+          backgroundColor: color,
+          opacity: isSelected ? 1 : 0.7,
+        }} />
+      </View>
+      <Typography variant="captionBold" color={isSelected ? color : theme.textTertiary} style={{ width: 32, textAlign: 'right' }}>
         {pct}%
       </Typography>
     </Pressable>
@@ -178,16 +201,17 @@ function TopicRow({ color, label, pct, isSelected, onPress }: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.sm,
-        paddingVertical: 3,
-        paddingLeft: spacing.xl,
-        paddingRight: spacing.sm,
+        paddingVertical: 4,
+        paddingLeft: 36,
+        paddingRight: spacing.md,
         borderRadius: radius.sm,
-        backgroundColor: isSelected ? color + '15' : 'transparent',
+        backgroundColor: isSelected ? color + '12' : 'transparent',
       }}
     >
       <View style={{
-        width: 7, height: 7, borderRadius: 3.5,
-        backgroundColor: color, opacity: 0.85,
+        width: 6, height: 6, borderRadius: 3,
+        backgroundColor: color,
+        opacity: isSelected ? 1 : 0.6,
       }} />
       <Typography
         variant="caption"
@@ -197,7 +221,20 @@ function TopicRow({ color, label, pct, isSelected, onPress }: {
       >
         {label}
       </Typography>
-      <Typography variant="caption" color={theme.textTertiary}>
+      <View style={{
+        width: 36, height: 4, borderRadius: 2,
+        backgroundColor: theme.border,
+        overflow: 'hidden',
+      }}>
+        <View style={{
+          width: `${Math.min(pct, 100)}%` as any,
+          height: '100%',
+          borderRadius: 2,
+          backgroundColor: color,
+          opacity: isSelected ? 0.9 : 0.5,
+        }} />
+      </View>
+      <Typography variant="caption" color={theme.textTertiary} style={{ width: 28, textAlign: 'right' }}>
         {pct}%
       </Typography>
     </Pressable>
@@ -223,17 +260,16 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
     const meta: { name: string; color: string; pct: number; topics: { name: string; color: string; pct: number; id: string }[] }[] = [];
 
     if (isEmpty) {
-      // Ghost skeleton
       const ghostShare = (2 * Math.PI) / GHOST_SUBJECTS;
       let angle = -Math.PI / 2;
       for (let si = 0; si < GHOST_SUBJECTS; si++) {
-        const color = SUBJECT_COLORS[si % SUBJECT_COLORS.length]!;
+        const pal = SUBJECT_PALETTE[si % SUBJECT_PALETTE.length]!;
         const subStart = angle + GAP_RAD / 2;
         const subEnd = angle + ghostShare - GAP_RAD / 2;
         segs.push({
           id: `ghost-inner-${si}`,
           path: arcPath(CX, CY, INNER_R, INNER_R + INNER_THICK, subStart, subEnd),
-          color, highlightColor: color, ring: 'inner',
+          color: pal.base, glowColor: pal.light, ring: 'inner',
           subjectIndex: si, topicIndex: -1,
           label: '', value: 0, total: 0, pct: 0, accuracy: 0,
         });
@@ -245,8 +281,8 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
           segs.push({
             id: `ghost-outer-${si}-${ti}`,
             path: arcPath(CX, CY, OUTER_R, OUTER_R + OUTER_THICK, ts, te),
-            color: adjustColor(color, 50),
-            highlightColor: adjustColor(color, 50),
+            color: shiftColor(pal.base, 30),
+            glowColor: pal.light,
             ring: 'outer',
             subjectIndex: si, topicIndex: ti,
             label: '', value: 0, total: 0, pct: 0, accuracy: 0,
@@ -261,40 +297,38 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
       };
     }
 
-    const grandTotal = data.reduce((s, d) => s + d.correctAnswers, 0) || 1;
+    const grandTotal = data.reduce((s, d) => s + d.totalAnswers, 0) || 1;
     const fullArc = 2 * Math.PI;
     let angle = -Math.PI / 2;
 
     data.forEach((subject, si) => {
-      const color = SUBJECT_COLORS[si % SUBJECT_COLORS.length]!;
-      const subjectArc = Math.max(MIN_ARC, (subject.correctAnswers / grandTotal) * fullArc);
+      const pal = SUBJECT_PALETTE[si % SUBJECT_PALETTE.length]!;
+      const subjectArc = Math.max(MIN_ARC, (subject.totalAnswers / grandTotal) * fullArc);
       const subStart = angle + GAP_RAD / 2;
       const subEnd = angle + subjectArc - GAP_RAD / 2;
-      const subjectPct = Math.round((subject.correctAnswers / grandTotal) * 100);
-      const subjectAcc = subject.totalAnswers > 0
+      const subjectPct = subject.totalAnswers > 0
         ? Math.round((subject.correctAnswers / subject.totalAnswers) * 100)
         : 0;
 
-      // Inner ring — subject
       if (subEnd > subStart) {
         segs.push({
           id: `s-${si}`,
           path: arcPath(CX, CY, INNER_R, INNER_R + INNER_THICK, subStart, subEnd),
-          color,
-          highlightColor: adjustColor(color, 25),
+          color: pal.base,
+          glowColor: pal.light,
           ring: 'inner',
           subjectIndex: si,
           topicIndex: -1,
           label: subject.subjectName,
-          value: subject.correctAnswers,
+          value: subject.totalAnswers,
           total: subject.totalAnswers,
           pct: subjectPct,
-          accuracy: subjectAcc,
+          accuracy: subjectPct,
         });
       }
 
       // Outer ring — topics
-      const topicTotal = subject.topics.reduce((s, t) => s + t.correctAnswers, 0) || 1;
+      const topicTotal = subject.topics.reduce((s, t) => s + t.totalAnswers, 0) || 1;
       let topicAngle = subStart;
       const usableArc = subjectArc - GAP_RAD;
       const topicMetas: typeof meta[0]['topics'] = [];
@@ -302,17 +336,16 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
       subject.topics.forEach((topic, ti) => {
         const topicArc = Math.max(
           MIN_ARC * 0.5,
-          (topic.correctAnswers / topicTotal) * usableArc,
+          (topic.totalAnswers / topicTotal) * usableArc,
         );
         const ts = topicAngle + GAP_RAD / 3;
         const te = topicAngle + topicArc - GAP_RAD / 3;
         topicAngle += topicArc;
 
-        // Progressive lighter shade for each topic
-        const shade = 30 + ti * 22;
-        const topicColor = adjustColor(color, shade);
-        const topicPct = Math.round((topic.correctAnswers / grandTotal) * 100);
-        const topicAcc = topic.totalAnswers > 0
+        // Lighter shade per topic — shifted 20-50% toward white
+        const lightShift = 20 + ti * 12;
+        const topicColor = shiftColor(pal.base, lightShift);
+        const topicPct = topic.totalAnswers > 0
           ? Math.round((topic.correctAnswers / topic.totalAnswers) * 100)
           : 0;
         const id = `t-${si}-${ti}`;
@@ -322,15 +355,15 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
             id,
             path: arcPath(CX, CY, OUTER_R, OUTER_R + OUTER_THICK, ts, te),
             color: topicColor,
-            highlightColor: adjustColor(topicColor, 20),
+            glowColor: shiftColor(topicColor, 15),
             ring: 'outer',
             subjectIndex: si,
             topicIndex: ti,
             label: topic.topicName,
-            value: topic.correctAnswers,
+            value: topic.totalAnswers,
             total: topic.totalAnswers,
             pct: topicPct,
-            accuracy: topicAcc,
+            accuracy: topicPct,
           });
         }
 
@@ -339,7 +372,7 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
 
       meta.push({
         name: subject.subjectName,
-        color,
+        color: pal.base,
         pct: subjectPct,
         topics: topicMetas,
       });
@@ -352,7 +385,7 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
       centerDefault: {
         label: 'Total',
         value: grandTotal,
-        sub: 'correct',
+        sub: 'answers',
       },
       subjectMeta: meta,
     };
@@ -365,8 +398,8 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
     if (!seg) return centerDefault;
     return {
       label: seg.label,
-      value: seg.value,
-      sub: `${seg.accuracy}% acc`,
+      value: seg.accuracy,
+      sub: '% accuracy',
     };
   }, [selectedId, segments, centerDefault]);
 
@@ -389,12 +422,12 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
   }, []);
 
   // ── Entrance animation ────────────────────────────────────
-  const svgScale = useSharedValue(0.82);
+  const svgScale = useSharedValue(0.85);
   const svgOpacity = useSharedValue(0);
 
   useMemo(() => {
-    svgOpacity.value = withTiming(1, { duration: 500 });
-    svgScale.value = withSpring(1, { damping: 16, stiffness: 110 });
+    svgOpacity.value = withTiming(1, { duration: 600 });
+    svgScale.value = withSpring(1, { damping: 14, stiffness: 100 });
   }, []);
 
   const svgAnimStyle = useAnimatedStyle(() => ({
@@ -412,58 +445,88 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
           : `Topic Distribution chart. ${subjectMeta.length} subjects.`
       }
     >
-      <View style={{ gap: spacing.md }}>
+      <View style={{ gap: spacing.lg }}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h4">Topic Distribution</Typography>
-          <Typography variant="caption" color={theme.textTertiary}>
-            By correct answers
-          </Typography>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <Typography variant="h4">Topic Mastery</Typography>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            paddingHorizontal: spacing.sm,
+            paddingVertical: 3,
+            borderRadius: radius.full,
+            backgroundColor: theme.primaryMuted,
+          }}>
+            <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: theme.primary }} />
+            <Typography variant="caption" color={theme.primary} style={{ fontSize: 10 }}>
+              accuracy %
+            </Typography>
+          </View>
         </View>
 
         {/* SVG Sunburst */}
         <Animated.View style={[{ alignItems: 'center' }, svgAnimStyle]}>
           <Svg width={SIZE} height={SIZE}>
+            <Defs>
+              <RadialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
+                <Stop offset="0%" stopColor={theme.primary} stopOpacity="0.06" />
+                <Stop offset="100%" stopColor={theme.primary} stopOpacity="0" />
+              </RadialGradient>
+            </Defs>
+
+            {/* Subtle center glow */}
+            <Circle cx={CX} cy={CY} r={CENTER_R + 8} fill="url(#centerGlow)" />
+
             {/* Render all segments */}
             {segments.map((seg) => {
               const isSelected = selectedId === seg.id;
-              // Highlight sibling segments when a subject is selected
               const selectedSeg = selectedId ? segments.find((s) => s.id === selectedId) : null;
               const isSiblingHighlight = selectedSeg
                 ? seg.subjectIndex === selectedSeg.subjectIndex
                 : false;
 
               const opacity = isEmpty
-                ? 0.12
+                ? 0.08
                 : selectedId === null
-                  ? 1
+                  ? 0.88
                   : isSelected
                     ? 1
                     : isSiblingHighlight
-                      ? 0.75
-                      : 0.25;
+                      ? 0.6
+                      : 0.15;
 
               return (
                 <Path
                   key={seg.id}
                   d={seg.path}
-                  fill={isSelected ? seg.highlightColor : seg.color}
+                  fill={isSelected ? seg.glowColor : seg.color}
                   fillOpacity={opacity}
-                  stroke={isSelected ? seg.highlightColor : theme.card}
-                  strokeWidth={isSelected ? 2 : 1.2}
+                  stroke={isSelected ? seg.glowColor : theme.card}
+                  strokeWidth={isSelected ? 2.5 : 1.5}
                   onPress={() => handleSegmentPress(seg.id, seg.subjectIndex)}
                 />
               );
             })}
 
-            {/* Center circle */}
+            {/* Center circle — frosted glass look */}
             <Circle
               cx={CX}
               cy={CY}
               r={CENTER_R}
               fill={theme.card}
               stroke={theme.border}
-              strokeWidth={1}
+              strokeWidth={1.5}
+            />
+            {/* Thin accent ring inside center */}
+            <Circle
+              cx={CX}
+              cy={CY}
+              r={CENTER_R - 3}
+              fill="none"
+              stroke={selectedId ? (segments.find(s => s.id === selectedId)?.color ?? theme.primary) : theme.primary}
+              strokeWidth={0.8}
+              strokeOpacity={0.3}
             />
 
             {/* Center text */}
@@ -471,75 +534,91 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
               <>
                 <SvgText
                   x={CX}
-                  y={CY - 8}
+                  y={centerInfo.label === 'Total' ? CY - 4 : CY - 6}
                   textAnchor="middle"
-                  fontSize={centerInfo.label === 'Total' ? 22 : 13}
-                  fontWeight="700"
-                  fill={theme.text}
+                  fontSize={centerInfo.label === 'Total' ? 24 : 20}
+                  fontWeight="800"
+                  fill={selectedId
+                    ? (segments.find(s => s.id === selectedId)?.color ?? theme.text)
+                    : theme.text}
                   fontFamily="System"
                 >
-                  {centerInfo.label === 'Total'
-                    ? centerInfo.value
-                    : centerInfo.value}
+                  {centerInfo.value}
                 </SvgText>
-                {centerInfo.label !== 'Total' && (
-                  <SvgText
-                    x={CX}
-                    y={CY + 5}
-                    textAnchor="middle"
-                    fontSize={9}
-                    fill={theme.textSecondary}
-                    fontFamily="System"
-                  >
-                    {centerInfo.label.length > 14
-                      ? centerInfo.label.slice(0, 13) + '…'
-                      : centerInfo.label}
-                  </SvgText>
-                )}
                 <SvgText
                   x={CX}
-                  y={centerInfo.label === 'Total' ? CY + 10 : CY + 17}
+                  y={centerInfo.label === 'Total' ? CY + 14 : CY + 12}
                   textAnchor="middle"
                   fontSize={9}
                   fill={theme.textTertiary}
                   fontFamily="System"
+                  fontWeight="500"
                 >
-                  {centerInfo.sub}
+                  {centerInfo.label === 'Total'
+                    ? centerInfo.sub
+                    : centerInfo.label.length > 12
+                      ? centerInfo.label.slice(0, 11) + '…'
+                      : centerInfo.label}
                 </SvgText>
+                {centerInfo.label !== 'Total' && (
+                  <SvgText
+                    x={CX}
+                    y={CY + 23}
+                    textAnchor="middle"
+                    fontSize={8}
+                    fill={theme.textTertiary}
+                    fontFamily="System"
+                  >
+                    {centerInfo.sub}
+                  </SvgText>
+                )}
               </>
             ) : (
-              <SvgText
-                x={CX}
-                y={CY + 4}
-                textAnchor="middle"
-                fontSize={10}
-                fill={theme.textTertiary}
-                fontFamily="System"
-              >
-                No data
-              </SvgText>
+              <>
+                <SvgText
+                  x={CX}
+                  y={CY - 2}
+                  textAnchor="middle"
+                  fontSize={10}
+                  fill={theme.textTertiary}
+                  fontFamily="System"
+                  fontWeight="600"
+                >
+                  No data
+                </SvgText>
+                <SvgText
+                  x={CX}
+                  y={CY + 12}
+                  textAnchor="middle"
+                  fontSize={8}
+                  fill={theme.textTertiary}
+                  fontFamily="System"
+                  opacity={0.6}
+                >
+                  yet
+                </SvgText>
+              </>
             )}
           </Svg>
         </Animated.View>
 
-        {/* Ring key labels */}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.lg }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-            <View style={{
-              width: 12, height: 12, borderRadius: 2,
-              backgroundColor: SUBJECT_COLORS[0],
-              opacity: isEmpty ? 0.2 : 1,
-            }} />
-            <Typography variant="caption" color={theme.textTertiary}>Subjects</Typography>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-            <View style={{
-              width: 12, height: 12, borderRadius: 2,
-              backgroundColor: adjustColor(SUBJECT_COLORS[0]!, 50),
-              opacity: isEmpty ? 0.2 : 1,
-            }} />
-            <Typography variant="caption" color={theme.textTertiary}>Topics</Typography>
-          </View>
+        {/* Ring key — minimal */}
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xl }}>
+          {[
+            { label: 'Inner · Subjects', opacity: isEmpty ? 0.15 : 0.9 },
+            { label: 'Outer · Topics', opacity: isEmpty ? 0.15 : 0.55 },
+          ].map((item) => (
+            <View key={item.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{
+                width: 10, height: 10, borderRadius: 2,
+                backgroundColor: SUBJECT_PALETTE[0]!.base,
+                opacity: item.opacity,
+              }} />
+              <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 10 }}>
+                {item.label}
+              </Typography>
+            </View>
+          ))}
         </View>
 
         {/* Selected detail banner */}
@@ -551,52 +630,60 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
               entering={FadeIn.duration(200)}
               exiting={FadeOut.duration(150)}
               style={{
-                backgroundColor: seg.color + '14',
+                backgroundColor: seg.color + '10',
                 borderWidth: 1,
-                borderColor: seg.color + '30',
-                borderRadius: radius.lg,
+                borderColor: seg.color + '25',
+                borderRadius: radius.xl,
                 padding: spacing.md,
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: spacing.md,
               }}
             >
+              {/* Accuracy circle */}
               <View style={{
-                width: 36, height: 36, borderRadius: 18,
-                backgroundColor: seg.color + '25',
+                width: 44, height: 44, borderRadius: 22,
+                backgroundColor: seg.color + '18',
+                borderWidth: 2,
+                borderColor: seg.color + '40',
                 alignItems: 'center', justifyContent: 'center',
               }}>
-                <Typography variant="h4" color={seg.color}>
-                  {seg.pct}%
+                <Typography variant="h4" color={seg.color} style={{ fontSize: 15 }}>
+                  {seg.accuracy}%
                 </Typography>
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, gap: 2 }}>
                 <Typography variant="label" numberOfLines={1}>
                   {seg.label}
                 </Typography>
                 <Typography variant="caption" color={theme.textSecondary}>
-                  {seg.value} / {seg.total} answers · {seg.accuracy}% accuracy
+                  {seg.value} answers · {seg.ring === 'inner' ? 'Subject' : 'Topic'}
                 </Typography>
               </View>
               <Pressable
                 onPress={() => setSelectedId(null)}
                 hitSlop={12}
+                style={{
+                  width: 24, height: 24, borderRadius: 12,
+                  backgroundColor: theme.border,
+                  alignItems: 'center', justifyContent: 'center',
+                }}
               >
-                <Typography variant="caption" color={theme.textTertiary}>✕</Typography>
+                <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 11, lineHeight: 13 }}>✕</Typography>
               </Pressable>
             </Animated.View>
           );
         })()}
 
         {/* Divider */}
-        <View style={{ height: 1, backgroundColor: theme.border, opacity: 0.4 }} />
+        <View style={{ height: 1, backgroundColor: theme.border, opacity: 0.3 }} />
 
         {/* Interactive Legend */}
         {!isEmpty ? (
           <View style={{ gap: 2 }}>
             {subjectMeta.map((subject, si) => (
               <View key={si}>
-                <LegendDot
+                <LegendItem
                   color={subject.color}
                   label={subject.name}
                   pct={subject.pct}

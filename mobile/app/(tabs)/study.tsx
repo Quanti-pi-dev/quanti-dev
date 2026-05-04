@@ -676,6 +676,53 @@ export default function StudyScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* ── PYQ Practice CTA ─────────────────────────────────── */}
+        <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.sm }}>
+          <TouchableOpacity
+            onPress={() => router.push('/pyq-practice')}
+            activeOpacity={0.85}
+            style={{
+              borderRadius: radius['2xl'],
+              overflow: 'hidden',
+              borderWidth: 1,
+              borderColor: '#F59E0B20',
+            }}
+          >
+            <LinearGradient
+              colors={['#F59E0B', '#F97316']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: spacing.xl,
+                paddingVertical: spacing.lg,
+                gap: spacing.md,
+              }}
+            >
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: 'rgba(255,255,255,0.2)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="library" size={22} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Typography variant="label" color="#FFFFFF">Previous Year Questions</Typography>
+                <Typography variant="caption" color="rgba(255,255,255,0.7)">
+                  Practice PYQs by year & paper
+                </Typography>
+              </View>
+              <Ionicons name="play-circle" size={24} color="rgba(255,255,255,0.9)" />
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+
         {/* ── Section 4: Discover More Decks ──────────────── */}
         <View style={{ marginTop: spacing['2xl'], gap: spacing.md }}>
           <View style={{ paddingHorizontal: spacing.xl }}>

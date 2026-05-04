@@ -13,6 +13,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo, memo } from 'react';
 import {
   View,
+  ScrollView,
   TouchableOpacity,
   useWindowDimensions,
   ViewStyle,
@@ -216,7 +217,7 @@ export const FlashCard = memo(function FlashCard({
         ]}
       >
         {/* Question (with optional diagram/graph image) */}
-        <View style={{ flex: 1, justifyContent: imageUrl ? 'flex-start' : 'center', gap: spacing.sm }}>
+        <View style={{ flex: 1, justifyContent: imageUrl ? 'flex-start' : 'center', gap: spacing.sm, overflow: 'hidden' }}>
           {imageUrl ? (
             <View
               style={{
@@ -236,12 +237,17 @@ export const FlashCard = memo(function FlashCard({
               />
             </View>
           ) : null}
-          <RichContent
-            variant={imageUrl ? 'bodySmall' : 'h4'}
-            align="center"
+          <ScrollView
+            contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+            showsVerticalScrollIndicator={true}
           >
-            {question || 'Question not available'}
-          </RichContent>
+            <RichContent
+              variant={imageUrl ? 'bodySmall' : 'h4'}
+              align="center"
+            >
+              {question || 'Question not available'}
+            </RichContent>
+          </ScrollView>
         </View>
 
         {/* Options */}
@@ -394,23 +400,29 @@ export const FlashCard = memo(function FlashCard({
           style={{
             backgroundColor: theme.successLight,
             borderRadius: radius.lg,
-            padding: spacing.md,
             borderLeftWidth: 3,
             borderLeftColor: theme.success,
             width: '100%',
+            flexShrink: 1,
+            overflow: 'hidden',
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: 4 }}>
-            <Ionicons name="checkmark-circle" size={14} color={theme.success} />
-            <Typography variant="label" color={theme.success}>
-              Correct answer: {correctKey}
-            </Typography>
-          </View>
-          {explanation ? (
-            <RichContent variant="bodySmall" color={theme.textSecondary}>
-              {explanation}
-            </RichContent>
-          ) : null}
+          <ScrollView
+            contentContainerStyle={{ padding: spacing.md }}
+            showsVerticalScrollIndicator={true}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: 4 }}>
+              <Ionicons name="checkmark-circle" size={14} color={theme.success} />
+              <Typography variant="label" color={theme.success}>
+                Correct answer: {correctKey}
+              </Typography>
+            </View>
+            {explanation ? (
+              <RichContent variant="bodySmall" color={theme.textSecondary}>
+                {explanation}
+              </RichContent>
+            ) : null}
+          </ScrollView>
         </View>
       </Animated.View>
     </View>

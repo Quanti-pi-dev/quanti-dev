@@ -19,6 +19,6 @@ export function useLearningProfile() {
   return useQuery({
     queryKey: learningProfileKeys.all,
     queryFn: fetchLearningProfile,
-    staleTime: 120_000, // 2 min — profile recomputed from SM-2 data
+    staleTime: 300_000, // 5 min — server caches this + invalidated after study sessions
   });
 }

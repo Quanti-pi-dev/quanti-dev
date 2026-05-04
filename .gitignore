@@ -126,6 +126,8 @@ node_modules
 server/db/seeds/**
 !server/db/seeds/.gitkeep
 
+server/db/scripts/test-mocktest.ts
+
 
 # Graphify
 .agents/

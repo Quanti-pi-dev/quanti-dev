@@ -1132,6 +1132,217 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
     });
   });
 
+  // ─── GET /progress/pyq/meta ─────────────────────────────────
+  // Student-facing: returns available PYQ years, papers, and total count
+  // for the filter UI. Scoped to user's selected subjects by default.
+  fastify.get('/pyq/meta', async (request: FastifyRequest<{
+    Querystring: { examId?: string; subjectId?: string };
+  }>, reply: FastifyReply) => {
+    const userId = request.user!.id;
+    const examIdParam = (request.query as { examId?: string }).examId;
+    const subjectIdParam = (request.query as { subjectId?: string }).subjectId;
+
+    const mongo = getMongoDb();
+    const pg = getPostgresPool();
+    const filter: Record<string, unknown> = { source: 'pyq' };
+
+    // Resolve deck scope
+    if (subjectIdParam && /^[0-9a-fA-F]{24}$/.test(subjectIdParam)) {
+      const deckDocs = await mongo.collection('decks').find(
+        { subjectId: new ObjectId(subjectIdParam) },
+        { projection: { _id: 1 } },
+      ).toArray();
+      filter['deckId'] = { $in: deckDocs.map(d => d._id) };
+    } else {
+      // Scope to user's selected subjects
+      const prefResult = await pg.query(
+        `SELECT selected_subjects FROM user_preferences WHERE user_id = (SELECT id FROM users WHERE firebase_uid = $1)`,
+        [userId],
+      );
+      const selectedSubjects: string[] = prefResult.rows[0]?.selected_subjects ?? [];
+      const subjectOids = selectedSubjects
+        .filter(id => /^[0-9a-fA-F]{24}$/.test(id))
+        .map(id => new ObjectId(id));
+
+      if (subjectOids.length > 0) {
+        const deckMatch: Record<string, unknown> = { subjectId: { $in: subjectOids } };
+        if (examIdParam && /^[0-9a-fA-F]{24}$/.test(examIdParam)) {
+          deckMatch['examId'] = new ObjectId(examIdParam);
+        }
+        const deckDocs = await mongo.collection('decks').find(deckMatch, { projection: { _id: 1 } }).toArray();
+        filter['deckId'] = { $in: deckDocs.map(d => d._id) };
+      }
+    }
+
+    const agg = await mongo.collection('flashcards').aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          years: { $addToSet: '$sourceYear' },
+          papers: { $addToSet: '$sourcePaper' },
+          total: { $sum: 1 },
+        },
+      },
+    ]).toArray();
+
+    const result = agg[0] ?? { years: [], papers: [], total: 0 };
+    const years = ((result['years'] as (number | null)[]) ?? [])
+      .filter((y): y is number => typeof y === 'number')
+      .sort((a, b) => b - a);
+    const papers = ((result['papers'] as (string | null)[]) ?? [])
+      .filter((p): p is string => typeof p === 'string' && p.length > 0)
+      .sort();
+
+    // Subject list for filter UI
+    const subjectIds = subjectIdParam
+      ? [subjectIdParam]
+      : (await pg.query(
+          `SELECT selected_subjects FROM user_preferences WHERE user_id = (SELECT id FROM users WHERE firebase_uid = $1)`,
+          [userId],
+        )).rows[0]?.selected_subjects ?? [];
+
+    const validSubOids = (subjectIds as string[])
+      .filter(id => /^[0-9a-fA-F]{24}$/.test(id))
+      .map(id => new ObjectId(id));
+
+    const subjects = validSubOids.length > 0
+      ? await mongo.collection('subjects').find({ _id: { $in: validSubOids } }).project({ name: 1 }).toArray()
+      : [];
+
+    return reply.send({
+      success: true,
+      data: {
+        years,
+        papers,
+        total: result['total'] ?? 0,
+        subjects: subjects.map(s => ({ id: s._id.toString(), name: s.name as string })),
+      },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ─── GET /progress/pyq/practice ─────────────────────────────
+  // Student-facing: returns PYQ flashcards for practice sessions.
+  // Supports filtering by year, paper, and subject.
+  fastify.get('/pyq/practice', async (request: FastifyRequest<{
+    Querystring: { examId?: string; subjectId?: string; year?: string; paper?: string; page?: string; pageSize?: string };
+  }>, reply: FastifyReply) => {
+    const userId = request.user!.id;
+    const { examId: examIdParam, subjectId: subjectIdParam, year, paper, page = '1', pageSize = '20' } = request.query;
+
+    const mongo = getMongoDb();
+    const pg = getPostgresPool();
+    const pgNum = Math.max(1, parseInt(page, 10) || 1);
+    const psNum = Math.min(50, Math.max(1, parseInt(pageSize, 10) || 20));
+    const skip = (pgNum - 1) * psNum;
+
+    const filter: Record<string, unknown> = { source: 'pyq' };
+
+    // Resolve deck scope
+    if (subjectIdParam && /^[0-9a-fA-F]{24}$/.test(subjectIdParam)) {
+      const deckDocs = await mongo.collection('decks').find(
+        { subjectId: new ObjectId(subjectIdParam) },
+        { projection: { _id: 1 } },
+      ).toArray();
+      filter['deckId'] = { $in: deckDocs.map(d => d._id) };
+    } else {
+      const prefResult = await pg.query(
+        `SELECT selected_subjects FROM user_preferences WHERE user_id = (SELECT id FROM users WHERE firebase_uid = $1)`,
+        [userId],
+      );
+      const selectedSubjects: string[] = prefResult.rows[0]?.selected_subjects ?? [];
+      const subjectOids = selectedSubjects
+        .filter(id => /^[0-9a-fA-F]{24}$/.test(id))
+        .map(id => new ObjectId(id));
+
+      if (subjectOids.length > 0) {
+        const deckMatch: Record<string, unknown> = { subjectId: { $in: subjectOids } };
+        if (examIdParam && /^[0-9a-fA-F]{24}$/.test(examIdParam)) {
+          deckMatch['examId'] = new ObjectId(examIdParam);
+        }
+        const deckDocs = await mongo.collection('decks').find(deckMatch, { projection: { _id: 1 } }).toArray();
+        filter['deckId'] = { $in: deckDocs.map(d => d._id) };
+      }
+    }
+
+    if (year) {
+      const y = parseInt(year, 10);
+      if (!isNaN(y)) filter['sourceYear'] = y;
+    }
+    if (paper) filter['sourcePaper'] = paper;
+
+    const [docs, totalItems] = await Promise.all([
+      mongo.collection('flashcards')
+        .find(filter)
+        .sort({ sourceYear: -1, sourcePaper: 1, order: 1 })
+        .skip(skip)
+        .limit(psNum)
+        .project({
+          question: 1, options: 1, correctAnswerId: 1,
+          explanation: 1, source: 1, sourceYear: 1,
+          sourcePaper: 1, topicDisplayName: 1, deckId: 1, tags: 1,
+        })
+        .toArray(),
+      mongo.collection('flashcards').countDocuments(filter),
+    ]);
+
+    // Enrich with subject names
+    const deckIds = [...new Set(docs.map(d => d.deckId).filter(Boolean))];
+    const validDeckIds = deckIds
+      .filter((id: unknown) => ObjectId.isValid(id as string))
+      .map((id: unknown) => (id instanceof ObjectId ? id : new ObjectId((id as string).toString())));
+
+    const enrichDecks = validDeckIds.length > 0
+      ? await mongo.collection('decks')
+          .find({ _id: { $in: validDeckIds } })
+          .project({ subjectId: 1, topicSlug: 1, topicDisplayName: 1 })
+          .toArray()
+      : [];
+
+    const deckMap = new Map(enrichDecks.map(d => [d._id.toString(), {
+      subjectId: d.subjectId?.toString() ?? '',
+      topicSlug: (d.topicSlug as string) ?? '',
+      topicDisplayName: (d.topicDisplayName as string) ?? '',
+    }]));
+
+    const subjectIdSet = [...new Set(enrichDecks.map(d => d.subjectId?.toString()).filter(Boolean))] as string[];
+    const validSubIds = subjectIdSet.filter(id => /^[0-9a-fA-F]{24}$/.test(id)).map(id => new ObjectId(id));
+    const subjects = validSubIds.length > 0
+      ? await mongo.collection('subjects').find({ _id: { $in: validSubIds } }).project({ name: 1 }).toArray()
+      : [];
+    const subjectNameMap = new Map(subjects.map(s => [s._id.toString(), s.name as string]));
+
+    const cards = docs.map(doc => {
+      const deck = deckMap.get(doc.deckId?.toString() ?? '');
+      return {
+        cardId: doc._id.toString(),
+        question: (doc.question as string) ?? '',
+        answers: (doc.options as { id: string; text: string }[]) ?? [],
+        correctAnswerId: (doc.correctAnswerId as string) ?? '',
+        explanation: (doc.explanation as string) ?? null,
+        sourceYear: (doc.sourceYear as number) ?? null,
+        sourcePaper: (doc.sourcePaper as string) ?? null,
+        topicName: deck?.topicDisplayName || (doc.topicDisplayName as string) || '',
+        subjectName: deck ? (subjectNameMap.get(deck.subjectId) ?? '') : '',
+      };
+    });
+
+    return reply.send({
+      success: true,
+      data: {
+        cards,
+        pagination: {
+          page: pgNum,
+          pageSize: psNum,
+          totalItems,
+          totalPages: Math.ceil(totalItems / psNum),
+        },
+      },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   // ─── GET /progress/mock-test ─────────────────────────────────
   // Serves a mock test. Two modes:
   //   1. Curated: ?mockTestId=... → loads a pre-built template from
