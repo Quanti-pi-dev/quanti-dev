@@ -68,8 +68,10 @@ export default function ProgressScreen() {
   const { data: learningProfile } = useLearningProfile();
 
   // Weekly session history for the report card (always fetched — free tier)
+  // PERF: Uses same query key as useProgressAnalytics ('weekly-history') so
+  // React Query deduplicates if both are mounted simultaneously.
   const { data: weeklySessions = [] } = useQuery({
-    queryKey: [...progressKeys.all, 'weekly-report'],
+    queryKey: [...progressKeys.all, 'weekly-history'],
     queryFn: async () => {
       const { data } = await api.get('/progress/history', { params: { page: 1, pageSize: 35 } });
       return (data.data ?? []) as { cardsStudied: number; correctAnswers: number; startedAt: string }[];

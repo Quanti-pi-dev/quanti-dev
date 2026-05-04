@@ -3,7 +3,7 @@
 // selections (selectedExams + selectedSubjects).
 // Falls back to generic "Explore Exams" for unonboarded users.
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, memo } from 'react';
 import { View, ScrollView, TouchableOpacity } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -39,10 +39,10 @@ import { useSubscriptionGate } from '../../src/hooks/useSubscriptionGate';
 import { useSubscription } from '../../src/contexts/SubscriptionContext';
 import { useProgressSummary, useStudyStreak } from '../../src/hooks/useProgress';
 import { useCoinBalance, useLevelProgressSummary } from '../../src/hooks/useGamification';
+import { usePersonalizedSubjects } from '../../src/hooks/usePersonalizedSubjects';
 import { useExams } from '../../src/hooks/useExams';
 import { fetchRecentSessions } from '../../src/services/api-contracts';
 import { formatRelativeTime } from '../../src/utils/time';
-import { api } from '../../src/services/api';
 import type { Subject } from '@kd/shared';
 
 const FREE_EXAM_PREVIEW = 3;
@@ -120,7 +120,15 @@ function UpgradePill({ onPress }: { onPress: () => void }) {
 }
 
 // ─── Staggered fade-in wrapper ────────────────────────────────
-function FadeInView({ delay = 0, children }: { delay?: number; children: React.ReactNode }) {
+// PERF: Only animate the first few visible items (delay <= 300ms).
+// Below-fold items render immediately — they're off-screen during the
+// animation window anyway, so animating them wastes shared values.
+const FadeInView = memo(function FadeInView({ delay = 0, children }: { delay?: number; children: React.ReactNode }) {
+  // Skip animation for below-fold items
+  if (delay > 300) {
+    return <View>{children}</View>;
+  }
+
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(14);
 
@@ -135,7 +143,7 @@ function FadeInView({ delay = 0, children }: { delay?: number; children: React.R
   }));
 
   return <Animated.View style={style}>{children}</Animated.View>;
-}
+});
 
 // ─── Weekly heatmap helper ────────────────────────────────────
 function getWeekStudyData(lastStudyDate?: string): { studiedDays: boolean[]; todayIndex: number } {
@@ -179,26 +187,8 @@ export default function HomeScreen() {
   const primaryExamId = selectedExamIds[0] ?? '';
 
   // ─── Fetch the full Subject objects for onboarded users ───
-  const { data: personalizedSubjects, isLoading: subjectsLoading } = useQuery<Subject[]>({
-    queryKey: ['home-personalized-subjects', selectedSubjectIds.join(',')],
-    queryFn: async () => {
-      const requests = selectedExamIds.map((id) => api.get(`/exams/${id}/subjects`));
-      const responses = await Promise.all(requests);
-      const map = new Map<string, Subject>();
-      for (const res of responses) {
-        if (res.data?.success && res.data.data) {
-          for (const s of res.data.data as Subject[]) {
-            if (selectedSubjectIds.includes(s.id)) {
-              map.set(s.id, s);
-            }
-          }
-        }
-      }
-      return selectedSubjectIds.map((id) => map.get(id)).filter((s): s is Subject => !!s);
-    },
-    enabled: isOnboarded && selectedExamIds.length > 0,
-    staleTime: 5 * 60 * 1000,
-  });
+  // PERF: Uses shared hook — same query key as Study screen, React Query deduplicates.
+  const { data: personalizedSubjects, isLoading: subjectsLoading } = usePersonalizedSubjects();
 
   // ─── Mastery data: correctAnswers + levelIndex per subject ───
   const { data: levelProgress } = useLevelProgressSummary();

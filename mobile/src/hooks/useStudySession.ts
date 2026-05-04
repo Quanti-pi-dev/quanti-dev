@@ -24,6 +24,12 @@ interface UseStudySessionConfig {
   deckId: string | null;
   /** ISO timestamp when the session started */
   startedAt: string;
+  /**
+   * When true, omit per-card `answers` from the flush payload.
+   * Use this for level-mode sessions where POST /level-answer already
+   * handles SM-2 and BKT per card — avoids double-processing.
+   */
+  skipAnswerDetails?: boolean;
 }
 
 interface AnswerRecord {
@@ -41,6 +47,8 @@ interface SessionSnapshot {
   startedAt: string;
   endedAt: string;
   isComplete?: boolean;
+  /** Per-card answer records — enables server-side SM-2 and BKT per card. */
+  answers?: AnswerRecord[];
 }
 
 interface UseStudySessionResult {
@@ -60,7 +68,7 @@ const FLUSH_DEBOUNCE_MS = 800;
 
 // ─── Hook ──────────────────────────────────────────────────
 
-export function useStudySession({ deckId, startedAt }: UseStudySessionConfig): UseStudySessionResult {
+export function useStudySession({ deckId, startedAt, skipAnswerDetails = false }: UseStudySessionConfig): UseStudySessionResult {
   const queryClient = useQueryClient();
   // Mutable ref for flush payloads (no stale-closure risk)
   const answersRef = useRef<AnswerRecord[]>([]);
@@ -109,18 +117,31 @@ export function useStudySession({ deckId, startedAt }: UseStudySessionConfig): U
       startedAt,
       endedAt: new Date().toISOString(),
       isComplete,
+      // Send only NEW answers since the last flush to avoid re-processing.
+      // The server is idempotent per cardId within a session, but sending
+      // the delta is cleaner and reduces payload size on mid-session flushes.
+      // skipAnswerDetails = true for level-mode (POST /level-answer handles SM-2/BKT).
+      answers: skipAnswerDetails ? undefined : answers.slice(lastFlushedCountRef.current),
     };
 
     try {
       await api.post('/progress/session', snapshot);
       lastFlushedCountRef.current = snapshotAnswered;
-      // Invalidate caches so Home screen stats update immediately
-      queryClient.invalidateQueries({ queryKey: progressKeys.summary() });
-      queryClient.invalidateQueries({ queryKey: progressKeys.streak() });
-      queryClient.invalidateQueries({ queryKey: ['progress', 'levelSummary'] });
-      queryClient.invalidateQueries({ queryKey: gamificationKeys.coins() });
-      queryClient.invalidateQueries({ queryKey: gamificationKeys.coinsToday() });
-      queryClient.invalidateQueries({ queryKey: sessionsKeys.today() });
+
+      if (isComplete) {
+        // On completion: immediately refetch so stats update when user sees results
+        queryClient.invalidateQueries({ queryKey: progressKeys.summary() });
+        queryClient.invalidateQueries({ queryKey: progressKeys.streak() });
+        queryClient.invalidateQueries({ queryKey: ['progress', 'levelSummary'] });
+        queryClient.invalidateQueries({ queryKey: gamificationKeys.coins() });
+        queryClient.invalidateQueries({ queryKey: gamificationKeys.coinsToday() });
+        queryClient.invalidateQueries({ queryKey: sessionsKeys.today() });
+      } else {
+        // Mid-session: mark stale but DON'T trigger refetch — avoids 6 parallel
+        // API calls every 800ms. Data refreshes when user navigates away.
+        queryClient.invalidateQueries({ queryKey: ['progress'], refetchType: 'none' });
+        queryClient.invalidateQueries({ queryKey: ['gamification'], refetchType: 'none' });
+      }
     } catch {
       // Server unreachable — persist to offline queue for later retry
       await enqueue({

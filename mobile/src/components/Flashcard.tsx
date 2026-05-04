@@ -10,7 +10,7 @@
 // - 3.4: Typography for all text (no raw Text elements)
 // - 2.2: Memoized card dimensions
 
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo, memo } from 'react';
 import {
   View,
   TouchableOpacity,
@@ -55,7 +55,7 @@ type AnswerState = 'unanswered' | 'correct' | 'incorrect' | 'skipped';
 
 // ─── Component ───────────────────────────────────────────────
 
-export function FlashCard({
+export const FlashCard = memo(function FlashCard({
   question,
   options,
   correctKey,
@@ -113,7 +113,7 @@ export function FlashCard({
     pulse();
   }, [flip, pulse]);
 
-  const handleSelectOption = (key: 'A' | 'B' | 'C' | 'D') => {
+  const handleSelectOption = useCallback((key: 'A' | 'B' | 'C' | 'D') => {
     if (answerState !== 'unanswered') return;
 
     setSelectedKey(key);
@@ -126,16 +126,16 @@ export function FlashCard({
     // Brief pause then flip — store ref so we can clear on unmount
     flipTimerRef.current = setTimeout(() => handleFlipToBack(), 600);
     onAnswer?.(correct, key);
-  };
+  }, [answerState, correctKey, handleFlipToBack, onAnswer]);
 
   // FIX 4.2: Skip handler
-  const handleSkip = () => {
+  const handleSkip = useCallback(() => {
     if (answerState !== 'unanswered') return;
     setAnswerState('skipped');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     flipTimerRef.current = setTimeout(() => handleFlipToBack(), 400);
     onSkip?.();
-  };
+  }, [answerState, handleFlipToBack, onSkip]);
 
   const optionStyles = (key: 'A' | 'B' | 'C' | 'D') => {
     const isSelected = selectedKey === key;
@@ -415,4 +415,4 @@ export function FlashCard({
       </Animated.View>
     </View>
   );
-}
+});

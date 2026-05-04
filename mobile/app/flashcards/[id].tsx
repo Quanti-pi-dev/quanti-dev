@@ -135,6 +135,9 @@ export default function FlashcardStudyScreen() {
   const session = useStudySession({
     deckId: effectiveDeckId,
     startedAt: sessionStarted,
+    // Level-mode: POST /level-answer already handles SM-2 + BKT per card,
+    // so skip per-card answers in the session flush to avoid double-processing.
+    skipAnswerDetails: isLevelMode,
   });
 
   // ─── Tournament score submission (FIX H1: must be above early returns) ──

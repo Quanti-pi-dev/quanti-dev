@@ -2,6 +2,7 @@
 // Recent study activity list row.
 
 
+import { memo } from 'react';
 import { View, Text, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
@@ -18,7 +19,7 @@ interface ActivityItemProps {
   style?: ViewStyle;
 }
 
-export function ActivityItem({
+export const ActivityItem = memo(function ActivityItem({
   examName,
   cardsStudied,
   accuracy,
@@ -102,4 +103,4 @@ export function ActivityItem({
       </View>
     </View>
   );
-}
+});

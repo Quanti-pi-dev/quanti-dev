@@ -352,6 +352,7 @@ export async function dismissErrorJournalEntry(cardId: string): Promise<void> {
 
 export interface ReviewQueueCard {
   cardId: string;
+  deckId: string;
   subjectId: string;
   subjectName: string;
   topicSlug: string;
@@ -402,6 +403,17 @@ export async function fetchMockTest(examId?: string, count?: number): Promise<Mo
   if (count) params.count = String(count);
   const { data } = await api.get<ApiResponse<MockTestResponse>>('/progress/mock-test', { params });
   return (data?.data ?? { cards: [], timeLimitMinutes: 0, totalCards: 0 }) as MockTestResponse;
+}
+
+export async function submitMockTestResult(payload: {
+  examId?: string;
+  totalCards: number;
+  correctCount: number;
+  timeElapsedSeconds: number;
+  timeLimitSeconds: number;
+  answers: { cardId: string; selectedAnswerId: string; correct: boolean }[];
+}): Promise<void> {
+  await api.post('/progress/mock-test-result', payload);
 }
 
 // ─── Diagnostic Placement ─────────────────────────────────────

@@ -23,6 +23,12 @@ const recordCompletionSchema = z.object({
   responseTimeMs: z.number().int().nonnegative(),
 });
 
+const cardAnswerRecordSchema = z.object({
+  cardId: z.string().min(1),
+  correct: z.boolean(),
+  responseTimeMs: z.number().int().nonnegative(),
+});
+
 const saveSessionSchema = z.object({
   deckId: z.string().min(1),
   cardsStudied: z.number().int().nonnegative(),
@@ -32,6 +38,9 @@ const saveSessionSchema = z.object({
   startedAt: z.string().datetime(),
   endedAt: z.string().datetime(),
   isComplete: z.boolean().optional().default(false),
+  // Optional: per-card answers for SM-2 and BKT updates.
+  // Deck-based study sessions send this; level-mode uses /level-answer instead.
+  answers: z.array(cardAnswerRecordSchema).optional(),
 });
 
 const levelAnswerSchema = z.object({
@@ -125,16 +134,82 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
     });
   });
 
-  // ─── POST /progress/session — Save completed session ─
+  // ─── POST /progress/session — Save completed session ─────────────────────
+  // Also runs SM-2 and BKT per card when `answers` is provided.
+  // Deck-based study sessions (useStudySession) send individual answers so
+  // the memory model stays in sync — mirrors what /level-answer does per card.
   fastify.post('/session', async (request: FastifyRequest, reply: FastifyReply) => {
     const input = saveSessionSchema.parse(request.body);
     const userId = request.user!.id;
 
+    // Always persist the aggregate session stats
     await progressRepository.saveSession({ ...input, userId });
 
     // Award perfect session bonus if 100% accuracy AND completed
     if (input.isComplete && input.cardsStudied >= 3 && input.correctAnswers === input.cardsStudied) {
       await rewardService.awardForPerfectSession(userId, input.startedAt).catch(() => {});
+    }
+
+    // ── SM-2 + BKT per card (fire-and-forget) ──────────────────────────────
+    // If the client sent individual card answers, run the memory model on each.
+    // We batch-fetch card metadata (subjectId, topicSlug, tags) from MongoDB
+    // in a single query to avoid N+1, then fan out to the per-card update fns.
+    if (input.answers && input.answers.length > 0) {
+      void (async () => {
+        try {
+          const mongo = getMongoDb();
+          const cardIds = input.answers!.map(a => a.cardId);
+          const validIds = cardIds
+            .filter(id => /^[0-9a-fA-F]{24}$/.test(id))
+            .map(id => new ObjectId(id));
+
+          if (validIds.length === 0) return;
+
+          // Single MongoDB round-trip for all card metadata
+          const cards = await mongo
+            .collection('flashcards')
+            .find({ _id: { $in: validIds } })
+            .project({ subjectId: 1, topicSlug: 1, tags: 1 })
+            .toArray();
+
+          const cardMeta = new Map(
+            cards.map(c => [
+              c._id.toString(),
+              {
+                subjectId: (c.subjectId as ObjectId | string)?.toString() ?? '',
+                topicSlug: (c.topicSlug as string) ?? '',
+                tags: (c.tags as string[]) ?? [],
+              },
+            ]),
+          );
+
+          // Fan out SM-2 + BKT per answer — all fire-and-forget internally
+          await Promise.allSettled(
+            input.answers!.map(async (answer) => {
+              const meta = cardMeta.get(answer.cardId);
+              if (!meta?.subjectId || !meta?.topicSlug) return;
+
+              await Promise.allSettled([
+                // SM-2: updates next_review_at, ease_factor, interval_days in Redis
+                updateCardMemory(
+                  userId,
+                  answer.cardId,
+                  answer.correct,
+                  answer.responseTimeMs,
+                  meta.topicSlug,
+                  meta.subjectId,
+                ),
+                // BKT: updates per-concept mastery probabilities in Redis
+                meta.tags.length > 0
+                  ? updateKnowledgeModel(userId, answer.cardId, meta.tags, answer.correct)
+                  : Promise.resolve(),
+              ]);
+            }),
+          );
+        } catch (err) {
+          request.log.error({ err }, 'SM-2/BKT per-card update failed for session');
+        }
+      })();
     }
 
     return reply.status(201).send({
@@ -803,7 +878,7 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
           .project({
             question: 1, answers: 1, correctAnswerId: 1,
             source: 1, sourceYear: 1, sourcePaper: 1,
-            topicDisplayName: 1, explanation: 1,
+            topicDisplayName: 1, explanation: 1, deckId: 1,
           })
           .toArray()
       : [];
@@ -826,6 +901,7 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
         const content = cardContentMap.get(c.cardId)!;
         return {
           cardId: c.cardId,
+          deckId: content.deckId?.toString() ?? '',
           subjectId: c.subjectId,
           subjectName: subjectNameMap.get(c.subjectId) ?? c.subjectId,
           topicSlug: c.topicSlug,
@@ -969,6 +1045,66 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
     }
     await pipeline.exec();
 
+    // ── SM-2 + BKT seeding from diagnostic answers (fire-and-forget) ────────
+    // The placement quiz is the ideal moment to initialise BKT priors and SM-2
+    // review schedules. Without this, a student who aces the quiz gets levels
+    // unlocked but their Educator Brain profile stays mathematically blank.
+    void (async () => {
+      try {
+        const cardIds = results.map(r => r.cardId);
+        const validCardIds = cardIds
+          .filter(id => /^[0-9a-fA-F]{24}$/.test(id))
+          .map(id => new ObjectId(id));
+
+        if (validCardIds.length === 0) return;
+
+        // Single MongoDB round-trip for card metadata
+        const cards = await mongo
+          .collection('flashcards')
+          .find({ _id: { $in: validCardIds } })
+          .project({ subjectId: 1, topicSlug: 1, tags: 1 })
+          .toArray();
+
+        const cardMeta = new Map(
+          cards.map(c => [
+            c._id.toString(),
+            {
+              subjectId: (c.subjectId as ObjectId | string)?.toString() ?? '',
+              topicSlug: (c.topicSlug as string) ?? '',
+              tags: (c.tags as string[]) ?? [],
+            },
+          ]),
+        );
+
+        // Fan out SM-2 + BKT per answer
+        await Promise.allSettled(
+          results.map(async (answer) => {
+            const meta = cardMeta.get(answer.cardId);
+            if (!meta?.subjectId || !meta?.topicSlug) return;
+
+            // Use a synthetic response time for diagnostic cards (no timing data)
+            const syntheticResponseTimeMs = answer.correct ? 8000 : 15000;
+
+            await Promise.allSettled([
+              updateCardMemory(
+                userId,
+                answer.cardId,
+                answer.correct,
+                syntheticResponseTimeMs,
+                meta.topicSlug,
+                meta.subjectId,
+              ),
+              meta.tags.length > 0
+                ? updateKnowledgeModel(userId, answer.cardId, meta.tags, answer.correct)
+                : Promise.resolve(),
+            ]);
+          }),
+        );
+      } catch (err) {
+        request.log.error({ err }, 'SM-2/BKT seeding failed for diagnostic result');
+      }
+    })();
+
     const unlockedCount = levelsToUnlock.length;
     const unlockedUpTo = levelsToUnlock[levelsToUnlock.length - 1] ?? 'Emerging';
 
@@ -1103,5 +1239,120 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
     };
 
     return reply.send({ success: true, data, timestamp: new Date().toISOString() });
+  });
+
+  // ─── POST /progress/mock-test-result ──────────────────────────
+  // Persists a completed mock test session and feeds individual
+  // answers through SM-2 + BKT. Without this, mock test data was
+  // completely discarded — no streaks, no coins, no memory model.
+  const mockTestResultSchema = z.object({
+    examId: z.string().min(1).optional(),
+    totalCards: z.number().int().nonnegative(),
+    correctCount: z.number().int().nonnegative(),
+    timeElapsedSeconds: z.number().int().nonnegative(),
+    timeLimitSeconds: z.number().int().nonnegative(),
+    answers: z.array(z.object({
+      cardId: z.string().min(1),
+      selectedAnswerId: z.string(),
+      correct: z.boolean(),
+    })),
+  });
+
+  fastify.post('/mock-test-result', async (request: FastifyRequest, reply: FastifyReply) => {
+    const input = mockTestResultSchema.parse(request.body);
+    const userId = request.user!.id;
+
+    const incorrectCount = input.totalCards - input.correctCount;
+    const avgResponseMs = input.totalCards > 0
+      ? Math.round((input.timeElapsedSeconds * 1000) / input.totalCards)
+      : 0;
+
+    // Persist as a study session (reuse saveSession — deckId = "mock-test")
+    const now = new Date();
+    const startedAt = new Date(now.getTime() - input.timeElapsedSeconds * 1000).toISOString();
+    await progressRepository.saveSession({
+      userId,
+      deckId: `mock-test:${input.examId ?? 'general'}`,
+      cardsStudied: input.totalCards,
+      correctAnswers: input.correctCount,
+      incorrectAnswers: incorrectCount,
+      averageResponseTimeMs: avgResponseMs,
+      startedAt,
+      endedAt: now.toISOString(),
+    });
+
+    // Update streak
+    void progressRepository.updateStreak(userId).catch(() => {});
+
+    // Perfect session bonus
+    if (input.totalCards >= 3 && input.correctCount === input.totalCards) {
+      void rewardService.awardForPerfectSession(userId, startedAt).catch(() => {});
+    }
+
+    // ── SM-2 + BKT per card (fire-and-forget) ─────────────────────
+    if (input.answers.length > 0) {
+      void (async () => {
+        try {
+          const mongo = getMongoDb();
+          const cardIds = input.answers.map(a => a.cardId);
+          const validIds = cardIds
+            .filter(id => /^[0-9a-fA-F]{24}$/.test(id))
+            .map(id => new ObjectId(id));
+
+          if (validIds.length === 0) return;
+
+          const cards = await mongo
+            .collection('flashcards')
+            .find({ _id: { $in: validIds } })
+            .project({ subjectId: 1, topicSlug: 1, tags: 1 })
+            .toArray();
+
+          const cardMeta = new Map(
+            cards.map(c => [
+              c._id.toString(),
+              {
+                subjectId: (c.subjectId as ObjectId | string)?.toString() ?? '',
+                topicSlug: (c.topicSlug as string) ?? '',
+                tags: (c.tags as string[]) ?? [],
+              },
+            ]),
+          );
+
+          // Estimate per-card time from total elapsed
+          const perCardMs = input.totalCards > 0
+            ? Math.round((input.timeElapsedSeconds * 1000) / input.totalCards)
+            : 10000;
+
+          await Promise.allSettled(
+            input.answers.map(async (answer) => {
+              const meta = cardMeta.get(answer.cardId);
+              if (!meta?.subjectId || !meta?.topicSlug) return;
+
+              await Promise.allSettled([
+                updateCardMemory(
+                  userId,
+                  answer.cardId,
+                  answer.correct,
+                  perCardMs,
+                  meta.topicSlug,
+                  meta.subjectId,
+                ),
+                meta.tags.length > 0
+                  ? updateKnowledgeModel(userId, answer.cardId, meta.tags, answer.correct)
+                  : Promise.resolve(),
+              ]);
+            }),
+          );
+        } catch (err) {
+          request.log.error({ err }, 'SM-2/BKT update failed for mock test');
+        }
+      })();
+    }
+
+    return reply.status(201).send({
+      success: true,
+      data: { message: 'Mock test result saved' },
+      timestamp: new Date().toISOString(),
+    });
   });
 }

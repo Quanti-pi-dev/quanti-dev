@@ -2,6 +2,7 @@
 // Compact stat tile with colored background. Replaces StatCard
 // with a cleaner, flatter design that fits stat grids better.
 
+import { memo } from 'react';
 import { View, ViewStyle } from 'react-native';
 import { radius, spacing } from '../theme/tokens';
 import { Typography } from './ui/Typography';
@@ -13,7 +14,7 @@ interface StatTileProps {
   style?: ViewStyle;
 }
 
-export function StatTile({ value, label, color, style }: StatTileProps) {
+export const StatTile = memo(function StatTile({ value, label, color, style }: StatTileProps) {
   return (
     <View
       style={[
@@ -36,4 +37,4 @@ export function StatTile({ value, label, color, style }: StatTileProps) {
       </Typography>
     </View>
   );
-}
+});

@@ -17,12 +17,23 @@
 //   - Once WebView renders successfully, it fades in and replaces the fallback.
 //   - Prevents blank/empty card display on network issues.
 
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
 import { View, ViewStyle, TextStyle, StyleProp } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useTheme } from '../../theme';
 import { typography as tokens } from '../../theme/tokens';
 import { Typography } from './Typography';
+
+// ─── Global Height Cache ──────────────────────────────────────
+// Once a piece of content has been rendered and measured, cache
+// its height so re-visits (back navigation, re-render) skip the
+// measurement delay entirely. Keyed by content hash.
+const heightCache = new Map<string, number>();
+
+function getContentKey(content: string, fontSize: number): string {
+  // Simple hash — content + fontSize is unique enough
+  return `${fontSize}:${content.slice(0, 200)}:${content.length}`;
+}
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -219,7 +230,7 @@ function buildRichHtml(
 
 // ─── Component ───────────────────────────────────────────────
 
-export function RichContent({
+export const RichContent = memo(function RichContent({
   variant = 'body',
   color,
   align = 'left',
@@ -253,7 +264,7 @@ export function RichContent({
       style={style}
     />
   );
-}
+});
 
 // ─── Inner WebView (extracted to allow hook usage) ────────────
 
@@ -269,12 +280,17 @@ interface RichWebViewProps {
 function RichWebView({ content, variant, fontSize, color, align, style }: RichWebViewProps) {
   const { theme } = useTheme();
   const resolvedColor = color ?? theme.text;
-  const [webViewHeight, setWebViewHeight] = useState(0);
-  const [hasRendered, setHasRendered] = useState(false);
+
+  // PERF: Check height cache for instant render on revisit
+  const cacheKey = getContentKey(content, fontSize);
+  const cachedHeight = heightCache.get(cacheKey);
+
+  const [webViewHeight, setWebViewHeight] = useState(cachedHeight ?? 0);
+  const [hasRendered, setHasRendered] = useState(!!cachedHeight);
   const [hasFailed, setHasFailed] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Ref mirrors hasRendered to avoid stale closures in the timeout callback
-  const hasRenderedRef = useRef(false);
+  const hasRenderedRef = useRef(!!cachedHeight);
 
   // Timeout: if WebView doesn't report height within WEBVIEW_TIMEOUT_MS,
   // mark as failed so we permanently show the native fallback.
@@ -305,15 +321,18 @@ function RichWebView({ content, variant, fontSize, color, align, style }: RichWe
     try {
       const msg = JSON.parse(event.nativeEvent.data) as { type: string; value: number };
       if (msg.type === 'height' && msg.value > 0) {
-        setWebViewHeight(msg.value + 4);
+        const h = msg.value + 4;
+        setWebViewHeight(h);
         setHasRendered(true);
         hasRenderedRef.current = true;
+        // PERF: Cache height for instant render on revisit
+        heightCache.set(cacheKey, h);
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
       }
     } catch {
       // ignore malformed messages
     }
-  }, []);
+  }, [cacheKey]);
 
   const handleError = useCallback(() => {
     setHasFailed(true);
@@ -370,6 +389,10 @@ function RichWebView({ content, variant, fontSize, color, align, style }: RichWe
           allowsInlineMediaPlayback={false}
           mediaPlaybackRequiresUserAction
           originWhitelist={['*']}
+          // PERF: Cache CDN resources (KaTeX, marked) on disk after first load.
+          // Eliminates ~200-500ms network overhead per card after the first one.
+          cacheEnabled={true}
+          cacheMode="LOAD_CACHE_ELSE_NETWORK"
         />
       </View>
     </View>

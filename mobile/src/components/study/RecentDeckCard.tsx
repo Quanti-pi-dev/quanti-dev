@@ -3,6 +3,7 @@
 // Displays deck title, relative timestamp, accuracy, cards studied,
 // a mini accuracy bar, and a "Resume" action button.
 
+import { memo } from 'react';
 import { View, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
@@ -44,7 +45,7 @@ export interface RecentDeckCardProps {
 
 // ─── Component ────────────────────────────────────────────────
 
-export function RecentDeckCard({
+export const RecentDeckCard = memo(function RecentDeckCard({
   deckId,
   deckTitle,
   cardsStudied,
@@ -166,4 +167,4 @@ export function RecentDeckCard({
       </View>
     </Animated.View>
   );
-}
+});

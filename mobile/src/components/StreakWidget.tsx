@@ -2,7 +2,7 @@
 // Flame icon + streak day count. Animated shake on mount.
 // Audit fix: replaced raw Text with Typography component.
 
-import { useEffect } from 'react';
+import { useEffect, memo } from 'react';
 import { View, ViewStyle } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -22,7 +22,7 @@ interface StreakWidgetProps {
   style?: ViewStyle;
 }
 
-export function StreakWidget({ streak, freezes, animate = false, style }: StreakWidgetProps) {
+export const StreakWidget = memo(function StreakWidget({ streak, freezes, animate = false, style }: StreakWidgetProps) {
   const { theme } = useTheme();
   const rotate = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -98,4 +98,4 @@ export function StreakWidget({ streak, freezes, animate = false, style }: Streak
       )}
     </View>
   );
-}
+});

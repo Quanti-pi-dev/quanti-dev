@@ -3,7 +3,7 @@
 // has already started studying, including their current level and
 // a circular mastery ring.
 
-import { useEffect } from 'react';
+import { useEffect, memo } from 'react';
 import { View, TouchableOpacity } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -77,7 +77,7 @@ export interface SubjectProgressCardProps {
 
 // ─── Component ────────────────────────────────────────────────
 
-export function SubjectProgressCard({
+export const SubjectProgressCard = memo(function SubjectProgressCard({
   subjectName,
   examName,
   levelIndex,
@@ -249,4 +249,4 @@ export function SubjectProgressCard({
       </TouchableOpacity>
     </Animated.View>
   );
-}
+});

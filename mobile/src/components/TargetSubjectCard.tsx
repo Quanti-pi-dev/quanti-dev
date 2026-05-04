@@ -3,7 +3,7 @@
 // Features: accent gradient blob, circular mastery ring,
 // level badge chip, scale-on-press haptic, staggered entrance.
 
-import { useEffect } from 'react';
+import { useEffect, memo } from 'react';
 import { View, TouchableOpacity, ViewStyle } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -88,7 +88,7 @@ export interface TargetSubjectCardProps {
   style?: ViewStyle;
 }
 
-export function TargetSubjectCard({
+export const TargetSubjectCard = memo(function TargetSubjectCard({
   subject,
   accentIndex,
   correctAnswers = 0,
@@ -260,4 +260,4 @@ export function TargetSubjectCard({
       </Animated.View>
     </Animated.View>
   );
-}
+});

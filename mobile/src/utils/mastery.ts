@@ -41,7 +41,14 @@ export function getLevelLabel(levelIndex: number): string {
 
 /**
  * Educator Brain mastery classification based on progress percentage.
- * Matches the BKT mastery levels from the backend.
+ * Thresholds match the server-side BKT classifyMastery() in bkt.ts:
+ *   pMastery >= 0.85 → master
+ *   pMastery >= 0.60 → proficient
+ *   pMastery >= 0.20 → developing
+ *   otherwise       → emerging
+ *
+ * `pct` here is correctAnswers / MAX_MASTERY_ANSWERS * 100, which is
+ * proportional to the BKT pMastery estimate the backend computes.
  */
 export function getEducatorMasteryLevel(pct: number): {
   level: 'emerging' | 'developing' | 'proficient' | 'master';
@@ -57,14 +64,14 @@ export function getEducatorMasteryLevel(pct: number): {
     emoji: '👑',
     sublabel: 'You truly own this subject',
   };
-  if (pct >= 50) return {
+  if (pct >= 60) return {
     level: 'proficient',
     label: 'Proficient',
     color: '#10B981',
     emoji: '💪',
     sublabel: 'Strong foundation — keep pushing',
   };
-  if (pct >= 15) return {
+  if (pct >= 20) return {
     level: 'developing',
     label: 'Developing',
     color: '#F59E0B',

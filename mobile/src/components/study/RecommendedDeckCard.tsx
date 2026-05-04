@@ -3,7 +3,7 @@
 // carousel. Glassmorphic design with glowing accent border,
 // reason label, a priority indicator star, and a "Start" CTA button.
 
-import { useEffect } from 'react';
+import { useEffect, memo } from 'react';
 import { View, TouchableOpacity } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -45,7 +45,7 @@ export interface RecommendedDeckCardProps {
 
 // ─── Component ────────────────────────────────────────────────
 
-export function RecommendedDeckCard({
+export const RecommendedDeckCard = memo(function RecommendedDeckCard({
   deckId,
   title,
   reason,
@@ -221,4 +221,4 @@ export function RecommendedDeckCard({
       </TouchableOpacity>
     </Animated.View>
   );
-}
+});

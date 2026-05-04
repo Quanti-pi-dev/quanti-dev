@@ -3,6 +3,7 @@
 // Grid (default) and list layout variants.
 // Uses the unified useScalePress hook for consistent press animation.
 
+import { memo } from 'react';
 import { View, Text, TouchableOpacity, ViewStyle } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,7 +28,7 @@ interface ExamCardProps {
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
-export const ExamCard = ({
+export const ExamCard = memo(function ExamCard({
   name,
   count,
   progress,
@@ -36,7 +37,7 @@ export const ExamCard = ({
   layout = 'grid',
   onPress,
   style,
-}: ExamCardProps) => {
+}: ExamCardProps) {
   const { theme } = useTheme();
   const color = accent ?? theme.primary;
   const isList = layout === 'list';
@@ -115,4 +116,4 @@ export const ExamCard = ({
       )}
     </AnimatedTouchable>
   );
-};
+});

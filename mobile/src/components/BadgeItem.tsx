@@ -2,6 +2,7 @@
 // Badge grid item — earned (full color) vs unearned (grayscale + lock).
 
 
+import { memo } from 'react';
 import { View, Text, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
@@ -17,7 +18,7 @@ interface BadgeItemProps {
   style?: ViewStyle;
 }
 
-export function BadgeItem({
+export const BadgeItem = memo(function BadgeItem({
   name,
   icon = 'ribbon',
   earned = false,
@@ -71,4 +72,4 @@ export function BadgeItem({
       </Text>
     </View>
   );
-}
+});

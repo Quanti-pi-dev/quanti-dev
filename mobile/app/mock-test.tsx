@@ -20,6 +20,7 @@ import { Skeleton } from '../src/components/ui/Skeleton';
 import { ProgressBar } from '../src/components/ui/ProgressBar';
 import {
   fetchMockTest,
+  submitMockTestResult,
   type MockTestCard,
 } from '../src/services/api-contracts';
 
@@ -335,6 +336,7 @@ export default function MockTestScreen() {
   const [timeElapsed, setTimeElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [testKey, setTestKey] = useState(0);
+  const resultSubmittedRef = useRef(false);
 
   const { data: mockTest, isLoading, refetch } = useQuery({
     queryKey: ['mockTest', examId, testKey],
@@ -373,7 +375,36 @@ export default function MockTestScreen() {
     setAnswers(new Map());
     setTimeRemaining(totalTime);
     setTimeElapsed(0);
+    resultSubmittedRef.current = false;
   }, [totalTime]);
+
+  // ─── Persist results to server when test finishes ──────────
+  useEffect(() => {
+    if (!finished || resultSubmittedRef.current || cards.length === 0) return;
+    resultSubmittedRef.current = true;
+
+    const answersArray = cards.map((c, i) => {
+      const selectedId = answers.get(i) ?? '';
+      return {
+        cardId: c.cardId,
+        selectedAnswerId: selectedId,
+        correct: selectedId === c.correctAnswerId,
+      };
+    }).filter(a => a.selectedAnswerId !== ''); // Only include answered cards
+
+    const correctCount = answersArray.filter(a => a.correct).length;
+
+    void submitMockTestResult({
+      examId: examId ?? undefined,
+      totalCards: cards.length,
+      correctCount,
+      timeElapsedSeconds: timeElapsed,
+      timeLimitSeconds: totalTime,
+      answers: answersArray,
+    }).catch(() => {
+      // Best-effort — don't block the results screen
+    });
+  }, [finished, cards, answers, timeElapsed, totalTime, examId]);
 
   const selectAnswer = useCallback((optionId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -409,6 +440,7 @@ export default function MockTestScreen() {
     setFinished(false);
     setCurrentIdx(0);
     setAnswers(new Map());
+    resultSubmittedRef.current = false;
   }, []);
 
   const currentCard = cards[currentIdx];

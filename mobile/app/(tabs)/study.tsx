@@ -34,10 +34,10 @@ import { useRecentSessions } from '../../src/hooks/useProgress';
 import { useLevelProgressSummary } from '../../src/hooks/useGamification';
 import { useRecommendations } from '../../src/hooks/useAI';
 import { useDecks } from '../../src/hooks/useDecks';
+import { usePersonalizedSubjects } from '../../src/hooks/usePersonalizedSubjects';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState, useCallback } from 'react';
-import { fetchExamSubjects } from '../../src/services/api-contracts';
 import type { Deck, Subject } from '@kd/shared';
 
 // ─── Accent palette reused for discover decks ─────────────────
@@ -253,33 +253,8 @@ export default function StudyScreen() {
   const { data: levelSummary, isLoading: isLevelLoading } = useLevelProgressSummary();
 
   // ── Fetch full Subject objects for onboarded users ────────
-  // This gives us the full Subject metadata (name, description, icon)
-  // for subjects the user selected during onboarding, even if they
-  // haven't started studying them yet.
-  const { data: onboardedSubjects, isLoading: isSubjectsLoading } = useQuery<Subject[]>({
-    queryKey: ['study-personalized-subjects', selectedSubjectIds.join(',')],
-    queryFn: async () => {
-      // Fetch all subjects for each selected exam
-      const allSubjects = await Promise.all(
-        selectedExamIds.map((eid) => fetchExamSubjects(eid)),
-      );
-      // Filter to only subjects the user selected during onboarding
-      const subjectMap = new Map<string, Subject>();
-      for (const batch of allSubjects) {
-        for (const s of batch) {
-          if (selectedSubjectIds.includes(s.id)) {
-            subjectMap.set(s.id, s);
-          }
-        }
-      }
-      // Preserve onboarding order
-      return selectedSubjectIds
-        .map((id) => subjectMap.get(id))
-        .filter((s): s is Subject => !!s);
-    },
-    enabled: isOnboarded && selectedExamIds.length > 0,
-    staleTime: 5 * 60_000,
-  });
+  // PERF: Uses shared hook — same query key as Home screen, React Query deduplicates.
+  const { data: onboardedSubjects, isLoading: isSubjectsLoading } = usePersonalizedSubjects();
 
   // ── Build mastery map (subjectId → levelIndex 0–5) ─────────
   const masteryMap = useMemo(() => {
@@ -380,12 +355,15 @@ export default function StudyScreen() {
   const lastSession = recentDecks[0];
 
   // ── Pull-to-refresh ───────────────────────────────────────
+  // PERF: Run all invalidations concurrently instead of sequentially.
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ['progress'] });
-    await queryClient.invalidateQueries({ queryKey: ['gamification'] });
-    await queryClient.invalidateQueries({ queryKey: ['ai'] });
-    await queryClient.invalidateQueries({ queryKey: ['decks'] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['progress'] }),
+      queryClient.invalidateQueries({ queryKey: ['gamification'] }),
+      queryClient.invalidateQueries({ queryKey: ['ai'] }),
+      queryClient.invalidateQueries({ queryKey: ['decks'] }),
+    ]);
     setRefreshing(false);
   }, [queryClient]);
 

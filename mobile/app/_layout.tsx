@@ -27,6 +27,11 @@ const QUERY_CLIENT_OPTIONS = {
       retry: 2,
       staleTime: 1000 * 60 * 5,  // 5 min
       gcTime:  1000 * 60 * 30,   // 30 min
+      // PERF: Disable refetch-on-focus. In React Native, "window focus"
+      // fires on every app foreground, causing ALL mounted queries to
+      // refetch simultaneously — visible lag spike. The 5-min staleTime
+      // + ConfigContext polling handle freshness instead.
+      refetchOnWindowFocus: false,
     },
     mutations: { retry: 1 },
   },
