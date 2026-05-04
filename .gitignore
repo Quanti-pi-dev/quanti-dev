@@ -127,6 +127,7 @@ server/db/seeds/**
 !server/db/seeds/.gitkeep
 
 server/db/scripts/test-mocktest.ts
+server/db/scripts/purge-users.ts
 
 
 # Graphify

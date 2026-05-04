@@ -168,19 +168,28 @@ export default function FlashcardEditorScreen() {
     cards: ParsedFlashcard[],
     onProgress?: (current: number, total: number, inserted: number) => void,
   ) {
-    // First resolve the deckId for this exam/subject/topic/level
+    // First resolve the deckId for this exam/subject/topic/level.
+    // If no deck exists yet, auto-create one via the findOrCreate endpoint.
     let deckId: string | null = levelData?.deckId ?? null;
     if (!deckId) {
       try {
-        const { data: deckRes } = await adminApi.get(
+        const { data: deckRes } = await adminApi.post(
           `/exams/${examId}/subjects/${subjectId}/topics/${topicSlug}/levels/${level}/deck`,
         );
         deckId = deckRes?.data?.deckId ?? null;
-      } catch { /* handled below */ }
+      } catch {
+        // Fall back to the read-only lookup
+        try {
+          const { data: deckRes } = await adminApi.get(
+            `/exams/${examId}/subjects/${subjectId}/topics/${topicSlug}/levels/${level}/deck`,
+          );
+          deckId = deckRes?.data?.deckId ?? null;
+        } catch { /* handled below */ }
+      }
     }
     if (!deckId) {
-      showToast('No deck found for this topic/level', 'error');
-      return;
+      // Throw instead of return so the BulkImportModal shows an error
+      throw new Error('No deck found for this topic/level. Please create the deck first.');
     }
 
     const batchSize = 100;
@@ -206,10 +215,9 @@ export default function FlashcardEditorScreen() {
     void queryClient.invalidateQueries({ queryKey: ['admin', 'level-cards', examId, subjectId, level, topicSlug] });
 
     if (errors.length > 0) {
-      showToast(`${totalCreated} cards imported, ${errors.length} batch(es) failed`, 'error');
-    } else {
-      showToast(`${totalCreated} cards imported successfully`);
+      throw new Error(`${totalCreated} cards imported, ${errors.length} batch(es) failed: ${errors[0]}`);
     }
+    // If we get here, onSubmit resolved successfully and the modal will show the real count
   }
 
   const isSaving = addCard.isPending || updateCard.isPending;
@@ -275,20 +283,7 @@ export default function FlashcardEditorScreen() {
 
   return (
     <ScreenWrapper keyboardAvoiding>
-      <Header
-        showBack
-        title={screenTitle}
-        rightAction={
-          !showForm
-            ? (
-              <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-                <Button variant="ghost" size="sm" onPress={() => setShowBulkImport(true)}>Bulk</Button>
-                <Button variant="ghost" size="sm" onPress={openCreate}>+ Add</Button>
-              </View>
-            )
-            : undefined
-        }
-      />
+      <Header showBack title={screenTitle} />
 
       <FlatList
         data={isLoading ? [] : cards}
@@ -302,6 +297,49 @@ export default function FlashcardEditorScreen() {
         windowSize={7}
         ListHeaderComponent={
           <>
+            {/* ── Action Buttons ── */}
+            {!showForm && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg }}>
+                <Typography variant="bodySmall" color={theme.textTertiary} style={{ flex: 1 }}>
+                  Manage flashcards for this level. Create new MCQ cards or import from CSV/JSON.
+                </Typography>
+                <TouchableOpacity
+                  onPress={() => setShowBulkImport(true)}
+                  activeOpacity={0.8}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
+                    backgroundColor: theme.card,
+                    borderWidth: 1.5,
+                    borderColor: theme.primary,
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.sm,
+                    borderRadius: radius.xl,
+                  }}
+                >
+                  <Ionicons name="cloud-upload-outline" size={16} color={theme.primary} />
+                  <Typography variant="caption" color={theme.primary} style={{ fontWeight: '600' }}>
+                    Bulk
+                  </Typography>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={openCreate}
+                  activeOpacity={0.8}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
+                    backgroundColor: theme.primary,
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.sm,
+                    borderRadius: radius.xl,
+                  }}
+                >
+                  <Ionicons name="add-circle-outline" size={18} color="#fff" />
+                  <Typography variant="caption" color="#fff" style={{ fontWeight: '600' }}>
+                    Add Card
+                  </Typography>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* ── Card Form ── */}
             {showForm && (
               <Card>
@@ -376,7 +414,7 @@ export default function FlashcardEditorScreen() {
           ) : !showForm ? (
             <Card>
               <Typography variant="body" align="center" color={theme.textTertiary}>
-                No cards in this level yet. Tap "+ Add Card" to create the first one.
+                No cards in this level yet. Tap "Add Card" above to create the first one.
               </Typography>
             </Card>
           ) : null
@@ -387,6 +425,8 @@ export default function FlashcardEditorScreen() {
         visible={showBulkImport}
         onClose={() => setShowBulkImport(false)}
         onSubmit={handleBulkSubmit}
+        topicName={levelData?.topicName ?? title}
+        levelName={level}
       />
     </ScreenWrapper>
   );

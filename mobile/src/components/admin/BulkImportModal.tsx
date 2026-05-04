@@ -37,6 +37,8 @@ interface BulkImportModalProps {
     cards: ParsedFlashcard[],
     onProgress?: (currentBatch: number, totalBatches: number, insertedSoFar: number) => void,
   ) => Promise<void>;
+  topicName?: string;
+  levelName?: string;
 }
 
 type FileFormat = 'json' | 'csv';
@@ -49,7 +51,7 @@ interface UploadProgress {
 
 // ─── Component ───────────────────────────────────────────────
 
-export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalProps) {
+export function BulkImportModal({ visible, onClose, onSubmit, topicName, levelName }: BulkImportModalProps) {
   const { theme } = useTheme();
   const { showToast } = useGlobalUI();
   const insets = useSafeAreaInsets();
@@ -156,13 +158,26 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
       <View style={{ flex: 1, backgroundColor: theme.background }}>
         {/* ── Header ── */}
         <View style={{
-          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
           padding: spacing.xl, paddingTop: Math.max(spacing.xl, insets.top + spacing.md), borderBottomWidth: 1, borderBottomColor: theme.border,
         }}>
-          <Typography variant="h4">Bulk Import Cards</Typography>
-          <TouchableOpacity onPress={handleClose}>
-            <Ionicons name="close" size={24} color={theme.text} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography variant="h4">Bulk Import Cards</Typography>
+            <TouchableOpacity onPress={handleClose}>
+              <Ionicons name="close" size={24} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+          {(topicName || levelName) && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs }}>
+              <Typography variant="caption" color={theme.textTertiary}>Importing into:</Typography>
+              <View style={{
+                backgroundColor: theme.primaryMuted, paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.sm,
+              }}>
+                <Typography variant="caption" color={theme.primary} style={{ fontWeight: '600' }}>
+                  {topicName ? `${topicName} · ` : ''}{levelName}
+                </Typography>
+              </View>
+            </View>
+          )}
         </View>
 
         <ScrollView
@@ -395,8 +410,12 @@ export function BulkImportModal({ visible, onClose, onSubmit }: BulkImportModalP
                                 backgroundColor: card.source === 'pyq' ? '#F59E0B18' : '#6366F118',
                                 borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
                               }}>
-                                <Typography variant="caption" color={card.source === 'pyq' ? '#F59E0B' : '#6366F1'}>
-                                  {card.source === 'pyq' ? `PYQ${card.sourceYear ? ` ${card.sourceYear}` : ''}${card.sourcePaper ? ` · ${card.sourcePaper}` : ''}` : 'Textbook'}
+                                <Typography variant="caption" color={card.source === 'pyq' ? '#F59E0B' : card.source === 'ai_generated' ? theme.primary : theme.textSecondary}>
+                                  {card.source === 'pyq'
+                                    ? `PYQ${card.sourceYear ? ` ${card.sourceYear}` : ''}${card.sourcePaper ? ` · ${card.sourcePaper}` : ''}`
+                                    : card.source === 'ai_generated'
+                                      ? 'AI Generated'
+                                      : 'Original'}
                                 </Typography>
                               </View>
                             )}

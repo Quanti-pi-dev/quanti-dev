@@ -148,28 +148,30 @@ export const SubjectProgressCard = memo(function SubjectProgressCard({
               <Ionicons name={icon} size={20} color={accent.bg} />
             </View>
             {/* Educator mastery badge */}
-            <View
-              style={{
-                backgroundColor: educator.color + '18',
-                borderRadius: radius.full,
-                borderWidth: 1,
-                borderColor: educator.color + '40',
-                paddingHorizontal: 7,
-                paddingVertical: 2,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 3,
-              }}
-            >
-              <Typography style={{ fontSize: 8 }}>{educator.emoji}</Typography>
-              <Typography
-                variant="captionBold"
-                color={educator.color}
-                style={{ fontSize: 9, letterSpacing: 0.3 }}
+            {educator.level !== 'emerging' && (
+              <View
+                style={{
+                  backgroundColor: educator.color + '18',
+                  borderRadius: radius.full,
+                  borderWidth: 1,
+                  borderColor: educator.color + '40',
+                  paddingHorizontal: 7,
+                  paddingVertical: 2,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 3,
+                }}
               >
-                {educator.label}
-              </Typography>
-            </View>
+                <Typography style={{ fontSize: 8 }}>{educator.emoji}</Typography>
+                <Typography
+                  variant="captionBold"
+                  color={educator.color}
+                  style={{ fontSize: 9, letterSpacing: 0.3 }}
+                >
+                  {educator.label}
+                </Typography>
+              </View>
+            )}
           </View>
 
           {/* Subject name */}
@@ -223,9 +225,11 @@ export const SubjectProgressCard = memo(function SubjectProgressCard({
 
           {/* Label + mini bar */}
           <View style={{ flex: 1, gap: 3 }}>
-            <Typography variant="captionBold" color={educator.color} style={{ fontSize: 10 }}>
-              {educator.sublabel}
-            </Typography>
+            {educator.level !== 'emerging' && (
+              <Typography variant="captionBold" color={educator.color} style={{ fontSize: 10 }}>
+                {educator.sublabel}
+              </Typography>
+            )}
             <View
               style={{
                 height: 3, borderRadius: 2,

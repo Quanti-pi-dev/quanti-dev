@@ -170,4 +170,38 @@ export async function adminContentRoutes(fastify: FastifyInstance): Promise<void
       });
     },
   );
+
+  // POST /admin/exams/:examId/subjects/:subjectId/topics/:topicSlug/levels/:level/deck
+  // Find-or-create the deck for a given hierarchy path.
+  // Used by bulk import to auto-create decks when they don't exist yet.
+  fastify.post(
+    '/exams/:examId/subjects/:subjectId/topics/:topicSlug/levels/:level/deck',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { examId, subjectId, topicSlug, level } = request.params as {
+        examId: string; subjectId: string; topicSlug: string; level: string;
+      };
+
+      if (!SUBJECT_LEVELS.includes(level as typeof SUBJECT_LEVELS[number])) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'BAD_REQUEST', message: `Invalid level. Must be one of: ${SUBJECT_LEVELS.join(', ')}` },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const deck = await deckRepository.findOrCreateForHierarchy(
+        examId,
+        subjectId,
+        topicSlug,
+        level as typeof SUBJECT_LEVELS[number],
+        request.user!.id,
+      );
+
+      return reply.send({
+        success: true,
+        data: { deckId: deck.id, cardCount: deck.cardCount },
+        timestamp: new Date().toISOString(),
+      });
+    },
+  );
 }

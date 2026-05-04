@@ -168,28 +168,30 @@ export const TargetSubjectCard = memo(function TargetSubjectCard({
               </View>
 
               {/* Educator mastery badge */}
-              <View
-                style={{
-                  backgroundColor: mastery.educator.color + '18',
-                  borderRadius: radius.full,
-                  borderWidth: 1,
-                  borderColor: mastery.educator.color + '40',
-                  paddingHorizontal: 8,
-                  paddingVertical: 3,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 3,
-                }}
-              >
-                <Typography style={{ fontSize: 9 }}>{mastery.educator.emoji}</Typography>
-                <Typography
-                  variant="captionBold"
-                  color={mastery.educator.color}
-                  style={{ fontSize: 9, letterSpacing: 0.3 }}
+              {mastery.educator.level !== 'emerging' && (
+                <View
+                  style={{
+                    backgroundColor: mastery.educator.color + '18',
+                    borderRadius: radius.full,
+                    borderWidth: 1,
+                    borderColor: mastery.educator.color + '40',
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 3,
+                  }}
                 >
-                  {mastery.educator.label}
-                </Typography>
-              </View>
+                  <Typography style={{ fontSize: 9 }}>{mastery.educator.emoji}</Typography>
+                  <Typography
+                    variant="captionBold"
+                    color={mastery.educator.color}
+                    style={{ fontSize: 9, letterSpacing: 0.3 }}
+                  >
+                    {mastery.educator.label}
+                  </Typography>
+                </View>
+              )}
             </View>
 
             {/* Subject name */}
@@ -234,9 +236,11 @@ export const TargetSubjectCard = memo(function TargetSubjectCard({
             </View>
 
             <View style={{ flex: 1, gap: 2 }}>
-              <Typography variant="captionBold" color={mastery.educator.color} style={{ fontSize: 10 }}>
-                {mastery.educator.sublabel}
-              </Typography>
+              {mastery.educator.level !== 'emerging' && (
+                <Typography variant="captionBold" color={mastery.educator.color} style={{ fontSize: 10 }}>
+                  {mastery.educator.sublabel}
+                </Typography>
+              )}
               {/* Mini progress bar */}
               <View
                 style={{

@@ -515,6 +515,7 @@ export default function SubjectLevelsScreen() {
         visible={showBulkImport}
         onClose={() => setShowBulkImport(false)}
         onSubmit={handleBulkImportTopics}
+        subjectName={subjectName}
       />
     </ScreenWrapper>
   );

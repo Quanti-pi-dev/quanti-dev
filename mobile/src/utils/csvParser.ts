@@ -34,7 +34,7 @@ export interface ParseResult {
 //   explanation, source, sourceYear, sourcePaper, tags
 //
 // - correctAnswer must be one of: A, B, C, D
-// - source must be: original | pyq | textbook  (default: original)
+// - source must be: original | pyq | ai_generated  (default: original)
 // - sourceYear: integer (e.g. 2022)
 // - sourcePaper: free text (e.g. "Paper 1")
 // - tags: comma-separated (e.g. "kinematics,motion")

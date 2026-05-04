@@ -33,13 +33,14 @@ interface BulkImportTopicsModalProps {
   visible: boolean;
   onClose: () => void;
   onSubmit: (topics: ParsedTopic[]) => Promise<void>;
+  subjectName?: string;
 }
 
 type FileFormat = 'json' | 'csv';
 
 // ─── Component ───────────────────────────────────────────────
 
-export function BulkImportTopicsModal({ visible, onClose, onSubmit }: BulkImportTopicsModalProps) {
+export function BulkImportTopicsModal({ visible, onClose, onSubmit, subjectName }: BulkImportTopicsModalProps) {
   const { theme } = useTheme();
   const { showToast } = useGlobalUI();
   const insets = useSafeAreaInsets();
@@ -123,13 +124,26 @@ export function BulkImportTopicsModal({ visible, onClose, onSubmit }: BulkImport
       <View style={{ flex: 1, backgroundColor: theme.background }}>
         {/* ── Header ── */}
         <View style={{
-          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
           padding: spacing.xl, paddingTop: Math.max(spacing.xl, insets.top + spacing.md), borderBottomWidth: 1, borderBottomColor: theme.border,
         }}>
-          <Typography variant="h4">Bulk Import Topics</Typography>
-          <TouchableOpacity onPress={handleClose}>
-            <Ionicons name="close" size={24} color={theme.text} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography variant="h4">Bulk Import Topics</Typography>
+            <TouchableOpacity onPress={handleClose}>
+              <Ionicons name="close" size={24} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+          {subjectName && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs }}>
+              <Typography variant="caption" color={theme.textTertiary}>Subject:</Typography>
+              <View style={{
+                backgroundColor: theme.primaryMuted, paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.sm,
+              }}>
+                <Typography variant="caption" color={theme.primary} style={{ fontWeight: '600' }}>
+                  {subjectName}
+                </Typography>
+              </View>
+            </View>
+          )}
         </View>
 
         <ScrollView

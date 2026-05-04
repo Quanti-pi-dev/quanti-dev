@@ -245,10 +245,19 @@ export function useAdminLevelCards(examId: string, subjectId: string, level: str
     queryKey: ['admin', 'level-cards', examId, subjectId, level, topicSlug],
     queryFn: async () => {
       // Resolve deck via hierarchy endpoint then fetch its cards
-      const { data: deckRes } = await adminApi.get(
-        `/exams/${examId}/subjects/${subjectId}/topics/${topicSlug}/levels/${level}/deck`,
-      );
-      const deckId: string = deckRes?.data?.deckId;
+      let deckId: string | null = null;
+      try {
+        const { data: deckRes } = await adminApi.get(
+          `/exams/${examId}/subjects/${subjectId}/topics/${topicSlug}/levels/${level}/deck`,
+        );
+        deckId = deckRes?.data?.deckId;
+      } catch (err: any) {
+        // If 404 Not Found, it means the deck just hasn't been created yet.
+        if (err.response?.status !== 404) {
+          throw err;
+        }
+      }
+
       if (!deckId) return { deckId: null, cardCount: 0, cards: [] } as AdminLevelCards;
       const { data } = await adminApi.get(`/decks/${deckId}/flashcards`);
       return {
@@ -280,11 +289,21 @@ export function useAddLevelCard() {
         tags?: string[];
       };
     }) => {
-      // Resolve deckId from hierarchy, then post to the clean deck endpoint
-      const { data: deckRes } = await adminApi.get(
-        `/exams/${examId}/subjects/${subjectId}/topics/${topicSlug}/levels/${level}/deck`,
-      );
-      const deckId: string = deckRes?.data?.deckId;
+      // Resolve deckId from hierarchy. Auto-create if it doesn't exist.
+      let deckId: string | undefined;
+      try {
+        const { data: deckRes } = await adminApi.post(
+          `/exams/${examId}/subjects/${subjectId}/topics/${topicSlug}/levels/${level}/deck`,
+        );
+        deckId = deckRes?.data?.deckId;
+      } catch {
+        // Fall back to read-only lookup
+        const { data: deckRes } = await adminApi.get(
+          `/exams/${examId}/subjects/${subjectId}/topics/${topicSlug}/levels/${level}/deck`,
+        );
+        deckId = deckRes?.data?.deckId;
+      }
+      
       if (!deckId) throw new Error('No deck found for this topic/level');
       const { data } = await adminApi.post(`/decks/${deckId}/flashcards`, card);
       return data?.data as { id: string; deckId: string };
