@@ -32,6 +32,12 @@ export interface UserPreferences {
   onboardingCompleted: boolean;
   selectedExams: string[];
   selectedSubjects: string[];
+  /** ISO date string (YYYY-MM-DD) for the student's target exam date. */
+  examDate: string | null;
+  /** Preferred study time of day — used for notification scheduling. */
+  preferredStudyTime: 'morning' | 'afternoon' | 'evening' | null;
+  /** Daily card target computed from exam date and content volume. */
+  dailyCardTarget: number | null;
 }
 
 export interface JwtPayload {

@@ -29,6 +29,7 @@ import { ActivityItem } from '../../src/components/ActivityItem';
 import { StudyInsightsCard } from '../../src/components/StudyInsightsCard';
 import { TargetSubjectCard, SUBJECT_ACCENT_PALETTE, getSubjectIcon } from '../../src/components/TargetSubjectCard';
 import { UpNextHeroCard } from '../../src/components/UpNextHeroCard';
+import { ExamCountdownWidget } from '../../src/components/ExamCountdownWidget';
 import { getEducatorMasteryLevel } from '../../src/utils/mastery';
 
 import { WeeklyHeatmap } from '../../src/components/WeeklyHeatmap';
@@ -465,6 +466,26 @@ export default function HomeScreen() {
                   </ScrollView>
                 ) : null}
               </View>
+
+              {/* ━━━ Exam Countdown ━━━ */}
+              {preferences?.examDate && (
+                <FadeInView delay={500}>
+                  <ExamCountdownWidget
+                    examDate={preferences.examDate}
+                    examName={primaryExam?.title}
+                    dailyTarget={preferences.dailyCardTarget}
+                    onStartStudy={() => {
+                      if (upNextSubject) {
+                        router.push(
+                          `/exams/${primaryExamId}/subjects/${upNextSubject.id}/levels?title=${encodeURIComponent(upNextSubject.name)}` as never,
+                        );
+                      } else {
+                        router.push('/(tabs)/study');
+                      }
+                    }}
+                  />
+                </FadeInView>
+              )}
             </>
           ) : (
             /* ━━━ GENERIC: Explore Exams (unonboarded users) ━━━ */

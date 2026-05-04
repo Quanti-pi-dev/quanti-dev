@@ -225,9 +225,9 @@ export default function OnboardingExamSelectionScreen() {
   const { user } = useAuth();
   const [selected, setSelected] = useState<Exam[]>([]);
 
-  // Determine total steps — if user lacks email, there's an extra email-prompt step
+  // Determine total steps — Exam → Subjects → Goals → (Email?) → Complete
   const userHasEmail = !!(user?.email && !user.email.includes('@placeholder.'));
-  const totalSteps = userHasEmail ? 3 : 4;
+  const totalSteps = userHasEmail ? 4 : 5;
 
   const { data: exams, isLoading } = useQuery<Exam[]>({
     queryKey: ['onboarding-exams'],

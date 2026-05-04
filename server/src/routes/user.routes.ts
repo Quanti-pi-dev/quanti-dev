@@ -25,6 +25,9 @@ const updatePreferencesSchema = z.object({
   onboardingCompleted: z.boolean().optional(),
   selectedExams: z.array(z.string()).optional(),
   selectedSubjects: z.array(z.string()).optional(),
+  examDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  preferredStudyTime: z.enum(['morning', 'afternoon', 'evening']).nullable().optional(),
+  dailyCardTarget: z.number().int().min(5).max(200).nullable().optional(),
 });
 
 // Allowed MIME types for avatar uploads

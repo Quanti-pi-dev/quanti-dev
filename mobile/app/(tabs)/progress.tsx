@@ -28,12 +28,17 @@ import { SubjectRadarChart } from '../../src/components/analytics/SubjectRadarCh
 import { TopicSunburstChart } from '../../src/components/analytics/TopicSunburstChart';
 import { AIInsightsCard } from '../../src/components/analytics/AIInsightsCard';
 import { TodaysStudyPlan } from '../../src/components/analytics/TodaysStudyPlan';
+import { WeeklyReportCard } from '../../src/components/analytics/WeeklyReportCard';
 import { KnowledgeHealthMap } from '../../src/components/analytics/KnowledgeHealthMap';
 import { ExamReadinessScore } from '../../src/components/analytics/ExamReadinessScore';
 import { LearningVelocityCard } from '../../src/components/analytics/LearningVelocityCard';
 
 import { useSubscriptionGate } from '../../src/hooks/useSubscriptionGate';
 import { useProgressSummary, useStudyStreak, useAdvancedInsights } from '../../src/hooks/useProgress';
+import { useAuth } from '../../src/contexts/AuthContext';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../../src/services/api';
+import { progressKeys } from '../../src/hooks/useProgress';
 import { useCoinBalance, useCoinsToday, useUserBadges } from '../../src/hooks/useGamification';
 import { useProgressAnalytics, LEVEL_COLORS, CARDS_PER_SUBJECT } from '../../src/hooks/useProgressAnalytics';
 import { useLearningProfile } from '../../src/hooks/useLearningProfile';
@@ -53,6 +58,7 @@ export default function ProgressScreen() {
   const CHART_W = SCREEN_WIDTH - spacing.xl * 2 - spacing.base * 2;
 
   // ── Data hooks ──────────────────────────────────────────────
+  const { preferences } = useAuth();
   const { data: progressData } = useProgressSummary();
   const { data: streakData } = useStudyStreak();
   const { data: userBadges } = useUserBadges();
@@ -60,6 +66,16 @@ export default function ProgressScreen() {
   const { data: coinsTodayData } = useCoinsToday();
   const { data: advancedData } = useAdvancedInsights(hasAdvancedAnalytics);
   const { data: learningProfile } = useLearningProfile();
+
+  // Weekly session history for the report card (always fetched — free tier)
+  const { data: weeklySessions = [] } = useQuery({
+    queryKey: [...progressKeys.all, 'weekly-report'],
+    queryFn: async () => {
+      const { data } = await api.get('/progress/history', { params: { page: 1, pageSize: 35 } });
+      return (data.data ?? []) as { cardsStudied: number; correctAnswers: number; startedAt: string }[];
+    },
+    staleTime: 60_000,
+  });
 
   const {
     accuracyChartData,
@@ -136,6 +152,14 @@ export default function ProgressScreen() {
           <LearningVelocityCard data={learningProfile.velocity} />
         )}
 
+        {/* ━━━ Weekly Report Card (free for all) ━━━ */}
+        <WeeklyReportCard
+          sessions={weeklySessions}
+          streak={streak}
+          preferences={preferences}
+          onViewDetails={() => router.push('/(tabs)/progress')}
+        />
+
         {/* ═══════════ Section Divider: Study Patterns ═══════════ */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
           <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
@@ -165,6 +189,78 @@ export default function ProgressScreen() {
                 : undefined,
           }}
         />
+
+        {/* ── Error Journal Quick Link ── */}
+        <TouchableOpacity
+          onPress={() => router.push('/error-journal')}
+          activeOpacity={0.8}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.md,
+            padding: spacing.md,
+            borderRadius: radius.xl,
+            backgroundColor: theme.card,
+            borderWidth: 1,
+            borderColor: theme.border,
+          }}
+        >
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: radius.lg,
+              backgroundColor: '#EF444412',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="journal-outline" size={20} color="#EF4444" />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Typography variant="label">Error Journal</Typography>
+            <Typography variant="caption" color={theme.textTertiary}>
+              Review mistakes and learn from them
+            </Typography>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
+        </TouchableOpacity>
+
+        {/* ── Review Queue Quick Link ── */}
+        <TouchableOpacity
+          onPress={() => router.push('/review-queue')}
+          activeOpacity={0.8}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.md,
+            padding: spacing.md,
+            borderRadius: radius.xl,
+            backgroundColor: theme.card,
+            borderWidth: 1,
+            borderColor: theme.border,
+          }}
+        >
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: radius.lg,
+              backgroundColor: '#6366F112',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="refresh-circle-outline" size={20} color="#6366F1" />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Typography variant="label">Review Queue</Typography>
+            <Typography variant="caption" color={theme.textTertiary}>
+              Spaced repetition cards due for review
+            </Typography>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
+        </TouchableOpacity>
 
         {/* ── 4-stat grid ── */}
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>

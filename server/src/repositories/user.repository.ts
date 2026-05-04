@@ -184,7 +184,8 @@ class UserRepository {
     const result = await this.pool.query(
       `SELECT up.user_id, up.theme, up.notifications_enabled,
               up.study_reminders_enabled, up.reminder_time,
-              up.onboarding_completed, up.selected_exams, up.selected_subjects
+              up.onboarding_completed, up.selected_exams, up.selected_subjects,
+              up.exam_date, up.preferred_study_time, up.daily_card_target
        FROM user_preferences up
        JOIN users u ON u.id = up.user_id
        WHERE u.firebase_uid = $1`,
@@ -203,6 +204,9 @@ class UserRepository {
       onboardingCompleted: row.onboarding_completed ?? false,
       selectedExams: row.selected_exams ?? [],
       selectedSubjects: row.selected_subjects ?? [],
+      examDate: row.exam_date ? row.exam_date.toISOString().split('T')[0] : null,
+      preferredStudyTime: row.preferred_study_time ?? null,
+      dailyCardTarget: row.daily_card_target ?? null,
     };
   }
 
@@ -242,6 +246,18 @@ class UserRepository {
     if (input.selectedSubjects !== undefined) {
       setClauses.push(`selected_subjects = $${paramIndex++}`);
       values.push(input.selectedSubjects);
+    }
+    if (input.examDate !== undefined) {
+      setClauses.push(`exam_date = $${paramIndex++}`);
+      values.push(input.examDate);
+    }
+    if (input.preferredStudyTime !== undefined) {
+      setClauses.push(`preferred_study_time = $${paramIndex++}`);
+      values.push(input.preferredStudyTime);
+    }
+    if (input.dailyCardTarget !== undefined) {
+      setClauses.push(`daily_card_target = $${paramIndex++}`);
+      values.push(input.dailyCardTarget);
     }
 
     if (setClauses.length === 0) {

@@ -300,6 +300,154 @@ export async function fetchLevelProgressSummary(): Promise<LevelProgressSummaryI
   return (data?.data ?? []) as LevelProgressSummaryItem[];
 }
 
+// ─── Subject Mastery (per-topic breakdown) ────────────────────
+
+export interface TopicMasteryItem {
+  topicSlug: string;
+  topicName: string;
+  correctAnswers: number;
+  totalAnswers: number;
+  highestLevel: string | null;
+  highestLevelIndex: number; // -1 = not started, 0–3 = Emerging–Master
+  masteryPercent: number;    // 0–100
+}
+
+export async function fetchSubjectMastery(
+  examId: string,
+  subjectId: string,
+): Promise<TopicMasteryItem[]> {
+  const { data } = await api.get<ApiResponse<TopicMasteryItem[]>>(
+    `/progress/subject-mastery/${examId}/${subjectId}`,
+  );
+  return (data?.data ?? []) as TopicMasteryItem[];
+}
+
+// ─── Error Journal ────────────────────────────────────────────
+
+export interface ErrorJournalEntry {
+  cardId: string;
+  examId: string;
+  subjectId: string;
+  subjectName: string;
+  topicSlug: string;
+  topicName: string;
+  level: string;
+  question: string;
+  correctAnswerId: string;
+  selectedAnswerId: string;
+  answers: { id: string; text: string }[];
+  timestamp: number;
+}
+
+export async function fetchErrorJournal(): Promise<ErrorJournalEntry[]> {
+  const { data } = await api.get<ApiResponse<ErrorJournalEntry[]>>('/progress/error-journal');
+  return (data?.data ?? []) as ErrorJournalEntry[];
+}
+
+export async function dismissErrorJournalEntry(cardId: string): Promise<void> {
+  await api.delete(`/progress/error-journal/${cardId}`);
+}
+
+// ─── Review Queue (SM-2 Due Cards) ────────────────────────────
+
+export interface ReviewQueueCard {
+  cardId: string;
+  subjectId: string;
+  subjectName: string;
+  topicSlug: string;
+  topicName: string;
+  question: string;
+  answers: { id: string; text: string }[];
+  correctAnswerId: string;
+  explanation: string | null;
+  source: 'original' | 'pyq' | 'ai_generated';
+  sourceYear: number | null;
+  sourcePaper: string | null;
+  overdueDays: number;
+  intervalDays: number;
+  easeFactor: number;
+  repetitions: number;
+}
+
+export async function fetchReviewQueue(source?: 'pyq'): Promise<ReviewQueueCard[]> {
+  const params = source ? { source } : {};
+  const { data } = await api.get<ApiResponse<ReviewQueueCard[]>>('/progress/review-queue', { params });
+  return (data?.data ?? []) as ReviewQueueCard[];
+}
+
+// ─── Mock Test ────────────────────────────────────────────────
+
+export interface MockTestCard {
+  cardId: string;
+  question: string;
+  answers: { id: string; text: string }[];
+  correctAnswerId: string;
+  explanation: string | null;
+  source: string;
+  sourceYear: number | null;
+  sourcePaper: string | null;
+  topicName: string;
+  subjectName: string;
+}
+
+export interface MockTestResponse {
+  cards: MockTestCard[];
+  timeLimitMinutes: number;
+  totalCards: number;
+}
+
+export async function fetchMockTest(examId?: string, count?: number): Promise<MockTestResponse> {
+  const params: Record<string, string> = {};
+  if (examId) params.examId = examId;
+  if (count) params.count = String(count);
+  const { data } = await api.get<ApiResponse<MockTestResponse>>('/progress/mock-test', { params });
+  return (data?.data ?? { cards: [], timeLimitMinutes: 0, totalCards: 0 }) as MockTestResponse;
+}
+
+// ─── Diagnostic Placement ─────────────────────────────────────
+
+export interface DiagnosticCard {
+  cardId: string;
+  question: string;
+  answers: { id: string; text: string }[];
+  correctAnswerId: string;
+  level: string;
+  topicName: string;
+}
+
+export interface DiagnosticDeckResponse {
+  cards: DiagnosticCard[];
+  examId: string;
+  subjectId: string;
+}
+
+export interface DiagnosticResultResponse {
+  highestPassedLevel: string | null;
+  unlockedUpTo: string;
+  unlockedCount: number;
+  topicsUnlocked: number;
+}
+
+export async function fetchDiagnosticDeck(examId: string, subjectId: string): Promise<DiagnosticDeckResponse> {
+  const { data } = await api.get<ApiResponse<DiagnosticDeckResponse>>('/progress/diagnostic-deck', {
+    params: { examId, subjectId },
+  });
+  return (data?.data ?? { cards: [], examId, subjectId }) as DiagnosticDeckResponse;
+}
+
+export async function submitDiagnosticResult(
+  examId: string,
+  subjectId: string,
+  results: { cardId: string; level: string; correct: boolean }[],
+): Promise<DiagnosticResultResponse> {
+  const { data } = await api.post<ApiResponse<DiagnosticResultResponse>>('/progress/diagnostic-result', {
+    examId,
+    subjectId,
+    results,
+  });
+  return (data?.data ?? { highestPassedLevel: null, unlockedUpTo: 'Emerging', unlockedCount: 1, topicsUnlocked: 0 }) as DiagnosticResultResponse;
+}
+
 // ─── Advanced Insights ────────────────────────────────────────
 
 export async function fetchAdvancedInsights(): Promise<AdvancedInsights> {

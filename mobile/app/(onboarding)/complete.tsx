@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useCallback, useMemo } from 'react';
 import { View, Dimensions } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -126,6 +126,12 @@ export default function OnboardingCompleteScreen() {
   const { theme, isDark } = useTheme();
   const router = useRouter();
   const { user, refreshUser, preferences } = useAuth();
+  const { examDate, preferredStudyTime, dailyCardTarget } =
+    useLocalSearchParams<{
+      examDate?: string;
+      preferredStudyTime?: string;
+      dailyCardTarget?: string;
+    }>();
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const displayName = user?.displayName?.split(' ')[0] ?? 'there';
@@ -161,12 +167,15 @@ export default function OnboardingCompleteScreen() {
     [],
   );
 
-  // Mark onboarding as completed
-  // FIX B8: Use static api import instead of dynamic import
+  // Mark onboarding as completed + save exam goal data
   useEffect(() => {
     (async () => {
       try {
-        await api.put('/users/preferences', { onboardingCompleted: true });
+        const goalData: Record<string, unknown> = { onboardingCompleted: true };
+        if (examDate) goalData.examDate = examDate;
+        if (preferredStudyTime) goalData.preferredStudyTime = preferredStudyTime;
+        if (dailyCardTarget) goalData.dailyCardTarget = parseInt(dailyCardTarget, 10);
+        await api.put('/users/preferences', goalData);
         await refreshUser();
       } catch {
         // Non-critical — onboarding layout guard will handle on next launch

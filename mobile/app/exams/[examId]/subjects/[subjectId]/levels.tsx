@@ -270,9 +270,53 @@ export default function LevelsScreen() {
           <DailyLimitBanner examsUsedToday={examsUsedToday} limitReached={true} />
         )}
 
-        <Typography variant="bodySmall" color={theme.textTertiary}>
-          Choose a topic, then select a difficulty level to start studying.
-        </Typography>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="bodySmall" color={theme.textTertiary} style={{ flex: 1 }}>
+            Choose a topic, then select a difficulty level.
+          </Typography>
+          <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+            <TouchableOpacity
+              onPress={() => router.push(
+                `/diagnostic?examId=${examId}&subjectId=${subjectId}&subjectName=${encodeURIComponent(subjectName)}` as never,
+              )}
+              activeOpacity={0.7}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                paddingHorizontal: spacing.sm,
+                paddingVertical: spacing.xs,
+                borderRadius: radius.full,
+                backgroundColor: 'rgba(16,185,129,0.08)',
+                borderWidth: 1,
+                borderColor: '#10B98133',
+              }}
+            >
+              <Ionicons name="telescope-outline" size={14} color="#10B981" />
+              <Typography variant="caption" color="#10B981">Placement</Typography>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push(
+                `/exams/${examId}/subjects/${subjectId}/mastery?title=${encodeURIComponent(subjectName)}` as never,
+              )}
+              activeOpacity={0.7}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                paddingHorizontal: spacing.sm,
+                paddingVertical: spacing.xs,
+                borderRadius: radius.full,
+                backgroundColor: theme.primaryMuted,
+                borderWidth: 1,
+                borderColor: theme.primary + '33',
+              }}
+            >
+              <Ionicons name="analytics-outline" size={14} color={theme.primary} />
+              <Typography variant="caption" color={theme.primary}>Mastery</Typography>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         {topicsLoading ? (
           <View style={{ gap: spacing.md, paddingTop: spacing.md }}>

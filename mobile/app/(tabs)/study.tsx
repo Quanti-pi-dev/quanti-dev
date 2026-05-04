@@ -651,6 +651,53 @@ export default function StudyScreen() {
           )}
         </View>
 
+        {/* ── Mock Test CTA ──────────────────────────────────── */}
+        <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.xl }}>
+          <TouchableOpacity
+            onPress={() => router.push('/mock-test')}
+            activeOpacity={0.85}
+            style={{
+              borderRadius: radius['2xl'],
+              overflow: 'hidden',
+              borderWidth: 1,
+              borderColor: '#6366F120',
+            }}
+          >
+            <LinearGradient
+              colors={['#6366F1', '#8B5CF6']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: spacing.xl,
+                paddingVertical: spacing.lg,
+                gap: spacing.md,
+              }}
+            >
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: 'rgba(255,255,255,0.2)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="document-text" size={22} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Typography variant="label" color="#FFFFFF">Mock Test</Typography>
+                <Typography variant="caption" color="rgba(255,255,255,0.7)">
+                  Timed exam simulation • NEET scoring
+                </Typography>
+              </View>
+              <Ionicons name="play-circle" size={24} color="rgba(255,255,255,0.9)" />
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+
         {/* ── Section 4: Discover More Decks ──────────────── */}
         <View style={{ marginTop: spacing['2xl'], gap: spacing.md }}>
           <View style={{ paddingHorizontal: spacing.xl }}>

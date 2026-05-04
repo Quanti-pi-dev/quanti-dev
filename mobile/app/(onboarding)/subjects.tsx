@@ -258,8 +258,7 @@ export default function SubjectSelectionScreen() {
 
   const finishMutation = useMutation({
     mutationFn: async () => {
-      // Save preferences but DON'T mark onboarding as completed yet —
-      // the completion screen will do that after the subscription prompt
+      // Save preferences but DON'T mark onboarding as completed yet
       await api.put('/users/preferences', {
         selectedExams: examIds?.split(',') ?? [],
         selectedSubjects: selectedSubjects,
@@ -267,8 +266,15 @@ export default function SubjectSelectionScreen() {
     },
     onSuccess: async () => {
       await refreshUser();
-      // Route to subscription prompt with onboarding context
-      router.push({ pathname: '/subscription', params: { fromOnboarding: 'true' } });
+      // Route to exam goals screen
+      router.push({
+        pathname: '/(onboarding)/exam-goals',
+        params: {
+          examIds: examIds ?? '',
+          selectedSubjects: selectedSubjects.join(','),
+          totalSteps: String(totalSteps),
+        },
+      });
     },
     onError: () => {
       showAlert({
@@ -309,7 +315,7 @@ export default function SubjectSelectionScreen() {
           examIds: examIds ?? '',
           selectedSubjects: selectedSubjects.join(','),
           totalSteps: String(totalSteps),
-          currentStep: String(currentStep + 1), // email-prompt is the next step
+          currentStep: String(currentStep + 1),
         },
       });
       return;

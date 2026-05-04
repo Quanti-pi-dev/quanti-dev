@@ -125,3 +125,8 @@ node_modules
 # Keep the directory in git via .gitkeep but ignore all seed files
 server/db/seeds/**
 !server/db/seeds/.gitkeep
+
+
+# Graphify
+.agents/
+graphify-out/
