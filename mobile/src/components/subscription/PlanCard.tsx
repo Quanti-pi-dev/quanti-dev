@@ -16,12 +16,19 @@ import type { Plan } from '@kd/shared';
 
 // ─── Static feature definitions ──────────────────────────────
 
-const FEATURE_ROWS: { icon: 'albums-outline' | 'document-text-outline' | 'bulb-outline' | 'cloud-download-outline' | 'analytics-outline' | 'headset-outline'; label: string; key: string }[] = [
+import { Ionicons } from '@expo/vector-icons';
+type IconName = keyof typeof Ionicons.glyphMap;
+
+const FEATURE_ROWS: { icon: IconName; label: string; key: string }[] = [
   { icon: 'albums-outline',          label: 'Flashcard decks',    key: 'max_decks' },
   { icon: 'document-text-outline',   label: 'Daily exams',        key: 'max_exams_per_day' },
+  { icon: 'book-outline',            label: 'Subjects per exam',  key: 'max_subjects_per_exam' },
+  { icon: 'school-outline',          label: 'Learning levels',    key: 'max_level' },
   { icon: 'bulb-outline',            label: 'AI explanations',    key: 'ai_explanations' },
-  { icon: 'cloud-download-outline',  label: 'Offline access',     key: 'offline_access' },
   { icon: 'analytics-outline',       label: 'Advanced analytics', key: 'advanced_analytics' },
+  { icon: 'stats-chart-outline',     label: 'Deep insights',      key: 'deep_insights' },
+  { icon: 'pie-chart-outline',       label: 'Mastery radar',      key: 'mastery_radar' },
+  { icon: 'cloud-download-outline',  label: 'Offline access',     key: 'offline_access' },
   { icon: 'headset-outline',         label: 'Priority support',   key: 'priority_support' },
 ];
 

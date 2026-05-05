@@ -158,16 +158,19 @@ class SubscriptionService {
     discountPaise: number;
     subscription: Subscription;
   }> {
-    // 1. Guard against duplicate subscriptions
-    const existing = await subscriptionRepository.findActiveByUserId(userId);
-    if (existing) {
-      throw Object.assign(new Error('User already has an active subscription'), { code: 'ALREADY_SUBSCRIBED' });
-    }
-
-    // 2. Resolve and validate plan
+    // 1. Resolve and validate plan
     const plan = await planRepository.findById(planId);
     if (!plan || !plan.isActive) {
       throw Object.assign(new Error('Plan not found or inactive'), { code: 'PLAN_NOT_FOUND' });
+    }
+
+    // 2. Guard against duplicate subscriptions (allow upgrades)
+    const existing = await subscriptionRepository.findActiveByUserId(userId);
+    if (existing) {
+      const existingPlan = await planRepository.findById(existing.planId);
+      if (!existingPlan || existingPlan.tier >= plan.tier) {
+        throw Object.assign(new Error('User already has an active subscription'), { code: 'ALREADY_SUBSCRIBED' });
+      }
     }
 
     // 3. Check trial eligibility
@@ -214,6 +217,16 @@ class SubscriptionService {
     const now = new Date();
     const trialEnd = new Date(now);
     trialEnd.setDate(trialEnd.getDate() + plan.trialDays);
+
+    // Cancel existing if it's an upgrade
+    const existing = await subscriptionRepository.findActiveByUserId(userId);
+    if (existing) {
+      if (existing.razorpaySubscriptionId) {
+        try { await paymentService.cancelRazorpaySubscription(existing.razorpaySubscriptionId, 0); } catch(e){}
+      }
+      await subscriptionRepository.updateStatus(existing.id, 'expired');
+      await subscriptionRepository.logEvent(existing.id, userId, 'expired', existing.status, 'expired', { reason: 'superseded_by_trial_upgrade' });
+    }
 
     const sub = await subscriptionRepository.create({
       userId,
@@ -396,6 +409,20 @@ class SubscriptionService {
     if (!sub) throw new Error('Subscription not found');
 
     if (sub.status !== 'active') {
+      // Find old active subscription and cancel it
+      const existing = await subscriptionRepository.findActiveByUserId(userId);
+      if (existing && existing.id !== sub.id) {
+        if (existing.razorpaySubscriptionId) {
+          try {
+            await paymentService.cancelRazorpaySubscription(existing.razorpaySubscriptionId, 0);
+          } catch (err) {
+            log.warn({ err, razorpaySubscriptionId: existing.razorpaySubscriptionId }, 'Failed to cancel old Razorpay mandate during upgrade');
+          }
+        }
+        await subscriptionRepository.updateStatus(existing.id, 'expired');
+        await subscriptionRepository.logEvent(existing.id, userId, 'expired', existing.status, 'expired', { reason: 'superseded_by_upgrade' });
+      }
+
       await subscriptionRepository.updateStatus(sub.id, 'active');
     }
 
