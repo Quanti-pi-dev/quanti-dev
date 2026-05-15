@@ -38,6 +38,7 @@ import { challengeRoutes } from './routes/challenge.routes.js';
 import { coinPackRoutes } from './routes/coinpack.routes.js';
 import { publicConfigRoutes } from './routes/config.routes.js';
 import { instituteStudentRoutes } from './routes/institute.routes.js';
+import { instituteTestRoutes } from './routes/institute-tests.routes.js';
 import { tournamentRoutes } from './routes/tournament.routes.js';
 
 // ─── Fastify Instance ─────────────────────────────────────────
@@ -127,6 +128,7 @@ async function registerRoutes() {
   await server.register(challengeRoutes, { prefix: '/api/v1' });
   await server.register(tournamentRoutes, { prefix: '/api/v1' });
   await server.register(instituteStudentRoutes, { prefix: '/api/v1' });
+  await server.register(instituteTestRoutes,    { prefix: '/api/v1' });
 }
 
 // ─── Cron Jobs ────────────────────────────────────────────────

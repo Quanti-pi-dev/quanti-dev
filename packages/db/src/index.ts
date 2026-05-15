@@ -54,6 +54,8 @@ export { planRepository } from './repositories/plan.repository.js';
 export { subscriptionRepository } from './repositories/subscription.repository.js';
 export { tournamentRepository } from './repositories/tournament.repository.js';
 export { instituteRepository } from './repositories/institute.repository.js';
+export { customTestRepository } from './repositories/custom-test.repository.js';
+export { instituteMockTestRepository } from './repositories/institute-mocktest.repository.js';
 export {
   adminExamRepository,
   adminExamSubjectRepository,

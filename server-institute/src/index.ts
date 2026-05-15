@@ -18,6 +18,8 @@ import { requestLoggerPlugin } from './middleware/request-logger.js';
 
 import { instituteMgmtRoutes } from './routes/institute.routes.js';
 import { instituteLeaderboardRoutes } from './routes/leaderboard.routes.js';
+import { customTestRoutes } from './routes/custom-test.routes.js';
+import { mockTestRoutes } from './routes/mock-test.routes.js';
 
 // ─── Fastify Instance ─────────────────────────────────────────────
 
@@ -87,8 +89,10 @@ async function registerRoutes() {
   });
 
   // Institute API routes — all under /api/inst/v1
-  await server.register(instituteMgmtRoutes,     { prefix: '/api/inst/v1' });
+  await server.register(instituteMgmtRoutes,        { prefix: '/api/inst/v1' });
   await server.register(instituteLeaderboardRoutes, { prefix: '/api/inst/v1' });
+  await server.register(customTestRoutes,           { prefix: '/api/inst/v1' });
+  await server.register(mockTestRoutes,             { prefix: '/api/inst/v1' });
 }
 
 // ─── Startup ──────────────────────────────────────────────────────
