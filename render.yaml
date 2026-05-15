@@ -1,42 +1,66 @@
+# ============================================================
+# Render Deployment Configuration
+# ─────────────────────────────
+# Services:
+#   1. quanti-pi-user-api   — Student API + cron jobs (port 10000)
+#   2. quanti-pi-admin-api  — Admin-only API, stateless  (port 10001)
+#   3. quanti-pi-admin-web  — Next.js admin dashboard   (Phase 3)
+#
+# Database infrastructure (PostgreSQL, MongoDB Atlas, Redis Upstash)
+# is managed externally and injected as env vars via the Render Dashboard.
+#
+# NOTE: preDeploy is a paid feature. Migrations run inside startCommand
+# on the User API (single instance, guaranteed order).
+# ============================================================
+
 services:
+
+  # ─── 1. User API ─────────────────────────────────────────
   - type: web
-    name: quanti-pi-api
+    name: quanti-pi-user-api
     env: node
     plan: free
     region: oregon
-    buildCommand: "npm ci --include=dev && npm run build --workspace=@kd/shared && npm run build --workspace=@kd/server"
-    # We execute migrations, indexing, and the admin script in startCommand since preDeploy is paid
-    startCommand: "npm --workspace=@kd/server exec -- tsx db/scripts/migrate.ts && npm --workspace=@kd/server exec -- tsx db/scripts/create-mongo-indexes.ts && npm --workspace=@kd/server exec -- tsx db/scripts/make-admin.ts dharmakd01@gmail.com && npm run start --workspace=@kd/server"
+    buildCommand: >
+      npm ci --include=dev &&
+      npm run build --workspace=@kd/shared &&
+      npm run build --workspace=@kd/db &&
+      npm run build --workspace=@kd/server-user
+    # Run migrations here — only the User API, single instance, guaranteed order.
+    # Admin API is stateless so it never runs migrations.
+    # NOTE: migrate scripts live in server/db/scripts (legacy monolith workspace) intentionally.
+    startCommand: >
+      npm --workspace=@kd/server exec -- tsx db/scripts/migrate.ts &&
+      npm --workspace=@kd/server exec -- tsx db/scripts/create-mongo-indexes.ts &&
+      npm --workspace=@kd/server exec -- tsx db/scripts/make-admin.ts dharmakd01@gmail.com &&
+      npm run start --workspace=@kd/server-user
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 10000
-      # The following must be securely added via the Render Dashboard manually
-      - key: CORS_ORIGIN
-        sync: false
+      # ── Database (set via Render Dashboard) ──────────────
       - key: POSTGRES_URL
         sync: false
       - key: MONGO_URL
         sync: false
       - key: REDIS_URL
         sync: false
-      
-      # Firebase
-      - key: FIREBASE_SERVICE_ACCOUNT_PATH
-        value: /etc/secrets/firebase-service-account.json
+      # ── Auth & Security ───────────────────────────────────
+      - key: CORS_ORIGIN
+        sync: false
       - key: FIREBASE_PROJECT_ID
         sync: false
-        
-      # Payments
+      - key: FIREBASE_SERVICE_ACCOUNT_PATH
+        value: /etc/secrets/firebase-service-account.json
+      # ── Payments ──────────────────────────────────────────
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET
         sync: false
       - key: RAZORPAY_WEBHOOK_SECRET
         sync: false
-        
-      # Storage (Cloudflare R2)
+      # ── Storage (Cloudflare R2) ───────────────────────────
       - key: R2_ENDPOINT
         sync: false
       - key: R2_ACCESS_KEY_ID
@@ -47,13 +71,83 @@ services:
         sync: false
       - key: CDN_BASE_URL
         sync: false
-        
-      # Emails
+      # ── Notifications ─────────────────────────────────────
       - key: RESEND_API_KEY
         sync: false
-        
-      # Push Notifications (Firebase)
-      # You need to upload firebase-service-account.json as a "Secret File" in Render 
-      # and mount it to the path specified here.
       - key: FCM_SERVICE_ACCOUNT_PATH
         value: /etc/secrets/firebase-service-account.json
+      - key: NOTIFICATIONS_ENABLED
+        value: "true"
+      # ── AI ────────────────────────────────────────────────
+      - key: GEMINI_API_KEY
+        sync: false
+
+  # ─── 2. Admin API ────────────────────────────────────────
+  - type: web
+    name: quanti-pi-admin-api
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: >
+      npm ci --include=dev &&
+      npm run build --workspace=@kd/shared &&
+      npm run build --workspace=@kd/db &&
+      npm run build --workspace=@kd/server-admin
+    # No migrations — stateless, admin-only service.
+    startCommand: npm run start --workspace=@kd/server-admin
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10001
+      # ── Database (same creds as User API — shared schema) ─
+      - key: POSTGRES_URL
+        sync: false
+      - key: MONGO_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      # ── Auth & Security ───────────────────────────────────
+      # Admin API only accepts requests from the admin web app.
+      # Set ADMIN_WEB_ORIGIN to the deployed Next.js URL.
+      - key: ADMIN_WEB_ORIGIN
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_PATH
+        value: /etc/secrets/firebase-service-account.json
+      # ── Storage (for content uploads) ─────────────────────
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: CDN_BASE_URL
+        sync: false
+      # ── AI (for content generation tools) ────────────────
+      - key: GEMINI_API_KEY
+        sync: false
+
+  # ─── 3. Admin Web (Next.js) ──────────────────────────────
+  - type: web
+    name: quanti-pi-admin-web
+    env: node
+    plan: free
+    region: oregon
+    rootDir: apps/admin-web
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_ADMIN_API_URL
+        sync: false          # Set to the quanti-pi-admin-api Render URL
+      - key: NEXT_PUBLIC_FIREBASE_API_KEY
+        sync: false
+      - key: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+        sync: false

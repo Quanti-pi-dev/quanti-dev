@@ -112,6 +112,7 @@ pids/
 
 # Secrets
 server/firebase-service-account.json
+.mcp.json
 
 # Scratch / One-off scripts
 scratch_*

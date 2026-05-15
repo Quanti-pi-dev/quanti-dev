@@ -2,7 +2,7 @@
 // Centralized, strongly-typed wrappers for every API endpoint.
 // All hooks should call these instead of raw api.get/post.
 
-import { api, adminApi } from './api';
+import { api } from './api';
 import type {
   Exam,
   Deck,
@@ -44,15 +44,7 @@ export async function apiPut<T>(path: string, body?: Record<string, unknown>): P
   return data?.data as T;
 }
 
-export async function adminGet<T>(path: string, params?: Record<string, unknown>): Promise<T> {
-  const { data } = await adminApi.get<ApiResponse<T>>(path, { params });
-  return data?.data as T;
-}
 
-export async function adminPost<T>(path: string, body?: Record<string, unknown>): Promise<T> {
-  const { data } = await adminApi.post<ApiResponse<T>>(path, body);
-  return data?.data as T;
-}
 
 export async function fetchCurrentUser(): Promise<UserProfile> {
   const { data } = await api.get<ApiResponse<UserProfile>>('/auth/me');
@@ -221,35 +213,6 @@ export async function fetchExplainWrong(
   );
   return data?.data?.feedback ?? null;
 }
-
-// ─── Admin ─────────────────────────────────────────────────
-
-export async function adminCreateExam(exam: Partial<Exam>): Promise<{ id: string }> {
-  const { data } = await adminApi.post<ApiResponse<{ id: string }>>('/exams', exam);
-  return data?.data as { id: string };
-}
-
-export async function adminCreateDeck(deck: Partial<Deck>): Promise<{ id: string }> {
-  const { data } = await adminApi.post<ApiResponse<{ id: string }>>('/decks', deck);
-  return data?.data as { id: string };
-}
-
-export async function adminCreateFlashcard(
-  deckId: string,
-  card: { question: string; options: Array<{ id: string; text: string }>; correctAnswerId: string; explanation?: string | null },
-): Promise<{ id: string }> {
-  const { data } = await adminApi.post<ApiResponse<{ id: string }>>(`/flashcards?deckId=${encodeURIComponent(deckId)}`, card);
-  return data?.data as { id: string };
-}
-
-export async function adminBulkCreateFlashcards(
-  deckId: string,
-  cards: Array<{ question: string; options: Array<{ id: string; text: string }>; correctAnswerId: string; explanation?: string | null }>
-): Promise<{ created: number }> {
-  const { data } = await adminApi.post<ApiResponse<{ created: number }>>(`/flashcards/bulk?deckId=${deckId}`, { cards });
-  return data?.data as { created: number };
-}
-
 // ─── Progress History ──────────────────────────────────────
 
 export async function fetchRecentSessions(pageSize = 5): Promise<Array<{
@@ -596,118 +559,6 @@ export async function fetchStudyStreak(): Promise<StudyStreak> {
   return apiGet<StudyStreak>('/progress/streak');
 }
 
-// ─── Admin Analytics ──────────────────────────────────────────
-
-export interface PlatformAnalytics {
-  totalUsers: number;
-  activeUsersToday: number;
-  totalSessions: number;
-  totalCardsAnswered: number;
-  avgAccuracyPct: number;
-  totalCoinsEarned: number;
-  totalCoinsSpent: number;
-  totalCoinsInCirculation: number;
-  shopItemCount: number;
-  purchasedPackCount: number;
-  purchasedThemeCount: number;
-}
-
-export async function fetchAdminAnalytics(): Promise<PlatformAnalytics> {
-  const { data } = await adminApi.get<ApiResponse<PlatformAnalytics>>('/analytics');
-  return data?.data as PlatformAnalytics;
-}
-
-// ─── Admin Plans ──────────────────────────────────────────────
-
-import type {
-  Plan,
-  PlanFeatures,
-  Subscription,
-  SubscriptionEvent,
-  SubscriptionStatus,
-} from '@kd/shared';
-
-export interface CreatePlanInput {
-  slug: string;
-  displayName: string;
-  tier: 1 | 2 | 3;
-  billingCycle: 'weekly' | 'monthly';
-  pricePaise: number;
-  features: PlanFeatures;
-  trialDays: number;
-  isActive: boolean;
-  sortOrder: number;
-}
-
-export async function adminFetchPlans(): Promise<Plan[]> {
-  const { data } = await adminApi.get<ApiResponse<Plan[]>>('/plans');
-  return (data?.data ?? []) as Plan[];
-}
-
-export async function adminCreatePlan(input: CreatePlanInput): Promise<Plan> {
-  const { data } = await adminApi.post<ApiResponse<Plan>>('/plans', input);
-  return data?.data as Plan;
-}
-
-export async function adminUpdatePlan(id: string, input: Partial<CreatePlanInput>): Promise<Plan> {
-  const { data } = await adminApi.patch<ApiResponse<Plan>>(`/plans/${id}`, input);
-  return data?.data as Plan;
-}
-
-export async function adminDeletePlan(id: string): Promise<void> {
-  await adminApi.delete(`/plans/${id}`);
-}
-
-// ─── Admin Subscriptions ──────────────────────────────────────
-
-export interface AdminSubscriptionListResult {
-  subscriptions: Subscription[];
-  total: number;
-}
-
-export interface AdminSubscriptionDetail {
-  subscription: Subscription;
-  events: SubscriptionEvent[];
-}
-
-export interface GrantSubscriptionInput {
-  userId: string;
-  planId: string;
-  customEndDate?: string;
-  adminNotes?: string;
-  overwriteExisting?: boolean;
-}
-
-export async function adminFetchSubscriptions(params?: {
-  limit?: number;
-  offset?: number;
-  status?: SubscriptionStatus;
-}): Promise<AdminSubscriptionListResult> {
-  const { data } = await adminApi.get<ApiResponse<AdminSubscriptionListResult>>('/subscriptions', { params });
-  return data?.data as AdminSubscriptionListResult;
-}
-
-export async function adminFetchSubscription(id: string): Promise<AdminSubscriptionDetail> {
-  const { data } = await adminApi.get<ApiResponse<AdminSubscriptionDetail>>(`/subscriptions/${id}`);
-  return data?.data as AdminSubscriptionDetail;
-}
-
-export async function adminGrantSubscription(input: GrantSubscriptionInput): Promise<{ subscription: Subscription; superseded?: Subscription }> {
-  const { data } = await adminApi.post<ApiResponse<{ subscription: Subscription; superseded?: Subscription }>>('/subscriptions', input);
-  return data?.data as { subscription: Subscription; superseded?: Subscription };
-}
-
-export async function adminPatchSubscription(id: string, input: { status?: SubscriptionStatus; cancelAtPeriodEnd?: boolean }): Promise<Subscription> {
-  const { data } = await adminApi.patch<ApiResponse<Subscription>>(`/subscriptions/${id}`, input);
-  return data?.data as Subscription;
-}
-
-// ─── Admin User Search ────────────────────────────────────────
-
-export async function adminSearchUsers(q: string, limit = 10): Promise<UserProfile[]> {
-  const { data } = await adminApi.get<ApiResponse<UserProfile[]>>('/users/search', { params: { q, limit } });
-  return (data?.data ?? []) as UserProfile[];
-}
 
 // ─── Friends ──────────────────────────────────────────────────
 

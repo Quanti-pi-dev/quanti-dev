@@ -5,11 +5,15 @@
   "description": "Scalable learning platform for competitive exam preparation",
   "workspaces": [
     "packages/*",
+    "apps/*",
     "server",
+    "server-user",
+    "server-admin",
+    "server-institute",
     "mobile"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit -p packages/shared/tsconfig.json && tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p mobile/tsconfig.json",
+    "typecheck": "tsc --noEmit -p packages/shared/tsconfig.json && tsc --noEmit -p packages/db/tsconfig.json && tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p server-user/tsconfig.json && tsc --noEmit -p server-admin/tsconfig.json && tsc --noEmit -p server-institute/tsconfig.json && tsc --noEmit -p mobile/tsconfig.json",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\""

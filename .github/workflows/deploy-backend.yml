@@ -1,0 +1,90 @@
+name: Deploy Backend to Oracle Cloud
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/**'
+      - 'server/**'
+      - 'server-user/**'
+      - 'server-admin/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'Dockerfile.user'
+      - 'Dockerfile.admin'
+      - 'docker-compose.yml'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_USER: ${{ github.repository }}/user-api
+  IMAGE_NAME_ADMIN: ${{ github.repository }}/admin-api
+
+jobs:
+  build-and-push-images:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push User API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.user
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_USER }}:latest
+
+      - name: Build and push Admin API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.admin
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ADMIN }}:latest
+
+  deploy-to-oci:
+    needs: build-and-push-images
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository (for docker-compose.yml)
+        uses: actions/checkout@v4
+        
+      - name: Copy docker-compose.yml to VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USERNAME }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          source: "docker-compose.yml"
+          target: "~/quanti-pi"
+          
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USERNAME }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          script: |
+            cd ~/quanti-pi
+            # Login to GitHub Container Registry to pull private packages if repo is private
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # Pull latest images and restart containers
+            docker compose pull
+            docker compose up -d --remove-orphans
+            
+            # Prune old dangling images to save space
+            docker image prune -af

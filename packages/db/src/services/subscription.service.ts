@@ -1,0 +1,662 @@
+// ─── Subscription Service ─────────────────────────────────────
+// Core lifecycle logic: create, activate, cancel, renew, expire.
+
+import { createServiceLogger } from '../lib/logger.js';
+import { getRedisClient } from '../clients/database.js';
+import { planRepository } from '../repositories/plan.repository.js';
+import { subscriptionRepository } from '../repositories/subscription.repository.js';
+import { paymentRepository } from '../repositories/payment.repository.js';
+import { couponRepository } from '../repositories/coupon.repository.js';
+import { couponService } from './coupon.service.js';
+import { paymentService } from './payment.service.js';
+import { notificationService } from './notification.service.js';
+import { analyticsService } from './analytics.service.js';
+import { userRepository } from '../repositories/user.repository.js';
+import { emailService } from './email.service.js';
+import { instituteService } from './institute.service.js';
+import type {
+  Subscription,
+  SubscriptionSummary,
+  Plan,
+  BillingCycle,
+  SubscriptionContext,
+} from '@kd/shared';
+
+const log = createServiceLogger('SubscriptionService');
+const SUBSCRIPTION_CACHE_TTL = 300; // 5 minutes
+
+function computeDaysRemaining(periodEnd: string): number {
+  return Math.max(0, Math.ceil((new Date(periodEnd).getTime() - Date.now()) / 86_400_000));
+}
+
+function billingCycleDays(cycle: BillingCycle): number {
+  return cycle === 'weekly' ? 7 : 30;
+}
+
+class SubscriptionService {
+  // ─── Redis cache key ────────────────────────────────────
+  private cacheKey(userId: string) {
+    return `sub:${userId}`;
+  }
+
+  // ─── Distributed checkout lock (prevents concurrent duplicate subscriptions)
+  // Uses SETNX + EX atomically via Lua — if the key already exists, returns 0.
+  private static CHECKOUT_LOCK_LUA = `
+    local key = KEYS[1]
+    local ttl = tonumber(ARGV[1])
+    local ok = redis.call('SET', key, '1', 'NX', 'EX', ttl)
+    if ok then return 1 else return 0 end
+  `;
+
+  // ─── Invalidate user's subscription cache ───────────────
+  async invalidateCache(userId: string): Promise<void> {
+    await getRedisClient().del(this.cacheKey(userId));
+  }
+
+  // ─── Get subscription context (for feature gate) ─────────
+  async getContext(userId: string): Promise<SubscriptionContext | null> {
+    const redis = getRedisClient();
+    const cached = await redis.get(this.cacheKey(userId));
+
+    if (cached) {
+      try {
+        return JSON.parse(cached) as SubscriptionContext;
+      } catch {
+        // Corrupted cache entry — fall through to DB lookup
+        await redis.del(this.cacheKey(userId));
+      }
+    }
+
+    const sub = await subscriptionRepository.findActiveByUserId(userId);
+    let context: SubscriptionContext | null = null;
+
+    if (sub && ['trialing', 'active', 'past_due'].includes(sub.status)) {
+      const plan = await planRepository.findById(sub.planId);
+      if (plan) {
+        context = {
+          planTier: plan.tier,
+          planSlug: plan.slug,
+          status: sub.status,
+          features: plan.features,
+          periodEnd: sub.currentPeriodEnd,
+        };
+      }
+    }
+
+    // ── Institute subscription fallback ──────────────────────────
+    // If personal subscription is absent or lower tier, check if the user
+    // is a student in an institute with an active bulk subscription.
+    try {
+      const pgRes = await (await import('../clients/database.js')).getPostgresPool().query(
+        'SELECT id FROM users WHERE firebase_uid = $1 LIMIT 1',
+        [userId],
+      );
+      if (pgRes.rows.length > 0) {
+        const pgUserId = pgRes.rows[0]['id'] as string;
+        const instCtx = await instituteService.resolveSubscriptionContext(pgUserId, userId);
+        if (instCtx && (!context || instCtx.planTier > context.planTier)) {
+          context = instCtx;
+        }
+      }
+    } catch (err) {
+      // Non-fatal: institute service unavailable should not block normal sub lookup
+      log.warn({ err }, 'Institute subscription fallback failed — using personal context only');
+    }
+
+    if (!context) return null;
+
+    await redis.setex(this.cacheKey(userId), SUBSCRIPTION_CACHE_TTL, JSON.stringify(context));
+    return context;
+  }
+
+  // ─── Get user-facing subscription summary ────────────────
+  async getSummary(userId: string): Promise<SubscriptionSummary | null> {
+    const sub = await subscriptionRepository.findActiveByUserId(userId);
+    if (!sub) return null;
+
+    const plan = await planRepository.findById(sub.planId);
+    if (!plan) return null;
+
+    const isActive = sub.status === 'active' || sub.status === 'trialing';
+
+    return {
+      id: sub.id,
+      status: sub.status,
+      plan,
+      currentPeriodEnd: sub.currentPeriodEnd,
+      trialEnd: sub.trialEnd,
+      cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+      isActive,
+      daysRemaining: computeDaysRemaining(sub.currentPeriodEnd),
+      // autoRenews = has a Razorpay mandate and has NOT requested cancellation
+      autoRenews: !!sub.razorpaySubscriptionId && !sub.cancelAtPeriodEnd,
+    };
+  }
+
+  // ─── Initiate checkout: validate + create Razorpay subscription ─
+  async initiateCheckout(
+    userId: string,
+    planId: string,
+    couponCode?: string,
+  ): Promise<{
+    orderId: string;          // 'trial' | razorpay_order_id (legacy one-off)
+    razorpaySubscriptionId?: string; // present for recurring paid subscriptions
+    amountPaise: number;
+    keyId: string;
+    plan: Plan;
+    discountPaise: number;
+    subscription: Subscription;
+  }> {
+    // Acquire distributed lock to prevent concurrent checkouts for same user
+    const lockKey = `lock:checkout:${userId}`;
+    const acquired = await getRedisClient().eval(
+      SubscriptionService.CHECKOUT_LOCK_LUA, 1, lockKey, 30, // 30s TTL
+    ) as number;
+
+    if (acquired === 0) {
+      throw Object.assign(
+        new Error('A checkout is already in progress. Please wait.'),
+        { code: 'CHECKOUT_IN_PROGRESS' },
+      );
+    }
+
+    try {
+      return await this.executeCheckout(userId, planId, couponCode);
+    } finally {
+      // Always release the lock
+      await getRedisClient().del(lockKey);
+    }
+  }
+
+  // ─── Internal checkout logic (runs under lock) ──────────
+  private async executeCheckout(
+    userId: string,
+    planId: string,
+    couponCode?: string,
+  ): Promise<{
+    orderId: string;
+    amountPaise: number;
+    keyId: string;
+    plan: Plan;
+    discountPaise: number;
+    subscription: Subscription;
+  }> {
+    // 1. Resolve and validate plan
+    const plan = await planRepository.findById(planId);
+    if (!plan || !plan.isActive) {
+      throw Object.assign(new Error('Plan not found or inactive'), { code: 'PLAN_NOT_FOUND' });
+    }
+
+    // 2. Guard against duplicate subscriptions (allow upgrades)
+    const existing = await subscriptionRepository.findActiveByUserId(userId);
+    if (existing) {
+      const existingPlan = await planRepository.findById(existing.planId);
+      if (!existingPlan || existingPlan.tier >= plan.tier) {
+        throw Object.assign(new Error('User already has an active subscription'), { code: 'ALREADY_SUBSCRIBED' });
+      }
+    }
+
+    // 3. Check trial eligibility
+    const hasHadTrial = await subscriptionRepository.hasHadTrialForTier(userId, plan.tier);
+    const eligibleForTrial = plan.trialDays > 0 && !hasHadTrial;
+
+    // 4. Validate coupon (if provided)
+    let discountPaise = 0;
+    let finalPricePaise = plan.pricePaise;
+    let couponId: string | undefined;
+
+    if (couponCode) {
+      const couponResult = await couponService.validate(
+        couponCode,
+        userId,
+        plan.id,
+        plan.billingCycle,
+        plan.pricePaise,
+      );
+      if (!couponResult.valid) {
+        throw Object.assign(new Error(couponResult.failureReason ?? 'Invalid coupon'), { code: 'INVALID_COUPON' });
+      }
+      discountPaise = couponResult.discountPaise;
+      finalPricePaise = couponResult.finalPricePaise;
+      couponId = couponResult.couponId;
+    }
+
+    // 5. Delegate to trial or paid path (FIX A11)
+    if (eligibleForTrial && !couponCode) {
+      return this.createTrialSubscription(userId, plan);
+    }
+    return this.createPaidSubscription(userId, plan, finalPricePaise, discountPaise, couponId, couponCode);
+  }
+
+  // ─── Trial path: no payment required ────────────────────
+  private async createTrialSubscription(
+    userId: string,
+    plan: Plan,
+  ): Promise<{
+    orderId: string; razorpaySubscriptionId?: string;
+    amountPaise: number; keyId: string;
+    plan: Plan; discountPaise: number; subscription: Subscription;
+  }> {
+    const now = new Date();
+    const trialEnd = new Date(now);
+    trialEnd.setDate(trialEnd.getDate() + plan.trialDays);
+
+    // Cancel existing if it's an upgrade
+    const existing = await subscriptionRepository.findActiveByUserId(userId);
+    if (existing) {
+      if (existing.razorpaySubscriptionId) {
+        try { await paymentService.cancelRazorpaySubscription(existing.razorpaySubscriptionId, 0); } catch(e){}
+      }
+      await subscriptionRepository.updateStatus(existing.id, 'expired');
+      await subscriptionRepository.logEvent(existing.id, userId, 'expired', existing.status, 'expired', { reason: 'superseded_by_trial_upgrade' });
+    }
+
+    const sub = await subscriptionRepository.create({
+      userId,
+      planId: plan.id,
+      status: 'trialing',
+      currentPeriodStart: now,
+      currentPeriodEnd: trialEnd,
+      trialStart: now,
+      trialEnd,
+    });
+
+    await subscriptionRepository.logEvent(sub.id, userId, 'trial_started', null, 'trialing', {
+      plan_slug: plan.slug,
+      trial_days: plan.trialDays,
+    });
+
+    await this.invalidateCache(userId);
+
+    // Fire-and-forget notifications + analytics
+    const user = await userRepository.findByFirebaseUid(userId).catch(() => null);
+    if (user) {
+      void Promise.allSettled([
+        analyticsService.trackTrialStarted(userId, plan.slug, plan.trialDays),
+        notificationService.handleEvent({
+          type: 'trial_started', userId, email: user.email,
+          planName: plan.displayName, trialDays: plan.trialDays,
+        }),
+      ]);
+    }
+
+    return {
+      orderId: 'trial',
+      amountPaise: 0,
+      keyId: '',
+      razorpaySubscriptionId: undefined,
+      plan,
+      discountPaise: 0,
+      subscription: sub,
+    };
+  }
+
+  // ─── Paid path: Razorpay Subscription creation (auto-debit) ──
+  private async createPaidSubscription(
+    userId: string,
+    plan: Plan,
+    finalPricePaise: number,
+    discountPaise: number,
+    couponId?: string,
+    couponCode?: string,
+  ): Promise<{
+    orderId: string; razorpaySubscriptionId?: string;
+    amountPaise: number; keyId: string;
+    plan: Plan; discountPaise: number; subscription: Subscription;
+  }> {
+    const now = new Date();
+
+    // Lock coupon usage before creating payment
+    if (couponId) {
+      const locked = await couponRepository.incrementUsage(couponId);
+      if (!locked) {
+        throw Object.assign(new Error('Coupon usage limit reached'), { code: 'COUPON_LIMIT_REACHED' });
+      }
+    }
+
+    const periodEnd = new Date(now);
+    periodEnd.setDate(periodEnd.getDate() + billingCycleDays(plan.billingCycle));
+
+    // ─── Step 1: Lazily ensure a Razorpay Plan exists for this internal plan ───
+    // Razorpay Plans are reusable billing templates. We create once and reuse.
+    let razorpayPlanId = plan.razorpayPlanId;
+    if (!razorpayPlanId) {
+      const { razorpayPlanId: newRpPlanId } = await paymentService.createRazorpayPlan({
+        name: plan.displayName,
+        amountPaise: plan.pricePaise, // use full plan price, not discounted
+        period: plan.billingCycle,
+        currency: plan.currency ?? 'INR',
+      });
+      razorpayPlanId = newRpPlanId;
+      // Persist so the next user subscribing to this plan reuses the same Razorpay Plan.
+      // Uses WHERE razorpay_plan_id IS NULL to prevent race conditions.
+      await planRepository.setRazorpayPlanId(plan.id, razorpayPlanId);
+    }
+
+    // ─── Step 2: Create Razorpay Subscription (mandate) ─────────────────────
+    // 120 billing cycles ≈ 10 years of monthly / 2.3 years of weekly billing.
+    // Razorpay requires a finite total_count; 120 is a safe upper bound.
+    let razorpaySubscriptionId: string;
+    try {
+      const { razorpaySubscriptionId: subId } = await paymentService.createRazorpaySubscription({
+        razorpayPlanId,
+        totalCount: 120,
+        customerNotify: 1,
+      });
+      razorpaySubscriptionId = subId;
+    } catch (err) {
+      // Roll back coupon lock on Razorpay failure
+      if (couponId) await couponRepository.decrementUsage(couponId);
+      throw err;
+    }
+
+    // ─── Step 3: Create local subscription row ───────────────────────────────
+    const sub = await subscriptionRepository.create({
+      userId,
+      planId: plan.id,
+      status: 'pending', // waits for webhook or frontend verification to become 'active'
+      currentPeriodStart: now,
+      currentPeriodEnd: periodEnd,
+      couponId: couponId ?? null,
+      razorpaySubscriptionId,
+    });
+
+    // ─── Step 4: Create payment record ──────────────────────────────────────
+    // For subscription-mode, razorpayOrderId = razorpaySubscriptionId (unique receipt key).
+    // The actual per-cycle charge order is created by Razorpay on each billing date.
+    await paymentRepository.create({
+      subscriptionId: sub.id,
+      userId,
+      razorpayOrderId: razorpaySubscriptionId,
+      amountPaise: finalPricePaise,
+      razorpaySubscriptionId,
+    });
+
+    await subscriptionRepository.logEvent(sub.id, userId, 'created', null, 'active', {
+      plan_slug: plan.slug,
+      razorpay_subscription_id: razorpaySubscriptionId,
+      razorpay_plan_id: razorpayPlanId,
+    });
+
+    // Fire-and-forget analytics
+    void analyticsService.trackCheckoutInitiated(userId, plan.slug, finalPricePaise, couponCode);
+
+    return {
+      orderId: razorpaySubscriptionId, // used by mobile SDK as subscription_id
+      razorpaySubscriptionId,
+      amountPaise: finalPricePaise,
+      keyId: '',  // filled in route from config
+      plan,
+      discountPaise,
+      subscription: sub,
+    };
+  }
+
+  // ─── Verify payment and activate subscription ─────────────
+  async verifyAndActivate(
+    userId: string,
+    razorpayOrderId: string,
+    razorpayPaymentId: string,
+    razorpaySignature: string,
+  ): Promise<SubscriptionSummary> {
+    // 1. Verify HMAC signature
+    const valid = paymentService.verifyPaymentSignature(
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature,
+    );
+
+    if (!valid) {
+      throw Object.assign(new Error('Invalid payment signature'), { code: 'INVALID_SIGNATURE' });
+    }
+
+    // 2. Find payment row
+    const payment = await paymentRepository.findByOrderId(razorpayOrderId);
+    if (!payment) {
+      throw Object.assign(new Error('Payment order not found'), { code: 'ORDER_NOT_FOUND' });
+    }
+
+    // 3. Idempotency: already captured — return existing state without re-processing
+    if (payment.status === 'captured') {
+      const summary = await this.getSummary(userId);
+      if (summary) return summary;
+      // Payment is captured but subscription summary is missing — this is a data integrity issue
+      throw new Error('Payment already captured but subscription summary unavailable');
+    }
+
+    // 4. Mark payment captured
+    await paymentRepository.markCaptured(razorpayOrderId, razorpayPaymentId, razorpaySignature);
+
+    // 5. Ensure subscription is active
+    const sub = await subscriptionRepository.findById(payment.subscriptionId);
+    if (!sub) throw new Error('Subscription not found');
+
+    if (sub.status !== 'active') {
+      // Find old active subscription and cancel it
+      const existing = await subscriptionRepository.findActiveByUserId(userId);
+      if (existing && existing.id !== sub.id) {
+        if (existing.razorpaySubscriptionId) {
+          try {
+            await paymentService.cancelRazorpaySubscription(existing.razorpaySubscriptionId, 0);
+          } catch (err) {
+            log.warn({ err, razorpaySubscriptionId: existing.razorpaySubscriptionId }, 'Failed to cancel old Razorpay mandate during upgrade');
+          }
+        }
+        await subscriptionRepository.updateStatus(existing.id, 'expired');
+        await subscriptionRepository.logEvent(existing.id, userId, 'expired', existing.status, 'expired', { reason: 'superseded_by_upgrade' });
+      }
+
+      await subscriptionRepository.updateStatus(sub.id, 'active');
+    }
+
+    // 6. Record coupon redemption if applicable
+    if (sub.couponId) {
+      await couponRepository.recordRedemption(sub.couponId, userId, sub.id, 0);
+    }
+
+    await subscriptionRepository.logEvent(sub.id, userId, 'activated', sub.status, 'active', {
+      razorpay_payment_id: razorpayPaymentId,
+    });
+
+    await this.invalidateCache(userId);
+
+    // Fire-and-forget notifications + analytics
+    const plan = await planRepository.findById(sub.planId).catch(() => null);
+    const user = await userRepository.findByFirebaseUid(userId).catch(() => null);
+    if (plan && user) {
+      void Promise.allSettled([
+        analyticsService.trackPaymentSucceeded(userId, plan.slug, payment.amountPaise, razorpayPaymentId),
+        analyticsService.trackSubscriptionActivated(userId, plan.slug, plan.billingCycle),
+        notificationService.handleEvent({
+          type: 'subscription_activated', userId, email: user.email, planName: plan.displayName,
+        }),
+      ]);
+
+      if (user.email && !user.email.includes('@placeholder.')) {
+        emailService.sendSubscriptionUpgradeEmail(user.email, user.displayName, plan.displayName).catch(() => {});
+      }
+    }
+
+    const summary = await this.getSummary(userId);
+    if (!summary) throw new Error('Failed to load subscription summary');
+    return summary;
+  }
+
+  // ─── Cancel subscription ──────────────────────────────────
+  async cancel(userId: string): Promise<SubscriptionSummary> {
+    const sub = await subscriptionRepository.findActiveByUserId(userId);
+    if (!sub || sub.status === 'canceled' || sub.status === 'expired') {
+      throw Object.assign(new Error('No active subscription to cancel'), { code: 'NO_ACTIVE_SUBSCRIPTION' });
+    }
+
+    // If this subscription has a Razorpay mandate, cancel it at cycle end
+    // so Razorpay stops debiting the user automatically.
+    if (sub.razorpaySubscriptionId) {
+      try {
+        await paymentService.cancelRazorpaySubscription(
+          sub.razorpaySubscriptionId,
+          1, // cancel_at_cycle_end=1 (graceful)
+        );
+      } catch (err) {
+        // Log but don't block the local cancel — the cron job will expire the sub anyway.
+        log.warn({ err, razorpaySubscriptionId: sub.razorpaySubscriptionId }, 'Failed to cancel Razorpay mandate — subscription will expire via cron');
+      }
+    }
+
+    const updated = await subscriptionRepository.updateStatus(sub.id, 'canceled', {
+      canceledAt: new Date(),
+      cancelAtPeriodEnd: true,
+    });
+
+    await subscriptionRepository.logEvent(
+      sub.id, userId, 'cancel_requested', sub.status, 'canceled', {
+        via_razorpay: !!sub.razorpaySubscriptionId,
+      },
+    );
+
+    await this.invalidateCache(userId);
+
+    // Fire-and-forget analytics (resolve plan slug for readable reporting)
+    const canceledPlan = await planRepository.findById(sub.planId).catch(() => null);
+    void analyticsService.trackSubscriptionCanceled(userId, canceledPlan?.slug ?? sub.planId);
+
+    const summary = await this.getSummary(userId);
+    return summary ?? ({
+      id: updated!.id,
+      status: 'canceled',
+      plan: (await planRepository.findById(sub.planId))!,
+      currentPeriodEnd: sub.currentPeriodEnd,
+      trialEnd: sub.trialEnd,
+      cancelAtPeriodEnd: true,
+      isActive: false,
+      daysRemaining: computeDaysRemaining(sub.currentPeriodEnd),
+      autoRenews: false,
+    } as SubscriptionSummary);
+  }
+
+  // ─── Reactivate a canceled sub (within period) ────────────
+  async reactivate(userId: string): Promise<Subscription> {
+    // Use findCanceledByUserId — findActiveByUserId excludes 'canceled' status
+    const sub = await subscriptionRepository.findCanceledByUserId(userId);
+    if (!sub) {
+      throw Object.assign(new Error('No canceled subscription to reactivate'), { code: 'NOTHING_TO_REACTIVATE' });
+    }
+
+    const updated = await subscriptionRepository.updateStatus(sub.id, 'active', {
+      canceledAt: null,
+      cancelAtPeriodEnd: false,
+    });
+
+    await subscriptionRepository.logEvent(sub.id, userId, 'reactivated', 'canceled', 'active', {});
+    await this.invalidateCache(userId);
+
+    return updated!;
+  }
+  // ─── Admin: grant a subscription manually ──────────────
+  async grantManualSubscription(input: {
+    userId: string;
+    planId: string;
+    adminId: string;
+    customEndDate?: string;
+    adminNotes?: string;
+    overwriteExisting?: boolean;
+  }): Promise<{ subscription: Subscription; superseded?: Subscription }> {
+    const { userId, planId, adminId, customEndDate, adminNotes, overwriteExisting } = input;
+
+    // 1. Validate user exists
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      throw Object.assign(new Error('User not found'), { code: 'USER_NOT_FOUND' });
+    }
+
+    // 1b. Resolve Firebase UID — subscriptions.user_id stores Firebase UIDs,
+    //     but the admin UI sends the PG UUID from the user search results.
+    const firebaseUid = await userRepository.getFirebaseUid(userId);
+    if (!firebaseUid) {
+      throw Object.assign(new Error('User Firebase UID not found'), { code: 'USER_NOT_FOUND' });
+    }
+
+    // 2. Validate plan exists and is active
+    const plan = await planRepository.findById(planId);
+    if (!plan || !plan.isActive) {
+      throw Object.assign(new Error('Plan not found or inactive'), { code: 'PLAN_NOT_FOUND' });
+    }
+
+    // 3. Check for existing active subscription (using Firebase UID)
+    const existing = await subscriptionRepository.findActiveByUserId(firebaseUid);
+    let superseded: Subscription | undefined;
+
+    if (existing) {
+      if (!overwriteExisting) {
+        const err = Object.assign(
+          new Error('User already has an active subscription'),
+          { code: 'ALREADY_ACTIVE', existingSubscription: existing },
+        );
+        throw err;
+      }
+
+      // ─── Cancel Razorpay mandate if it exists ───
+      if (existing.razorpaySubscriptionId) {
+        try {
+          await paymentService.cancelRazorpaySubscription(existing.razorpaySubscriptionId, 0); // 0 = immediate cancel
+        } catch (err) {
+          // Log but don't block the manual grant
+          log.warn({ err, razorpaySubscriptionId: existing.razorpaySubscriptionId }, 'Failed to cancel Razorpay mandate during manual override — continuing with grant');
+        }
+      }
+
+      // Expire the old subscription
+      await subscriptionRepository.updateStatus(existing.id, 'expired');
+      await subscriptionRepository.logEvent(
+        existing.id, firebaseUid, 'expired', existing.status, 'expired',
+        { reason: 'superseded_by_manual_grant', admin_id: adminId },
+      );
+      superseded = existing;
+    }
+
+    // 4. Compute period end
+    const now = new Date();
+    let periodEnd: Date;
+    if (customEndDate) {
+      periodEnd = new Date(customEndDate);
+      if (periodEnd <= now) {
+        throw Object.assign(new Error('Custom end date must be in the future'), { code: 'INVALID_END_DATE' });
+      }
+    } else {
+      periodEnd = new Date(now);
+      periodEnd.setDate(periodEnd.getDate() + billingCycleDays(plan.billingCycle));
+    }
+
+    // 5. Create subscription (using Firebase UID to match user-facing lookups)
+    const sub = await subscriptionRepository.create({
+      userId: firebaseUid,
+      planId,
+      status: 'active',
+      currentPeriodStart: now,
+      currentPeriodEnd: periodEnd,
+    });
+
+    // 6. Log event
+    await subscriptionRepository.logEvent(
+      sub.id, firebaseUid, 'manual_grant', null, 'active',
+      {
+        admin_id: adminId,
+        plan_slug: plan.slug,
+        admin_notes: adminNotes ?? null,
+        custom_end_date: customEndDate ?? null,
+        superseded_subscription_id: superseded?.id ?? null,
+      },
+    );
+
+    // 7. Invalidate cache
+    await this.invalidateCache(firebaseUid);
+
+    if (user.email && !user.email.includes('@placeholder.')) {
+      emailService.sendSubscriptionUpgradeEmail(user.email, user.displayName, plan.displayName).catch(() => {});
+    }
+
+    return { subscription: sub, superseded };
+  }
+}
+
+export const subscriptionService = new SubscriptionService();
