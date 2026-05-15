@@ -1,8 +1,9 @@
 # ============================================================
 # Docker Compose — Development Environment
 # Study Platform: PostgreSQL + MongoDB + Redis
-#                 + User API (port 3000)
-#                 + Admin API (port 3001)
+#                 + User API      (port 3000)
+#                 + Admin API     (port 3001)
+#                 + Institute API (port 3002)
 # ============================================================
 
 services:
@@ -139,6 +140,33 @@ services:
       - "${ADMIN_API_PORT:-3001}:3001"
     volumes:
       - ../../server-admin/src:/app/server-admin/src:ro
+      - ../../packages:/app/packages:ro
+
+  # ─── Institute API (port 3002) ─────────────────────────────
+  # Institute staff routes (educator, examiner, institute_admin).
+  # Shares the same DB stack; no cron jobs.
+  api-institute:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.server-institute
+    container_name: kd-api-institute
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *api-env
+      HOST: 0.0.0.0
+      PORT: 3002
+      INSTITUTE_WEB_ORIGIN: ${INSTITUTE_WEB_ORIGIN:-http://localhost:3003}
+    ports:
+      - "${INSTITUTE_API_PORT:-3002}:3002"
+    volumes:
+      - ../../server-institute/src:/app/server-institute/src:ro
       - ../../packages:/app/packages:ro
 
   # ─── Legacy Monolith (port 3099) — for reference during cutover ──

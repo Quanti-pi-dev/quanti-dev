@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { api } from '@/lib/api';
+import Link from 'next/link';
 import { Plus, Clock, FileText, Send, Trash2, Eye, Search } from 'lucide-react';
+
 
 interface MockTest {
   id: string;
@@ -70,12 +72,12 @@ export default function MockTestsPage() {
             {total} mock test{total !== 1 ? 's' : ''} · exam-format tests for students
           </p>
         </div>
-        <button
+        <Link href="/mock-tests/new"
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200 hover:opacity-90"
           style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' }}>
           <Plus className="w-4 h-4" />
           New Mock Test
-        </button>
+        </Link>
       </div>
 
       <div className="relative mb-6">

@@ -125,10 +125,29 @@ function InstituteSection({
             />
           ))
         )}
+        {/* Leaderboard link */}
+        <TouchableOpacity
+          onPress={() => router.push(
+            `/institute/leaderboard?instituteId=${membership.instituteId}&instituteName=${encodeURIComponent(membership.instituteName)}` as never,
+          )}
+          style={{
+            flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+            paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+            borderTopWidth: 1, borderTopColor: 'rgba(99,102,241,0.1)',
+            marginTop: spacing.xs,
+          }}
+        >
+          <Ionicons name="trophy-outline" size={14} color="#a5b4fc" />
+          <Typography variant="caption" color="#a5b4fc" style={{ fontWeight: '600' }}>
+            View Leaderboard
+          </Typography>
+          <Ionicons name="chevron-forward" size={12} color="#a5b4fc" style={{ marginLeft: 'auto' }} />
+        </TouchableOpacity>
       </View>
     </Animated.View>
   );
 }
+
 
 function TestRow({ test, onPress }: { test: InstituteTest; onPress: () => void }) {
   const { theme } = useTheme();

@@ -2,9 +2,11 @@
 # Render Deployment Configuration
 # ─────────────────────────────
 # Services:
-#   1. quanti-pi-user-api   — Student API + cron jobs (port 10000)
-#   2. quanti-pi-admin-api  — Admin-only API, stateless  (port 10001)
-#   3. quanti-pi-admin-web  — Next.js admin dashboard   (Phase 3)
+#   1. quanti-pi-user-api      — Student API + cron jobs   (port 10000)
+#   2. quanti-pi-admin-api     — Admin-only API, stateless  (port 10001)
+#   3. quanti-pi-admin-web     — Next.js admin dashboard
+#   4. quanti-pi-institute-api — Institute staff API        (port 10002)
+#   5. quanti-pi-institute-web — Next.js institute dashboard
 #
 # Database infrastructure (PostgreSQL, MongoDB Atlas, Redis Upstash)
 # is managed externally and injected as env vars via the Render Dashboard.
@@ -12,6 +14,7 @@
 # NOTE: preDeploy is a paid feature. Migrations run inside startCommand
 # on the User API (single instance, guaranteed order).
 # ============================================================
+
 
 services:
 
@@ -145,6 +148,72 @@ services:
         value: production
       - key: NEXT_PUBLIC_ADMIN_API_URL
         sync: false          # Set to the quanti-pi-admin-api Render URL
+      - key: NEXT_PUBLIC_FIREBASE_API_KEY
+        sync: false
+      - key: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+        sync: false
+
+  # ─── 4. Institute API ────────────────────────────────────
+  - type: web
+    name: quanti-pi-institute-api
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: >
+      npm ci --include=dev &&
+      npm run build --workspace=@kd/shared &&
+      npm run build --workspace=@kd/db &&
+      npm run build --workspace=@kd/server-institute
+    # No migrations — User API owns the schema.
+    startCommand: npm run start --workspace=@kd/server-institute
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10002
+      # ── Database ──────────────────────────────────────────
+      - key: POSTGRES_URL
+        sync: false
+      - key: MONGO_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      # ── Auth & Security ───────────────────────────────────
+      # Set INSTITUTE_WEB_ORIGIN to the deployed institute-web URL.
+      - key: INSTITUTE_WEB_ORIGIN
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_PATH
+        value: /etc/secrets/firebase-service-account.json
+      # ── Storage ───────────────────────────────────────────
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: CDN_BASE_URL
+        sync: false
+
+  # ─── 5. Institute Web (Next.js) ──────────────────────────
+  - type: web
+    name: quanti-pi-institute-web
+    env: node
+    plan: free
+    region: oregon
+    rootDir: apps/institute-web
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_INSTITUTE_API_URL
+        sync: false          # Set to the quanti-pi-institute-api Render URL
       - key: NEXT_PUBLIC_FIREBASE_API_KEY
         sync: false
       - key: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
