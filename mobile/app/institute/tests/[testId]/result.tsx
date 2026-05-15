@@ -4,8 +4,9 @@
 import { useEffect, useState } from 'react';
 import { View, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown, FadeIn, ZoomIn } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../../src/theme';
@@ -25,51 +26,16 @@ interface ResultData {
   message?: string;
 }
 
-// ── Circular score ring ─────────────────────────────────────────
-
-function ScoreRing({ pct, passed }: { pct: number; passed: boolean }) {
-  const size = 160;
-  const stroke = 12;
-  const r = (size - stroke) / 2;
-  const circ = 2 * Math.PI * r;
-  const arc = circ * (1 - pct / 100);
-  const color = passed ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444';
-
-  return (
-    <Animated.View entering={ZoomIn.springify()} style={{ alignItems: 'center', marginVertical: spacing.lg }}>
-      <View style={{ width: size, height: size }}>
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ position: 'absolute' }}>
-          <circle cx={size / 2} cy={size / 2} r={r}
-            fill="none" stroke="rgba(99,102,241,0.12)" strokeWidth={stroke} />
-          <circle cx={size / 2} cy={size / 2} r={r}
-            fill="none" stroke={color} strokeWidth={stroke}
-            strokeDasharray={circ} strokeDashoffset={arc}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${size / 2} ${size / 2})`} />
-        </svg>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Typography variant="h1" color={color} style={{ fontSize: 36, fontWeight: '800' }}>
-            {pct}%
-          </Typography>
-          <Typography variant="caption" color={passed ? '#4ade80' : '#f87171'}
-            style={{ fontWeight: '700', fontSize: 12, marginTop: 2 }}>
-            {passed ? '✅ PASSED' : '❌ FAILED'}
-          </Typography>
-        </View>
-      </View>
-    </Animated.View>
-  );
-}
-
 // ── Main screen ─────────────────────────────────────────────────
 
 export default function TestResultScreen() {
   const { testId, instituteId } = useLocalSearchParams<{ testId: string; instituteId: string }>();
   const { theme } = useTheme();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
-  const [data, setData]       = useState<ResultData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData]             = useState<ResultData | null>(null);
+  const [loading, setLoading]       = useState(true);
   const [showReview, setShowReview] = useState(false);
 
   useEffect(() => {
@@ -80,7 +46,7 @@ export default function TestResultScreen() {
         const res = await fetchInstituteTestResult(instituteId, testId);
         setData(res);
         void Haptics.notificationAsync(
-          res.submission.percentage >= (res.test.passingScore ?? 60)
+          res.resultsAvailable && res.submission.percentage >= (res.test.passingScore ?? 60)
             ? Haptics.NotificationFeedbackType.Success
             : Haptics.NotificationFeedbackType.Warning,
         );
@@ -90,6 +56,13 @@ export default function TestResultScreen() {
     };
     void load();
   }, [testId, instituteId]);
+
+  // On returning home, bust the institute-tests cache so the home
+  // screen reflects any status change (e.g. test now "closed").
+  const goHome = () => {
+    void queryClient.invalidateQueries({ queryKey: ['institute-tests', instituteId] });
+    router.replace('/institute');
+  };
 
   if (loading) return (
     <ScreenWrapper>
@@ -106,7 +79,7 @@ export default function TestResultScreen() {
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md }}>
         <Ionicons name="alert-circle-outline" size={40} color={theme.text.tertiary} />
         <Typography variant="body" color={theme.text.secondary}>Result not found</Typography>
-        <TouchableOpacity onPress={() => router.replace('/institute')}
+        <TouchableOpacity onPress={goHome}
           style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: '#6366f1', borderRadius: radius.xl }}>
           <Typography variant="button" color="white">Back to Institute</Typography>
         </TouchableOpacity>
@@ -129,8 +102,7 @@ export default function TestResultScreen() {
           <Typography variant="body" color={theme.text.secondary} style={{ textAlign: 'center', lineHeight: 22 }}>
             {data.message ?? 'Results will be available when released by your educator.'}
           </Typography>
-          <TouchableOpacity onPress={() => router.replace('/institute')}
-            style={{ borderRadius: radius.xl, overflow: 'hidden' }}>
+          <TouchableOpacity onPress={goHome} style={{ borderRadius: radius.xl, overflow: 'hidden' }}>
             <LinearGradient colors={['#6366f1', '#8b5cf6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
               style={{ paddingHorizontal: spacing.xl, paddingVertical: spacing.md }}>
               <Typography variant="button" color="white">Back to Institute</Typography>
@@ -142,7 +114,7 @@ export default function TestResultScreen() {
   }
 
   const { submission, test } = data;
-  const pct = submission.percentage;
+  const pct     = submission.percentage;
   const correct = submission.answers.filter(a => a.isCorrect).length;
   const wrong   = submission.answers.filter(a => !a.isCorrect && a.selectedOptionId).length;
   const skipped = submission.answers.filter(a => !a.selectedOptionId).length;
@@ -160,7 +132,7 @@ export default function TestResultScreen() {
           <Typography variant="body" color={theme.text.secondary}>Test Results</Typography>
         </Animated.View>
 
-        {/* Score ring — SVG-based on RN (use View approximation) */}
+        {/* Score circle */}
         <Animated.View entering={FadeIn.delay(100).springify()}
           style={{
             marginVertical: spacing.xl,
@@ -171,7 +143,6 @@ export default function TestResultScreen() {
             alignItems: 'center',
           }}>
 
-          {/* Big score */}
           <View style={{
             width: 130, height: 130, borderRadius: 65,
             borderWidth: 6, borderColor: test.passed ? '#22c55e' : '#ef4444',
@@ -199,9 +170,9 @@ export default function TestResultScreen() {
         <Animated.View entering={FadeInDown.delay(150).springify()}
           style={{ flexDirection: 'row', gap: spacing.md, marginBottom: spacing.lg }}>
           {[
-            { label: 'Correct',  value: correct, color: '#4ade80' },
-            { label: 'Wrong',    value: wrong,   color: '#f87171' },
-            { label: 'Skipped',  value: skipped, color: '#fbbf24' },
+            { label: 'Correct', value: correct, color: '#4ade80' },
+            { label: 'Wrong',   value: wrong,   color: '#f87171' },
+            { label: 'Skipped', value: skipped, color: '#fbbf24' },
           ].map(s => (
             <View key={s.label} style={{
               flex: 1, padding: spacing.md, borderRadius: radius.xl,
@@ -254,7 +225,7 @@ export default function TestResultScreen() {
                   </View>
                   {!ans.isCorrect && ans.correctAnswerId && (
                     <Typography variant="caption" color="#4ade80" style={{ marginBottom: 4 }}>
-                      ✓ Correct answer: option {ans.correctAnswerId.slice(-1).toUpperCase()}
+                      ✓ Correct: option {ans.correctAnswerId.slice(-1).toUpperCase()}
                     </Typography>
                   )}
                   {ans.explanation && (
@@ -270,7 +241,7 @@ export default function TestResultScreen() {
         </Animated.View>
 
         {/* CTA */}
-        <TouchableOpacity onPress={() => router.replace('/institute')} activeOpacity={0.85}
+        <TouchableOpacity onPress={goHome} activeOpacity={0.85}
           style={{ borderRadius: radius.xl, overflow: 'hidden' }}>
           <LinearGradient colors={['#6366f1', '#8b5cf6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
             style={{ paddingVertical: spacing.md, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: spacing.sm }}>
