@@ -147,8 +147,30 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
           </View>
         </Card>
+        {/* ── My Institute ── */}
+        <Card pressable onPress={() => router.push('/institute' as never)}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+            <View
+              style={{
+                width: 40, height: 40, borderRadius: radius.md,
+                backgroundColor: 'rgba(99,102,241,0.15)',
+                alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="school-outline" size={20} color="#6366f1" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Typography variant="label">My Institute</Typography>
+              <Typography variant="caption" color={theme.textTertiary}>
+                Tests, mock exams &amp; institute activities
+              </Typography>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
+          </View>
+        </Card>
 
         <BadgeShowcase badges={earnedBadges} />
+
 
         <SettingsSection
           isDark={isDark}

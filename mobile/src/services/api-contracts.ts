@@ -660,3 +660,119 @@ export async function cancelChallenge(id: string): Promise<void> {
 export async function submitChallengeAnswer(id: string, cardId: string, selectedAnswerId: string): Promise<AnswerResult> {
   return apiPost<AnswerResult>(`/p2p/challenges/${id}/answer`, { cardId, selectedAnswerId });
 }
+
+// ─── Institute (Student-facing) ───────────────────────────────────────────────
+
+export interface InstituteMembership {
+  id: string;
+  instituteId: string;
+  instituteName: string;
+  role: 'student' | 'educator' | 'examiner' | 'institute_admin';
+  studentUid: string | null;
+  department: string | null;
+  joinedAt: string;
+}
+
+export interface InstituteTest {
+  id: string;
+  title: string;
+  description: string;
+  status: 'draft' | 'scheduled' | 'live' | 'closed' | 'graded';
+  questionCount: number;
+  durationMinutes: number;
+  scheduledAt: string | null;
+  closesAt: string | null;
+  isPublished: boolean;
+  totalMarks: number;
+  settings: {
+    shuffleQuestions: boolean;
+    showResults: 'immediate' | 'after_close' | 'manual';
+    negativeMarking: boolean;
+    negativeMarkValue: number;
+    passingScore: number;
+  };
+  questions?: InstituteTestQuestion[];
+}
+
+export interface InstituteTestQuestion {
+  id: string;
+  text: string;
+  imageUrl?: string | null;
+  options: { id: string; text: string }[];
+  marks: number;
+  topicSlug?: string | null;
+}
+
+export interface InstituteSubmissionResult {
+  id: string;
+  testId: string;
+  status: 'in_progress' | 'submitted' | 'graded';
+  score: number;
+  totalMarks: number;
+  percentage: number;
+  timeTakenSeconds: number;
+  submittedAt: string;
+  answers: {
+    questionId: string;
+    selectedOptionId: string;
+    isCorrect: boolean;
+    marks: number;
+    correctAnswerId: string | null;
+    explanation: string | null;
+  }[];
+}
+
+export async function fetchMyMemberships(): Promise<InstituteMembership[]> {
+  return apiGet<InstituteMembership[]>('/institute/me');
+}
+
+export async function joinInstitute(code: string): Promise<{ member: InstituteMembership; instituteName: string }> {
+  return apiPost<{ member: InstituteMembership; instituteName: string }>('/institute/join', { code });
+}
+
+export async function fetchInstituteTests(
+  instituteId: string,
+  opts?: { limit?: number; offset?: number },
+): Promise<InstituteTest[]> {
+  const { data } = await api.get<{ success: boolean; data: InstituteTest[] }>(
+    `/institute/${instituteId}/tests`,
+    { params: { limit: opts?.limit ?? 30, offset: opts?.offset ?? 0 } },
+  );
+  return data?.data ?? [];
+}
+
+export async function fetchInstituteTest(instituteId: string, testId: string): Promise<InstituteTest> {
+  return apiGet<InstituteTest>(`/institute/${instituteId}/tests/${testId}`);
+}
+
+export async function startInstituteTest(instituteId: string, testId: string): Promise<{
+  submissionId: string;
+  startedAt: string;
+  durationMinutes: number;
+  questionCount: number;
+}> {
+  return apiPost<{ submissionId: string; startedAt: string; durationMinutes: number; questionCount: number }>(
+    `/institute/${instituteId}/tests/${testId}/start`, {},
+  );
+}
+
+export async function submitInstituteTest(
+  instituteId: string,
+  testId: string,
+  answers: { questionId: string; selectedOptionId: string }[],
+  timeTakenSeconds: number,
+): Promise<InstituteSubmissionResult> {
+  return apiPost<InstituteSubmissionResult>(
+    `/institute/${instituteId}/tests/${testId}/submit`,
+    { answers, timeTakenSeconds },
+  );
+}
+
+export async function fetchInstituteTestResult(
+  instituteId: string,
+  testId: string,
+): Promise<{ submission: InstituteSubmissionResult; test: { title: string; totalMarks: number; passingScore: number; passed: boolean }; resultsAvailable: boolean; message?: string }> {
+  return apiGet<{ submission: InstituteSubmissionResult; test: { title: string; totalMarks: number; passingScore: number; passed: boolean }; resultsAvailable: boolean; message?: string }>(
+    `/institute/${instituteId}/tests/${testId}/result`,
+  );
+}
