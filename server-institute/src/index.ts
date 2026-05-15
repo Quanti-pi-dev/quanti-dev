@@ -9,6 +9,10 @@ import {
   buildFastifyLoggerOptions,
   connectDatabases, disconnectDatabases,
   getRedisClient, getMongoDb, getPostgresPool,
+  withCronLock,
+  customTestRepository, instituteMockTestRepository,
+  runInstituteTestLifecycle,
+  resetInstituteWeeklyLeaderboards,
 } from '@kd/db';
 
 import { instituteAuthPlugin } from './middleware/auth.js';
@@ -104,13 +108,59 @@ async function start() {
     await registerRoutes();
     await connectDatabases(server.log);
 
+    // Ensure MongoDB indexes for institute collections
+    await Promise.allSettled([
+      customTestRepository.ensureIndexes(),
+      instituteMockTestRepository.ensureIndexes(),
+    ]);
+
     const port = Number(process.env['PORT'] ?? 3002);
     await server.listen({ port, host: config.host });
     server.log.info(`🏫  Institute API listening on http://${config.host}:${port}  [${config.env}]`);
+    startCronJobs();
   } catch (err) {
     server.log.fatal({ err }, 'FATAL STARTUP ERROR — exiting');
     process.exit(1);
   }
+}
+
+// ─── Cron Jobs ────────────────────────────────────────────
+
+function startCronJobs() {
+  const log = server.log;
+  const locked = (name: string, ttlSec: number, job: () => Promise<void>) =>
+    withCronLock(name, ttlSec, job, log);
+
+  // Institute test lifecycle (scheduled → live → closed) — every 5 minutes
+  setInterval(
+    () => void locked('institute-test-lifecycle', 240, () => runInstituteTestLifecycle(log)),
+    5 * 60 * 1000,
+  );
+  // Also run immediately on startup to catch any missed transitions
+  void locked('institute-test-lifecycle', 240, () => runInstituteTestLifecycle(log));
+
+  // Weekly institute leaderboard reset — Sunday midnight UTC
+  const scheduleWeeklyReset = () => {
+    const now = new Date();
+    const dayOfWeek = now.getUTCDay();
+    const daysUntilSunday = dayOfWeek === 0 ? 7 : 7 - dayOfWeek; // next Sunday (not today)
+    const nextSunday = new Date(Date.UTC(
+      now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + daysUntilSunday,
+    ));
+    const msUntil = nextSunday.getTime() - now.getTime();
+    setTimeout(() => {
+      void locked('institute-weekly-leaderboard-reset', 60,
+        () => resetInstituteWeeklyLeaderboards(log));
+      setInterval(
+        () => void locked('institute-weekly-leaderboard-reset', 60,
+          () => resetInstituteWeeklyLeaderboards(log)),
+        7 * 24 * 60 * 60 * 1000,
+      );
+    }, msUntil);
+  };
+  scheduleWeeklyReset();
+
+  log.info('Institute cron jobs scheduled');
 }
 
 // ─── Graceful Shutdown ────────────────────────────────────────────

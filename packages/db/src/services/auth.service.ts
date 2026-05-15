@@ -12,6 +12,21 @@ import { emailService } from './email.service.js';
 
 const log = createServiceLogger('AuthService');
 
+// ─── Claim Shapes ────────────────────────────────────────────
+// Firebase custom claims are merged into the JWT automatically.
+// The 'role' claim is the platform-wide role (student/admin/etc).
+// Institute-scoped claims use namespaced keys to avoid collisions.
+//
+// Token payload example:
+//   { role: 'educator', institute_role: 'educator', institute_id: 'abc123' }
+//
+// A student who belongs to an institute keeps role='student' but
+// gets 'institute_role' injected for server-side membership checks.
+//
+// Claims are refreshed on the client by calling getIdToken(true).
+
+const CLAIMS_VERSION = 1; // increment to force-refresh all tokens if claim shape changes
+
 class AuthService {
   // ─── Sync user (lazy upsert after Firebase login) ────
   // Called from POST /auth/sync after client-side Firebase login.
@@ -130,6 +145,90 @@ class AuthService {
     await userRepository.updateEmail(firebaseUid, newEmail);
 
     log.info({ firebaseUid }, 'email updated via Firebase Admin SDK');
+  }
+  // ─── Set institute-scoped custom claims ────────────────
+  // Called after a user joins an institute (any role).
+  // Updates Firebase custom claims to include the institute role.
+  // The client must call getIdToken(true) to pick up the new claims.
+  //
+  // For users who belong to MULTIPLE institutes (rare but supported),
+  // this stores the PRIMARY institute (most recently joined).
+  async setInstituteClaims(
+    firebaseUid: string,
+    instituteId: string,
+    instituteRole: string,
+    platformRole: string,  // the UserRole e.g. 'educator' | 'student' etc.
+  ): Promise<void> {
+    const admin = getFirebaseAdmin();
+    try {
+      // Read existing claims first to preserve any non-institute ones
+      const user = await admin.auth().getUser(firebaseUid);
+      const existing = (user.customClaims ?? {}) as Record<string, unknown>;
+
+      await admin.auth().setCustomUserClaims(firebaseUid, {
+        ...existing,
+        role: platformRole,
+        institute_role: instituteRole,
+        institute_id: instituteId,
+        cv: CLAIMS_VERSION,
+      });
+
+      log.info({ firebaseUid, instituteId, instituteRole, platformRole }, 'Institute claims set');
+    } catch (err) {
+      // Non-fatal: claims will be refreshed on next join or admin action.
+      // The API still works via DB membership checks.
+      log.error({ err, firebaseUid }, 'Failed to set institute custom claims');
+    }
+  }
+
+  // ─── Clear institute-scoped custom claims ───────────────
+  // Called when a user leaves or is removed from an institute.
+  // Reverts role to 'student' and removes institute claims.
+  async clearInstituteClaims(
+    firebaseUid: string,
+  ): Promise<void> {
+    const admin = getFirebaseAdmin();
+    try {
+      const user = await admin.auth().getUser(firebaseUid);
+      const existing = (user.customClaims ?? {}) as Record<string, unknown>;
+
+      // Remove institute-specific keys, keep everything else
+      const { institute_role: _, institute_id: __, ...rest } = existing;
+      await admin.auth().setCustomUserClaims(firebaseUid, {
+        ...rest,
+        role: 'student',   // revert to base role
+        cv: CLAIMS_VERSION,
+      });
+
+      // Also revoke refresh tokens so the change takes effect immediately
+      await admin.auth().revokeRefreshTokens(firebaseUid);
+
+      log.info({ firebaseUid }, 'Institute claims cleared');
+    } catch (err) {
+      log.error({ err, firebaseUid }, 'Failed to clear institute custom claims');
+    }
+  }
+
+  // ─── Sync role claim (general purpose) ─────────────────
+  // Sets just the 'role' custom claim for any platform role change.
+  // Used by admin when promoting a user to institute_admin.
+  async syncRoleClaim(
+    firebaseUid: string,
+    role: string,
+  ): Promise<void> {
+    const admin = getFirebaseAdmin();
+    try {
+      const user = await admin.auth().getUser(firebaseUid);
+      const existing = (user.customClaims ?? {}) as Record<string, unknown>;
+      await admin.auth().setCustomUserClaims(firebaseUid, {
+        ...existing,
+        role,
+        cv: CLAIMS_VERSION,
+      });
+      log.info({ firebaseUid, role }, 'Role claim synced');
+    } catch (err) {
+      log.error({ err, firebaseUid }, 'Failed to sync role claim');
+    }
   }
 }
 

@@ -4,7 +4,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { instituteRepository, instituteService } from '@kd/db';
+import { instituteRepository, instituteService, authService } from '@kd/db';
 import { requireInstituteRole } from '../middleware/auth.js';
 
 // ─── Schemas ──────────────────────────────────────────────────────
@@ -111,6 +111,8 @@ export async function instituteMgmtRoutes(fastify: FastifyInstance): Promise<voi
       const removed = await instituteRepository.removeMember(instituteId, userId);
       if (!removed) return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Member not found' }, timestamp: new Date().toISOString() });
       await instituteService.invalidateMembershipCache(userId);
+      // Clear Firebase institute claims so the revocation takes effect immediately
+      void authService.clearInstituteClaims(userId);
       return reply.send({ success: true, data: { removed: true }, timestamp: new Date().toISOString() });
     },
   );

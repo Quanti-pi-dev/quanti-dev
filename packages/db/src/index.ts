@@ -106,3 +106,5 @@ export { retryFailedPayments } from './jobs/retry-payments.js';
 export { sendSubscriptionReminders } from './jobs/send-reminders.js';
 export { expirePendingChallenges, finalizeAbandonedChallenges } from './jobs/expire-challenges.js';
 export { completeTournaments } from './jobs/expire-tournaments.js';
+export { runInstituteTestLifecycle } from './jobs/institute-test-lifecycle.js';
+export { resetInstituteWeeklyLeaderboards } from './jobs/institute-leaderboard-reset.js';

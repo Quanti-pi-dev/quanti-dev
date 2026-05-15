@@ -6,6 +6,7 @@ import { getRedisClient, getPostgresPool } from '../clients/database.js';
 import { instituteRepository } from '../repositories/institute.repository.js';
 import { subscriptionRepository } from '../repositories/subscription.repository.js';
 import { planRepository } from '../repositories/plan.repository.js';
+import { authService } from './auth.service.js';
 import { createServiceLogger } from '../lib/logger.js';
 import type {
   InstituteMember,
@@ -125,6 +126,18 @@ class InstituteService {
 
     // Invalidate membership cache
     await this.redis.del(MEMBERSHIP_CACHE_KEY(firebaseUid));
+
+    // ── Firebase custom claims ─────────────────────────────────────
+    // Map join-code role to platform-level UserRole.
+    // Students keep role='student', staff roles get a platform role upgrade.
+    const platformRole = joinCode.role === 'student' ? 'student' : joinCode.role;
+    // Fire-and-forget: non-fatal if Firebase is temporarily unavailable
+    void authService.setInstituteClaims(
+      firebaseUid,
+      joinCode.instituteId,
+      joinCode.role,
+      platformRole,
+    );
 
     log.info({ instituteId: joinCode.instituteId, userId, role: joinCode.role }, 'User joined institute');
     return { member, instituteName: institute.name };
