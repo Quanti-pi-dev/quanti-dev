@@ -24,6 +24,7 @@ import { instituteMgmtRoutes } from './routes/institute.routes.js';
 import { instituteLeaderboardRoutes } from './routes/leaderboard.routes.js';
 import { customTestRoutes } from './routes/custom-test.routes.js';
 import { mockTestRoutes } from './routes/mock-test.routes.js';
+import { studentProgressRoutes } from './routes/student-progress.routes.js';
 
 // ─── Fastify Instance ─────────────────────────────────────────────
 
@@ -97,6 +98,7 @@ async function registerRoutes() {
   await server.register(instituteLeaderboardRoutes, { prefix: '/api/inst/v1' });
   await server.register(customTestRoutes,           { prefix: '/api/inst/v1' });
   await server.register(mockTestRoutes,             { prefix: '/api/inst/v1' });
+  await server.register(studentProgressRoutes,      { prefix: '/api/inst/v1' });
 }
 
 // ─── Startup ──────────────────────────────────────────────────────

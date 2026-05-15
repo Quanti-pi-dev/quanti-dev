@@ -6,11 +6,12 @@ import { useAuth } from '@/contexts/auth-context';
 import clsx from 'clsx';
 import {
   BookOpen, Users, ClipboardList, FileText,
-  Trophy, Key, LogOut, ChevronRight,
+  Trophy, Key, LogOut, ChevronRight, GraduationCap,
 } from 'lucide-react';
 
 const NAV = [
   { href: '/',              label: 'Dashboard',   icon: BookOpen,      roles: ['educator','examiner','institute_admin'] },
+  { href: '/students',      label: 'Students',    icon: GraduationCap, roles: ['educator','examiner','institute_admin'] },
   { href: '/members',       label: 'Members',     icon: Users,         roles: ['institute_admin'] },
   { href: '/join-codes',    label: 'Join Codes',  icon: Key,           roles: ['institute_admin'] },
   { href: '/tests',         label: 'Tests',       icon: ClipboardList, roles: ['educator','institute_admin'] },
