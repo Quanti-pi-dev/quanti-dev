@@ -10,7 +10,8 @@ import {
   View, ScrollView, TouchableOpacity, RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useFocusEffect } from 'expo-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -214,6 +215,7 @@ function TestRow({ test, onPress }: { test: InstituteTest; onPress: () => void }
 export default function InstituteHomeScreen() {
   const { theme } = useTheme();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const {
     data: memberships,
@@ -223,8 +225,18 @@ export default function InstituteHomeScreen() {
   } = useQuery({
     queryKey: ['institute-memberships'],
     queryFn:  fetchMyMemberships,
-    staleTime: 5 * 60_000,
+    // 60 s staleTime — short enough that a just-invalidated cache from
+    // the join screen triggers an immediate re-fetch on mount.
+    staleTime: 60_000,
   });
+
+  // Refetch whenever this screen comes into focus (e.g., user returns
+  // via back button from the join screen without replace()).
+  useFocusEffect(
+    useCallback(() => {
+      void queryClient.invalidateQueries({ queryKey: ['institute-memberships'] });
+    }, [queryClient]),
+  );
 
   const onRefresh = useCallback(() => { void refetch(); }, [refetch]);
 
