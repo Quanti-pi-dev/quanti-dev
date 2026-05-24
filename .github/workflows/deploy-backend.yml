@@ -86,7 +86,7 @@ jobs:
         with:
           host:     ${{ secrets.OCI_HOST_USER }}
           username: ${{ secrets.OCI_USERNAME }}
-          key:      ${{ secrets.OCI_SSH_KEY }}
+          key:      ${{ secrets.OCI_SSH_KEY_USER }}
           source:   "docker-compose.yml"
           target:   "~/quanti-pi"
 
@@ -95,7 +95,7 @@ jobs:
         with:
           host:     ${{ secrets.OCI_HOST_USER }}
           username: ${{ secrets.OCI_USERNAME }}
-          key:      ${{ secrets.OCI_SSH_KEY }}
+          key:      ${{ secrets.OCI_SSH_KEY_USER }}
           envs: GHCR_PAT,GHCR_ACTOR
           script: |
             cd ~/quanti-pi
@@ -126,7 +126,7 @@ jobs:
         with:
           host:     ${{ secrets.OCI_HOST_ADMIN }}
           username: ${{ secrets.OCI_USERNAME }}
-          key:      ${{ secrets.OCI_SSH_KEY }}
+          key:      ${{ secrets.OCI_SSH_KEY_ADMIN }}
           source:   "docker-compose.yml"
           target:   "~/quanti-pi"
 
@@ -135,7 +135,7 @@ jobs:
         with:
           host:     ${{ secrets.OCI_HOST_ADMIN }}
           username: ${{ secrets.OCI_USERNAME }}
-          key:      ${{ secrets.OCI_SSH_KEY }}
+          key:      ${{ secrets.OCI_SSH_KEY_ADMIN }}
           envs: GHCR_PAT,GHCR_ACTOR
           script: |
             cd ~/quanti-pi
