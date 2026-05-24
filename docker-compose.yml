@@ -1,17 +1,17 @@
-version: '3.8'
 
 services:
   user-api:
     build:
       context: .
       dockerfile: Dockerfile.user
-    image: ghcr.io/${GITHUB_REPOSITORY:-kd-study-platform}/user-api:latest
+    image: ghcr.io/quanti-pi-dev/quanti-dev/user-api:latest
     container_name: quanti-pi-user-api
     restart: always
     ports:
       - "10000:10000"
     environment:
       - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=250
       - PORT=10000
       - POSTGRES_URL=${POSTGRES_URL}
       - MONGO_URL=${MONGO_URL}
@@ -38,13 +38,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.admin
-    image: ghcr.io/${GITHUB_REPOSITORY:-kd-study-platform}/admin-api:latest
+    image: ghcr.io/quanti-pi-dev/quanti-dev/admin-api:latest
     container_name: quanti-pi-admin-api
     restart: always
     ports:
       - "10001:10001"
     environment:
       - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=250
       - PORT=10001
       - POSTGRES_URL=${POSTGRES_URL}
       - MONGO_URL=${MONGO_URL}
@@ -58,6 +59,10 @@ services:
       - R2_BUCKET=${R2_BUCKET}
       - CDN_BASE_URL=${CDN_BASE_URL}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
+      - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET}
+      - RESEND_API_KEY=${RESEND_API_KEY}
     volumes:
       - ./firebase-service-account.json:/app/firebase-service-account.json:ro
 
@@ -65,13 +70,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.institute
-    image: ghcr.io/${GITHUB_REPOSITORY:-kd-study-platform}/institute-api:latest
+    image: ghcr.io/quanti-pi-dev/quanti-dev/institute-api:latest
     container_name: quanti-pi-institute-api
     restart: always
     ports:
       - "10002:10002"
     environment:
       - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=250
       - PORT=10002
       - POSTGRES_URL=${POSTGRES_URL}
       - MONGO_URL=${MONGO_URL}
@@ -85,5 +91,9 @@ services:
       - R2_BUCKET=${R2_BUCKET}
       - CDN_BASE_URL=${CDN_BASE_URL}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
+      - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET}
+      - RESEND_API_KEY=${RESEND_API_KEY}
     volumes:
       - ./firebase-service-account.json:/app/firebase-service-account.json:ro

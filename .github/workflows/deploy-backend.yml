@@ -18,9 +18,9 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME_USER:      ${{ github.repository }}/user-api
-  IMAGE_NAME_ADMIN:     ${{ github.repository }}/admin-api
-  IMAGE_NAME_INSTITUTE: ${{ github.repository }}/institute-api
+  IMAGE_NAME_USER:      quanti-pi-dev/quanti-dev/user-api
+  IMAGE_NAME_ADMIN:     quanti-pi-dev/quanti-dev/admin-api
+  IMAGE_NAME_INSTITUTE: quanti-pi-dev/quanti-dev/institute-api
 
 jobs:
   build-and-push-images:
