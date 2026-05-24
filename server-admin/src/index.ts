@@ -18,14 +18,7 @@ import { metricsPlugin } from './middleware/metrics.js';
 import { requestLoggerPlugin } from './middleware/request-logger.js';
 
 import { adminRoutes } from './routes/admin.routes.js';
-import { adminAnalyticsRoutes } from './routes/admin-analytics.routes.js';
-import { adminContentRoutes } from './routes/admin-content.routes.js';
-import { adminExamRoutes } from './routes/admin-exam.routes.js';
-import { adminMockTestRoutes } from './routes/admin-mocktest.routes.js';
-import { adminPYQRoutes } from './routes/admin-pyq.routes.js';
-import { adminTopicRoutes } from './routes/admin-topic.routes.js';
-import { adminSubjectRoutes } from './routes/admin-subject.routes.js';
-import { adminShopRoutes } from './routes/admin-shop.routes.js';
+
 import { adminSubscriptionRoutes } from './routes/admin-subscription.routes.js';
 import { adminConfigRoutes } from './routes/config.routes.js';
 import { adminCoinPackRoutes } from './routes/coinpack.routes.js';
@@ -109,14 +102,7 @@ async function registerRoutes() {
 
   // Admin routes — all require admin role (enforced at auth plugin level)
   await server.register(adminRoutes,             { prefix: '/api/admin' });
-  await server.register(adminAnalyticsRoutes,    { prefix: '/api/admin' });
-  await server.register(adminContentRoutes,      { prefix: '/api/admin' });
-  await server.register(adminExamRoutes,         { prefix: '/api/admin' });
-  await server.register(adminMockTestRoutes,     { prefix: '/api/admin' });
-  await server.register(adminPYQRoutes,          { prefix: '/api/admin' });
-  await server.register(adminTopicRoutes,        { prefix: '/api/admin' });
-  await server.register(adminSubjectRoutes,      { prefix: '/api/admin' });
-  await server.register(adminShopRoutes,         { prefix: '/api/admin' });
+
   await server.register(adminSubscriptionRoutes, { prefix: '/api/admin' });
   await server.register(adminConfigRoutes,       { prefix: '/api/admin' });
   await server.register(adminCoinPackRoutes,     { prefix: '/api/admin' });
