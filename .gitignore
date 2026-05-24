@@ -134,3 +134,13 @@ server/db/scripts/purge-users.ts
 # Graphify
 .agents/
 graphify-out/
+
+# Local test scripts and secrets
+firebase-service-account.json
+skills-lock.json
+test_*.py
+test_kimi.*
+update_graph.py
+clean_graph.py
+merge.py
+run_semantic*.py
