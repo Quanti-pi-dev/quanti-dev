@@ -13,28 +13,58 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
-// ─── Nav items ────────────────────────────────────────────────
+// ─── Nav structure with sections ─────────────────────────────
 
-const NAV = [
-  { label: 'Dashboard',     href: '/',              icon: LayoutDashboard },
-  { label: 'Users',         href: '/users',         icon: Users },
-  { label: 'Exams',         href: '/exams',         icon: BookOpen },
-  { label: 'Subjects',      href: '/subjects',      icon: BookMarked },
-  { label: 'Decks',         href: '/decks',         icon: Layers },
-  { label: 'PYQ',           href: '/pyq',           icon: FileQuestion },
-  { label: 'Mock Tests',    href: '/mock-tests',    icon: ClipboardList },
-  { label: 'Institutes',    href: '/institutes',    icon: Building2 },
-  { label: 'Subscriptions', href: '/subscriptions', icon: CreditCard },
-  { label: 'Plans',         href: '/plans',         icon: Banknote },
-  { label: 'Coupons',       href: '/coupons',       icon: Tag },
-  { label: 'Payments',      href: '/payments',      icon: ReceiptText },
-  { label: 'Gamification',  href: '/gamification',  icon: Medal },
-  { label: 'Coin Packs',    href: '/coin-packs',    icon: Coins },
-  { label: 'Tournaments',   href: '/tournaments',   icon: Trophy },
-  { label: 'Challenges',    href: '/challenges',    icon: Swords },
-  { label: 'Notifications', href: '/notifications', icon: Bell },
-  { label: 'Analytics',     href: '/analytics',     icon: BarChart3 },
-  { label: 'Config',        href: '/config',        icon: Settings },
+const NAV_SECTIONS = [
+  {
+    label: 'Overview',
+    items: [
+      { label: 'Dashboard', href: '/',         icon: LayoutDashboard },
+    ],
+  },
+  {
+    label: 'Content',
+    items: [
+      { label: 'Exams',      href: '/exams',      icon: BookOpen },
+      { label: 'Subjects',   href: '/subjects',   icon: BookMarked },
+      { label: 'Decks',      href: '/decks',      icon: Layers },
+      { label: 'PYQ',        href: '/pyq',        icon: FileQuestion },
+      { label: 'Mock Tests', href: '/mock-tests', icon: ClipboardList },
+    ],
+  },
+  {
+    label: 'Users',
+    items: [
+      { label: 'Users',      href: '/users',      icon: Users },
+      { label: 'Institutes', href: '/institutes', icon: Building2 },
+    ],
+  },
+  {
+    label: 'Monetization',
+    items: [
+      { label: 'Subscriptions', href: '/subscriptions', icon: CreditCard },
+      { label: 'Plans',         href: '/plans',         icon: Banknote },
+      { label: 'Coupons',       href: '/coupons',       icon: Tag },
+      { label: 'Payments',      href: '/payments',      icon: ReceiptText },
+      { label: 'Coin Packs',    href: '/coin-packs',    icon: Coins },
+    ],
+  },
+  {
+    label: 'Engagement',
+    items: [
+      { label: 'Gamification',  href: '/gamification',  icon: Medal },
+      { label: 'Tournaments',   href: '/tournaments',   icon: Trophy },
+      { label: 'Challenges',    href: '/challenges',    icon: Swords },
+      { label: 'Notifications', href: '/notifications', icon: Bell },
+    ],
+  },
+  {
+    label: 'System',
+    items: [
+      { label: 'Analytics', href: '/analytics', icon: BarChart3 },
+      { label: 'Config',    href: '/config',    icon: Settings },
+    ],
+  },
 ];
 
 // ─── Component ────────────────────────────────────────────────
@@ -115,27 +145,42 @@ export function Sidebar() {
       </div>
 
       {/* ── Nav ───────────────────────────────────────────────── */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-0.5 px-2">
-        {NAV.map(({ label, href, icon: Icon }) => {
-          const active = pathname === href || (href !== '/' && pathname.startsWith(href));
-          return (
-            <Link
-              key={href}
-              href={href}
-              title={label}
-              className={clsx(
-                'flex items-center rounded-lg text-sm font-medium transition-colors',
-                collapsed ? 'justify-center py-2.5 px-0' : 'gap-3 px-3 py-2',
-                active
-                  ? 'bg-violet-600/20 text-violet-300'
-                  : 'text-zinc-400 hover:bg-zinc-800 hover:text-white',
-              )}
-            >
-              <Icon size={16} className="shrink-0" />
-              {!collapsed && <span className="truncate">{label}</span>}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2">
+        {NAV_SECTIONS.map((section, si) => (
+          <div key={section.label} className={si > 0 ? 'mt-3' : ''}>
+            {/* Section label — hidden when collapsed */}
+            {!collapsed && (
+              <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-widest text-zinc-600 select-none">
+                {section.label}
+              </p>
+            )}
+            {collapsed && si > 0 && (
+              <div className="mx-auto w-6 border-t border-zinc-800/70 mb-2 mt-1" />
+            )}
+            <div className="space-y-0.5">
+              {section.items.map(({ label, href, icon: Icon }) => {
+                const active = pathname === href || (href !== '/' && pathname.startsWith(href));
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    title={label}
+                    className={clsx(
+                      'flex items-center rounded-lg text-sm font-medium transition-colors',
+                      collapsed ? 'justify-center py-2.5 px-0' : 'gap-3 px-3 py-2',
+                      active
+                        ? 'bg-violet-600/20 text-violet-300'
+                        : 'text-zinc-400 hover:bg-zinc-800 hover:text-white',
+                    )}
+                  >
+                    <Icon size={16} className="shrink-0" />
+                    {!collapsed && <span className="truncate">{label}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* ── User footer ───────────────────────────────────────── */}

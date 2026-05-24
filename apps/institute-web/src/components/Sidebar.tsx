@@ -5,12 +5,37 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import clsx from 'clsx';
-import Image from 'next/image';
 import {
   BookOpen, Users, ClipboardList, FileText,
   Trophy, Key, LogOut, ChevronRight, GraduationCap, Settings,
   PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
+
+// ─── Brand mark SVG (inline — no image file dependency) ──────
+
+function BrandMark({ size = 30 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="qp-i-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#6366f1" />
+          <stop offset="1" stopColor="#8b5cf6" />
+        </linearGradient>
+      </defs>
+      {/* Rounded square background */}
+      <rect width="32" height="32" rx="8" fill="url(#qp-i-grad)" />
+      {/* π symbol as stroked paths */}
+      {/* Top horizontal bar */}
+      <line x1="7" y1="11" x2="25" y2="11" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
+      {/* Left leg — straight down */}
+      <line x1="11.5" y1="11" x2="11.5" y2="23" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
+      {/* Right leg — curved */}
+      <path d="M20.5 11 L20.5 20 Q20.5 23 17.5 23" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </svg>
+  );
+}
+
+// ─── Nav ─────────────────────────────────────────────────────
 
 const NAV = [
   { href: '/',            label: 'Dashboard',   icon: BookOpen,      roles: ['educator','examiner','institute_admin'] },
@@ -28,12 +53,9 @@ export function Sidebar() {
   const { instituteRole, user, logout } = useAuth();
   const [collapsed, setCollapsed]       = useState(false);
 
-  // Restore persisted preference after mount
   useEffect(() => {
     try {
-      if (localStorage.getItem('institute-sidebar-collapsed') === 'true') {
-        setCollapsed(true);
-      }
+      if (localStorage.getItem('institute-sidebar-collapsed') === 'true') setCollapsed(true);
     } catch { /* SSR / private browsing */ }
   }, []);
 
@@ -64,31 +86,26 @@ export function Sidebar() {
       )}
       style={{ background: 'var(--color-surface-900)', borderRight: '1px solid rgba(99,102,241,0.12)' }}
     >
-      {/* ── Header: logo + wordmark + collapse toggle ─────────── */}
+      {/* ── Header ────────────────────────────────────────────── */}
       <div
         className="flex h-16 shrink-0 items-center gap-2 px-3 overflow-hidden"
         style={{ borderBottom: '1px solid rgba(99,102,241,0.12)' }}
       >
-        {/* Logo — clickable when collapsed to expand */}
+        {/* Brand mark — clickable when collapsed to expand */}
         <button
           onClick={collapsed ? toggle : undefined}
           title={collapsed ? 'Expand sidebar' : undefined}
           className={clsx(
             'shrink-0 rounded-lg transition-transform duration-150',
-            collapsed ? 'cursor-pointer hover:scale-110 hover:brightness-125 active:scale-95' : 'cursor-default',
+            collapsed
+              ? 'cursor-pointer hover:scale-110 active:scale-95'
+              : 'cursor-default',
           )}
         >
-          <Image
-            src="/logo.jpg"
-            alt="QuantiPi"
-            width={30}
-            height={30}
-            className="rounded-lg shadow-md shadow-indigo-900/50 block"
-            priority
-          />
+          <BrandMark size={30} />
         </button>
 
-        {/* Wordmark + role — hidden when collapsed */}
+        {/* Wordmark + role — fades out when collapsed */}
         <div
           className={clsx(
             'flex-1 min-w-0 transition-all duration-300',
@@ -101,19 +118,17 @@ export function Sidebar() {
           </p>
         </div>
 
-        {/* Collapse toggle — always visible */}
+        {/* Collapse toggle — hidden when collapsed (logo acts as expand) */}
         <button
           onClick={toggle}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title="Collapse sidebar"
           className={clsx(
             'shrink-0 flex items-center justify-center rounded-md p-1.5 transition-colors hover:bg-white/10',
-            collapsed && 'mx-auto',
+            collapsed && 'hidden',
           )}
           style={{ color: 'var(--color-surface-400)' }}
         >
-          {collapsed
-            ? <PanelLeftOpen  size={15} />
-            : <PanelLeftClose size={15} />}
+          <PanelLeftClose size={15} />
         </button>
       </div>
 
@@ -147,7 +162,7 @@ export function Sidebar() {
                   } : { color: 'var(--color-surface-300)' }}
                 >
                   <Icon
-                    className={clsx('w-4 h-4 shrink-0 transition-colors', active ? 'text-indigo-400' : 'text-current')}
+                    className={clsx('w-4 h-4 shrink-0', active ? 'text-indigo-400' : 'text-current')}
                   />
                   {!collapsed && (
                     <>
@@ -164,10 +179,7 @@ export function Sidebar() {
 
       {/* ── User footer ───────────────────────────────────────── */}
       <div
-        className={clsx(
-          'shrink-0 transition-all duration-300',
-          collapsed ? 'px-2 py-3' : 'px-4 py-4',
-        )}
+        className={clsx('shrink-0 transition-all duration-300', collapsed ? 'px-2 py-3' : 'px-4 py-4')}
         style={{ borderTop: '1px solid rgba(99,102,241,0.12)' }}
       >
         {collapsed ? (
