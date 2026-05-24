@@ -64,49 +64,47 @@ export function Sidebar() {
       )}
       style={{ background: 'var(--color-surface-900)', borderRight: '1px solid rgba(99,102,241,0.12)' }}
     >
-      {/* ── Header: logo + wordmark + collapse toggle ─────────── */}
-      <div
-        className="flex h-16 shrink-0 items-center gap-2 px-3 overflow-hidden"
-        style={{ borderBottom: '1px solid rgba(99,102,241,0.12)' }}
-      >
-        {/* Logo — always visible */}
-        <Image
-          src="/logo.jpg"
-          alt="QuantiPi"
-          width={30}
-          height={30}
-          className="rounded-lg shadow-md shadow-indigo-900/50 shrink-0"
-          priority
-        />
-
-        {/* Wordmark + role — hidden when collapsed */}
-        <div
-          className={clsx(
-            'flex-1 min-w-0 transition-all duration-300',
-            collapsed ? 'opacity-0 w-0 pointer-events-none' : 'opacity-100',
-          )}
-        >
-          <p className="text-white font-bold text-sm leading-none whitespace-nowrap">QuantiPi</p>
-          <p className="text-xs mt-0.5 whitespace-nowrap" style={{ color: 'var(--color-brand-400)' }}>
-            {roleLabel}
-          </p>
-        </div>
-
-        {/* Collapse toggle — always visible */}
+      {/* ── Header ────────────────────────────────────────────── */}
+      {collapsed ? (
+        // When collapsed: entire header is one big expand button
         <button
           onClick={toggle}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className={clsx(
-            'shrink-0 flex items-center justify-center rounded-md p-1.5 transition-colors hover:bg-white/10',
-            collapsed && 'mx-auto',
-          )}
-          style={{ color: 'var(--color-surface-400)' }}
+          title="Expand sidebar"
+          className="flex h-16 w-full shrink-0 items-center justify-center transition-colors hover:bg-white/5"
+          style={{ borderBottom: '1px solid rgba(99,102,241,0.12)', color: 'var(--color-surface-400)' }}
         >
-          {collapsed
-            ? <PanelLeftOpen  size={15} />
-            : <PanelLeftClose size={15} />}
+          <PanelLeftOpen size={18} />
         </button>
-      </div>
+      ) : (
+        // When expanded: logo + wordmark + role + collapse toggle
+        <div
+          className="flex h-16 shrink-0 items-center gap-2 px-3"
+          style={{ borderBottom: '1px solid rgba(99,102,241,0.12)' }}
+        >
+          <Image
+            src="/logo.jpg"
+            alt="QuantiPi"
+            width={30}
+            height={30}
+            className="rounded-lg shadow-md shadow-indigo-900/50 shrink-0"
+            priority
+          />
+          <div className="flex-1 min-w-0">
+            <p className="text-white font-bold text-sm leading-none whitespace-nowrap">QuantiPi</p>
+            <p className="text-xs mt-0.5 whitespace-nowrap truncate" style={{ color: 'var(--color-brand-400)' }}>
+              {roleLabel}
+            </p>
+          </div>
+          <button
+            onClick={toggle}
+            title="Collapse sidebar"
+            className="shrink-0 flex items-center justify-center rounded-md p-1.5 transition-colors hover:bg-white/10"
+            style={{ color: 'var(--color-surface-400)' }}
+          >
+            <PanelLeftClose size={15} />
+          </button>
+        </div>
+      )}
 
       {/* ── Nav ───────────────────────────────────────────────── */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-2">
