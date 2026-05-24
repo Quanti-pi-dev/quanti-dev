@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import {
   LayoutDashboard, Users, BookOpen, Trophy, CreditCard,
-  Settings, LogOut, Layers, Swords, Bell, BarChart3,
+  Settings, LogOut, Layers, Swords, Bell, BarChart3, Building2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -16,6 +16,7 @@ const NAV = [
   { label: 'Users',         href: '/users',           icon: Users },
   { label: 'Exams',         href: '/exams',           icon: BookOpen },
   { label: 'Decks',         href: '/decks',           icon: Layers },
+  { label: 'Institutes',    href: '/institutes',      icon: Building2 },
   { label: 'Subscriptions', href: '/subscriptions',   icon: CreditCard },
   { label: 'Tournaments',   href: '/tournaments',     icon: Trophy },
   { label: 'Challenges',    href: '/challenges',      icon: Swords },
