@@ -6,19 +6,21 @@ on:
       - main
     paths:
       - 'packages/**'
-      - 'server/**'
       - 'server-user/**'
       - 'server-admin/**'
+      - 'server-institute/**'
       - 'package.json'
       - 'package-lock.json'
       - 'Dockerfile.user'
       - 'Dockerfile.admin'
+      - 'Dockerfile.institute'
       - 'docker-compose.yml'
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME_USER: ${{ github.repository }}/user-api
-  IMAGE_NAME_ADMIN: ${{ github.repository }}/admin-api
+  IMAGE_NAME_USER:      ${{ github.repository }}/user-api
+  IMAGE_NAME_ADMIN:     ${{ github.repository }}/admin-api
+  IMAGE_NAME_INSTITUTE: ${{ github.repository }}/institute-api
 
 jobs:
   build-and-push-images:
@@ -38,6 +40,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and push User API image
         uses: docker/build-push-action@v5
         with:
@@ -45,6 +50,8 @@ jobs:
           file: Dockerfile.user
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_USER }}:latest
+          cache-from: type=gha,scope=user-api
+          cache-to:   type=gha,scope=user-api,mode=max
 
       - name: Build and push Admin API image
         uses: docker/build-push-action@v5
@@ -53,38 +60,95 @@ jobs:
           file: Dockerfile.admin
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ADMIN }}:latest
+          cache-from: type=gha,scope=admin-api
+          cache-to:   type=gha,scope=admin-api,mode=max
 
-  deploy-to-oci:
+      - name: Build and push Institute API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.institute
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_INSTITUTE }}:latest
+          cache-from: type=gha,scope=institute-api
+          cache-to:   type=gha,scope=institute-api,mode=max
+
+  deploy-user-api:
     needs: build-and-push-images
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository (for docker-compose.yml)
         uses: actions/checkout@v4
-        
-      - name: Copy docker-compose.yml to VM
+
+      - name: Copy docker-compose.yml to User VM
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.OCI_HOST }}
+          host:     ${{ secrets.OCI_HOST_USER }}
           username: ${{ secrets.OCI_USERNAME }}
-          key: ${{ secrets.OCI_SSH_KEY }}
-          source: "docker-compose.yml"
-          target: "~/quanti-pi"
-          
-      - name: Deploy via SSH
+          key:      ${{ secrets.OCI_SSH_KEY }}
+          source:   "docker-compose.yml"
+          target:   "~/quanti-pi"
+
+      - name: Deploy User API via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.OCI_HOST }}
+          host:     ${{ secrets.OCI_HOST_USER }}
           username: ${{ secrets.OCI_USERNAME }}
-          key: ${{ secrets.OCI_SSH_KEY }}
+          key:      ${{ secrets.OCI_SSH_KEY }}
+          envs: GHCR_PAT,GHCR_ACTOR
           script: |
             cd ~/quanti-pi
-            # Login to GitHub Container Registry to pull private packages if repo is private
-            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
-            # Pull latest images and restart containers
-            docker compose pull
-            docker compose up -d --remove-orphans
-            
-            # Prune old dangling images to save space
+
+            # Authenticate with GHCR using a dedicated PAT
+            echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
+
+            # Pull and start ONLY the user-api
+            docker compose pull user-api
+            docker compose up -d --remove-orphans user-api
+
+            # Prune dangling images to recover disk space
             docker image prune -af
+        env:
+          GHCR_PAT:   ${{ secrets.GHCR_PAT }}
+          GHCR_ACTOR: ${{ github.actor }}
+
+  deploy-admin-institute-api:
+    needs: build-and-push-images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository (for docker-compose.yml)
+        uses: actions/checkout@v4
+
+      - name: Copy docker-compose.yml to Admin/Institute VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ secrets.OCI_HOST_ADMIN }}
+          username: ${{ secrets.OCI_USERNAME }}
+          key:      ${{ secrets.OCI_SSH_KEY }}
+          source:   "docker-compose.yml"
+          target:   "~/quanti-pi"
+
+      - name: Deploy Admin & Institute APIs via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.OCI_HOST_ADMIN }}
+          username: ${{ secrets.OCI_USERNAME }}
+          key:      ${{ secrets.OCI_SSH_KEY }}
+          envs: GHCR_PAT,GHCR_ACTOR
+          script: |
+            cd ~/quanti-pi
+
+            # Authenticate with GHCR using a dedicated PAT
+            echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
+
+            # Pull and start ONLY admin-api and institute-api
+            docker compose pull admin-api institute-api
+            docker compose up -d --remove-orphans admin-api institute-api
+
+            # Prune dangling images to recover disk space
+            docker image prune -af
+        env:
+          GHCR_PAT:   ${{ secrets.GHCR_PAT }}
+          GHCR_ACTOR: ${{ github.actor }}
