@@ -31,6 +31,7 @@ services:
       - FCM_SERVICE_ACCOUNT_PATH=/app/firebase-service-account.json
       - NOTIFICATIONS_ENABLED=${NOTIFICATIONS_ENABLED:-true}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
     volumes:
       - ./firebase-service-account.json:/app/firebase-service-account.json:ro
 
@@ -59,6 +60,7 @@ services:
       - R2_BUCKET=${R2_BUCKET}
       - CDN_BASE_URL=${CDN_BASE_URL}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
       - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
       - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET}
@@ -91,6 +93,7 @@ services:
       - R2_BUCKET=${R2_BUCKET}
       - CDN_BASE_URL=${CDN_BASE_URL}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
       - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
       - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET}
