@@ -20,7 +20,7 @@ const NAV = [
   { label: 'Users',         href: '/users',         icon: Users },
   { label: 'Exams',         href: '/exams',         icon: BookOpen },
   { label: 'Subjects',      href: '/subjects',      icon: BookMarked },
-  { label: 'Content Packs',  href: '/decks',         icon: Layers },
+  { label: 'Decks',         href: '/decks',         icon: Layers },
   { label: 'PYQ',           href: '/pyq',           icon: FileQuestion },
   { label: 'Mock Tests',    href: '/mock-tests',    icon: ClipboardList },
   { label: 'Institutes',    href: '/institutes',    icon: Building2 },
@@ -68,39 +68,51 @@ export function Sidebar() {
         collapsed ? 'w-16' : 'w-60',
       )}
     >
-      {/* ── Header ────────────────────────────────────────────── */}
-      {collapsed ? (
-        // When collapsed: entire header is one big expand button
+      {/* ── Header: logo + wordmark + collapse toggle ─────────── */}
+      <div className="flex h-16 shrink-0 items-center border-b border-zinc-800 px-3 gap-2 overflow-hidden">
+        {/* Logo mark — clickable when collapsed to expand */}
         <button
-          onClick={toggle}
-          title="Expand sidebar"
-          className="flex h-16 w-full shrink-0 items-center justify-center border-b border-zinc-800 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+          onClick={collapsed ? toggle : undefined}
+          title={collapsed ? 'Expand sidebar' : undefined}
+          className={clsx(
+            'shrink-0 rounded-lg transition-transform duration-150',
+            collapsed ? 'cursor-pointer hover:scale-110 hover:brightness-125 active:scale-95' : 'cursor-default',
+          )}
         >
-          <PanelLeftOpen size={18} />
-        </button>
-      ) : (
-        // When expanded: logo + wordmark + collapse toggle
-        <div className="flex h-16 shrink-0 items-center border-b border-zinc-800 px-3 gap-2">
           <Image
             src="/logo.jpg"
             alt="QuantiPi"
             width={30}
             height={30}
-            className="rounded-lg shadow-sm shadow-violet-900/60 shrink-0"
+            className="rounded-lg shadow-sm shadow-violet-900/60 block"
             priority
           />
-          <span className="flex-1 text-sm font-bold tracking-tight text-white whitespace-nowrap truncate">
-            QuantiPi <span className="text-violet-400">Admin</span>
-          </span>
-          <button
-            onClick={toggle}
-            title="Collapse sidebar"
-            className="shrink-0 flex items-center justify-center rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
-          >
-            <PanelLeftClose size={15} />
-          </button>
-        </div>
-      )}
+        </button>
+
+        {/* Wordmark — hidden when collapsed */}
+        <span
+          className={clsx(
+            'flex-1 text-sm font-bold tracking-tight text-white whitespace-nowrap transition-all duration-300',
+            collapsed ? 'opacity-0 w-0 pointer-events-none' : 'opacity-100',
+          )}
+        >
+          QuantiPi <span className="text-violet-400">Admin</span>
+        </span>
+
+        {/* Collapse toggle — always visible, flips icon */}
+        <button
+          onClick={toggle}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className={clsx(
+            'shrink-0 flex items-center justify-center rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white',
+            collapsed && 'mx-auto',
+          )}
+        >
+          {collapsed
+            ? <PanelLeftOpen  size={15} />
+            : <PanelLeftClose size={15} />}
+        </button>
+      </div>
 
       {/* ── Nav ───────────────────────────────────────────────── */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-0.5 px-2">

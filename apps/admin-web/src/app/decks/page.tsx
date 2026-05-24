@@ -1,9 +1,12 @@
 'use client';
 
-// ─── Flashcard Decks Page ─────────────────────────────────────
-// Lists all decks with create, edit, delete, and drill-down to flashcards.
+// ─── Content Packs Page ───────────────────────────────────────
+// Manages standalone and shop-type flashcard decks (purchasable
+// content packs). Mastery decks are managed from:
+//   /exams → [exam] → subjects → topics → (expandable level rows)
+//
 // Routes wired:
-//   GET    /api/admin/decks
+//   GET    /api/admin/decks?types=shop,standalone   (default)
 //   POST   /api/admin/decks
 //   PUT    /api/admin/decks/:id
 //   DELETE /api/admin/decks/:id
@@ -13,7 +16,7 @@ import { useRouter } from 'next/navigation';
 import { adminApi } from '@/lib/api';
 import { PageShell, Badge, Spinner, ErrorBanner } from '@/components/page-shell';
 import { DataTable } from '@/components/data-table';
-import { Plus, Pencil, Trash2, BookOpen, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, BookOpen, X, Info } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -21,6 +24,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 interface DeckRow {
   id: string;
   title: string;
+  type: 'shop' | 'standalone';
   category: string;
   description: string;
   cardCount: number;
@@ -88,7 +92,7 @@ function DeckModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-white">{isEdit ? 'Edit Deck' : 'New Deck'}</h2>
+          <h2 className="text-base font-semibold text-white">{isEdit ? 'Edit Pack' : 'New Content Pack'}</h2>
           <button onClick={onClose} className="text-zinc-500 hover:text-white transition"><X size={16} /></button>
         </div>
         {error && <ErrorBanner message={error} />}
@@ -114,7 +118,7 @@ function DeckModal({
               Cancel
             </button>
             <button type="submit" disabled={saving} className="flex-1 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition disabled:opacity-50">
-              {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Deck'}
+              {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Pack'}
             </button>
           </div>
         </form>
@@ -127,18 +131,19 @@ function DeckModal({
 
 export default function DecksPage() {
   const router = useRouter();
-  const [decks, setDecks]     = useState<DeckRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState('');
-  const [modal, setModal]     = useState<false | 'new' | DeckRow>(false);
+  const [decks, setDecks]       = useState<DeckRow[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState('');
+  const [modal, setModal]       = useState<false | 'new' | DeckRow>(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
   const fetchDecks = useCallback(async () => {
     setLoading(true); setError('');
     try {
+      // Default: shop + standalone only. Mastery decks live in the exam hierarchy.
       const res = await adminApi.get<{ data: DeckRow[]; pagination: unknown }>('/api/admin/decks');
       setDecks(res.data.data);
-    } catch { setError('Failed to load decks.'); }
+    } catch { setError('Failed to load content packs.'); }
     finally { setLoading(false); }
   }, []);
 
@@ -165,6 +170,16 @@ export default function DecksPage() {
         >
           {row.original.title}
         </button>
+      ),
+    },
+    {
+      accessorKey: 'type',
+      header: 'Type',
+      cell: ({ getValue }) => (
+        <Badge
+          label={(getValue() as string) === 'shop' ? 'Shop Pack' : 'Standalone'}
+          variant={(getValue() as string) === 'shop' ? 'violet' : 'zinc'}
+        />
       ),
     },
     { accessorKey: 'category', header: 'Category' },
@@ -200,7 +215,7 @@ export default function DecksPage() {
           <button
             onClick={() => setModal(row.original)}
             className="p-2 rounded-lg text-zinc-500 hover:text-violet-400 hover:bg-zinc-800 transition"
-            title="Edit deck"
+            title="Edit pack"
           >
             <Pencil size={13} />
           </button>
@@ -208,7 +223,7 @@ export default function DecksPage() {
             onClick={() => handleDelete(row.original)}
             disabled={deleting === row.original.id}
             className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50"
-            title="Delete deck"
+            title="Delete pack"
           >
             <Trash2 size={13} />
           </button>
@@ -221,14 +236,14 @@ export default function DecksPage() {
 
   return (
     <PageShell
-      title="Flashcard Decks"
-      subtitle={`${decks.length} decks · ${totalCards.toLocaleString()} cards`}
+      title="Content Packs"
+      subtitle={`${decks.length} pack${decks.length !== 1 ? 's' : ''} · ${totalCards.toLocaleString()} cards`}
       actions={
         <button
           onClick={() => setModal('new')}
           className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors"
         >
-          <Plus size={14} /> New Deck
+          <Plus size={14} /> New Pack
         </button>
       }
     >
@@ -239,6 +254,17 @@ export default function DecksPage() {
           onSaved={() => { setModal(false); fetchDecks(); }}
         />
       )}
+
+      {/* Info callout — explains mastery decks are in exam hierarchy */}
+      <div className="flex items-start gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 mb-5 text-sm text-zinc-400">
+        <Info size={15} className="mt-0.5 text-violet-400 shrink-0" />
+        <span>
+          This page manages <strong className="text-zinc-200">shop and standalone</strong> content packs.
+          {' '}<strong className="text-zinc-200">Mastery decks</strong> (exam-specific flashcard sets) are managed from
+          {' '}<button onClick={() => router.push('/exams')} className="text-violet-400 hover:text-violet-300 underline underline-offset-2">Exams</button>
+          {' '}→ subject → topic → level.
+        </span>
+      </div>
 
       {error && <ErrorBanner message={error} />}
       {loading ? <Spinner /> : <DataTable columns={COLUMNS} data={decks} pageSize={20} />}

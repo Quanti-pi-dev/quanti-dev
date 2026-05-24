@@ -2,8 +2,12 @@
 
 // ─── Deck Detail + Flashcards Page ───────────────────────────
 // Full CRUD for flashcards within a deck.
+// Works for mastery, shop, and standalone decks.
+// Mastery decks show a hierarchy breadcrumb (Exam → Subject → Topic → Level).
+//
 // Routes wired:
 //   GET    /api/admin/decks/:id/flashcards
+//   GET    /api/admin/exams  (to resolve exam name for breadcrumb)
 //   POST   /api/admin/decks/:id/flashcards
 //   PUT    /api/admin/flashcards/:cardId
 //   DELETE /api/admin/decks/:deckId/flashcards/:cardId
@@ -13,7 +17,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { adminApi } from '@/lib/api';
 import { PageShell, Badge, Spinner, ErrorBanner } from '@/components/page-shell';
-import { ArrowLeft, Plus, Pencil, Trash2, Upload, X } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, Upload, X, ChevronRight } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -33,6 +37,37 @@ interface Flashcard {
   source?: string;
   sourceYear?: number;
   sourcePaper?: string;
+}
+
+interface DeckMeta {
+  id: string;
+  title: string;
+  type: 'mastery' | 'shop' | 'standalone';
+  examId?: string;
+  subjectId?: string;
+  topicSlug?: string;
+  topicId?: string;
+  level?: string;
+  cardCount: number;
+}
+
+interface ExamRow {
+  id: string;
+  title: string;
+}
+
+interface SubjectRow {
+  id: string;
+  name: string;
+}
+
+interface Breadcrumb {
+  examName?: string;
+  examId?: string;
+  subjectName?: string;
+  subjectId?: string;
+  topicSlug?: string;
+  level?: string;
 }
 
 const INPUT = 'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500';
@@ -227,6 +262,88 @@ function BulkImportModal({ deckId, onClose, onImported }: { deckId: string; onCl
   );
 }
 
+// ─── Hierarchy Breadcrumb ─────────────────────────────────────
+
+function HierarchyBreadcrumb({
+  deck,
+  router,
+}: {
+  deck: DeckMeta;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const [bc, setBc] = useState<Breadcrumb | null>(null);
+
+  useEffect(() => {
+    if (deck.type !== 'mastery' || !deck.examId) return;
+
+    const resolve = async () => {
+      try {
+        const [examsRes, subjectsRes] = await Promise.all([
+          adminApi.get<{ data: ExamRow[] }>('/api/admin/exams'),
+          adminApi.get<{ data: SubjectRow[] }>('/api/admin/subjects'),
+        ]);
+        const exam    = examsRes.data.data.find(e => e.id === deck.examId);
+        const subject = subjectsRes.data.data.find(s => s.id === deck.subjectId);
+        setBc({
+          examName:    exam?.title,
+          examId:      deck.examId,
+          subjectName: subject?.name,
+          subjectId:   deck.subjectId,
+          topicSlug:   deck.topicSlug,
+          level:       deck.level,
+        });
+      } catch { /* silently fail */ }
+    };
+    resolve();
+  }, [deck]);
+
+  if (deck.type !== 'mastery' || !bc) return null;
+
+  const LEVEL_COLORS: Record<string, string> = {
+    Emerging: 'text-sky-400', Developing: 'text-violet-400', Proficient: 'text-amber-400', Master: 'text-rose-400',
+  };
+
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-zinc-500 mb-4 flex-wrap">
+      <button
+        onClick={() => router.push('/exams')}
+        className="hover:text-zinc-300 transition"
+      >Exams</button>
+      {bc.examName && bc.examId && (
+        <>
+          <ChevronRight size={10} className="text-zinc-700" />
+          <button onClick={() => router.push(`/exams/${bc.examId}`)} className="hover:text-zinc-300 transition truncate max-w-[140px]">
+            {bc.examName}
+          </button>
+        </>
+      )}
+      {bc.subjectName && bc.examId && bc.subjectId && (
+        <>
+          <ChevronRight size={10} className="text-zinc-700" />
+          <button
+            onClick={() => router.push(`/exams/${bc.examId}/subjects/${bc.subjectId}/topics`)}
+            className="hover:text-zinc-300 transition"
+          >
+            {bc.subjectName}
+          </button>
+        </>
+      )}
+      {bc.topicSlug && (
+        <>
+          <ChevronRight size={10} className="text-zinc-700" />
+          <span className="font-mono">{bc.topicSlug}</span>
+        </>
+      )}
+      {bc.level && (
+        <>
+          <ChevronRight size={10} className="text-zinc-700" />
+          <span className={`font-semibold ${LEVEL_COLORS[bc.level] ?? 'text-zinc-400'}`}>{bc.level}</span>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────
 
 export default function DeckFlashcardsPage() {
@@ -234,6 +351,7 @@ export default function DeckFlashcardsPage() {
   const router = useRouter();
 
   const [cards, setCards]     = useState<Flashcard[]>([]);
+  const [deck, setDeck]       = useState<DeckMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
   const [modal, setModal]     = useState<false | 'new' | 'bulk' | Flashcard>(false);
@@ -242,8 +360,12 @@ export default function DeckFlashcardsPage() {
   const fetchCards = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const res = await adminApi.get<{ data: Flashcard[] }>(`/api/admin/decks/${deckId}/flashcards`);
-      setCards(res.data.data);
+      const [cardsRes, deckRes] = await Promise.all([
+        adminApi.get<{ data: Flashcard[] }>(`/api/admin/decks/${deckId}/flashcards`),
+        adminApi.get<{ data: DeckMeta }>(`/api/admin/decks/${deckId}`).catch(() => null),
+      ]);
+      setCards(cardsRes.data.data);
+      if (deckRes) setDeck(deckRes.data.data);
     } catch { setError('Failed to load flashcards.'); }
     finally { setLoading(false); }
   }, [deckId]);
@@ -260,14 +382,20 @@ export default function DeckFlashcardsPage() {
     finally { setDeleting(null); }
   };
 
+  // Build context-aware back button label
+  const backLabel = deck?.type === 'mastery' ? 'Topics' : 'Content Packs';
+  const backHref  = deck?.type === 'mastery' && deck.examId && deck.subjectId
+    ? `/exams/${deck.examId}/subjects/${deck.subjectId}/topics`
+    : '/decks';
+
   return (
     <PageShell
-      title="Flashcards"
-      subtitle={`${cards.length} card${cards.length !== 1 ? 's' : ''} in this deck`}
+      title={deck?.title ?? 'Flashcards'}
+      subtitle={`${cards.length} card${cards.length !== 1 ? 's' : ''}`}
       actions={
         <div className="flex items-center gap-2">
-          <button onClick={() => router.push('/decks')} className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition">
-            <ArrowLeft size={14} /> Decks
+          <button onClick={() => router.push(backHref)} className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition">
+            <ArrowLeft size={14} /> {backLabel}
           </button>
           <button onClick={() => setModal('bulk')} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm rounded-lg transition">
             <Upload size={13} /> Bulk Import
@@ -291,11 +419,21 @@ export default function DeckFlashcardsPage() {
         <BulkImportModal deckId={deckId} onClose={() => setModal(false)} onImported={fetchCards} />
       )}
 
+      {/* Hierarchy breadcrumb for mastery decks */}
+      {deck && <HierarchyBreadcrumb deck={deck} router={router} />}
+
+      {/* Deck type badge */}
+      {deck && deck.type !== 'mastery' && (
+        <div className="mb-4">
+          <Badge label={deck.type === 'shop' ? 'Shop Pack' : 'Standalone'} variant="zinc" />
+        </div>
+      )}
+
       {error && <ErrorBanner message={error} />}
 
       {loading ? <Spinner /> : cards.length === 0 ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-12 text-center text-zinc-600 text-sm">
-          No flashcards yet. Click "Add Card" or use "Bulk Import".
+          No flashcards yet. Click &ldquo;Add Card&rdquo; or use &ldquo;Bulk Import&rdquo;.
         </div>
       ) : (
         <div className="space-y-3">

@@ -97,6 +97,15 @@ export async function adminContentRoutes(fastify: FastifyInstance): Promise<void
     });
   });
 
+  // GET /admin/decks/:id — fetch a single deck (metadata + hierarchy fields)
+  // Used by the deck flashcard page to resolve the hierarchy breadcrumb.
+  fastify.get('/decks/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const deck = await deckRepository.findById(id);
+    if (!deck) return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Deck not found' }, timestamp: new Date().toISOString() });
+    return reply.send({ success: true, data: deck, timestamp: new Date().toISOString() });
+  });
+
   // DELETE /admin/decks/:id — delete a deck
   fastify.delete('/decks/:id', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
@@ -224,6 +233,37 @@ export async function adminContentRoutes(fastify: FastifyInstance): Promise<void
       return reply.send({
         success: true,
         data: { deckId: deck.id, cardCount: deck.cardCount },
+        timestamp: new Date().toISOString(),
+      });
+    },
+  );
+
+  // ─── GET /admin/exams/:examId/subjects/:subjectId/topics/:topicSlug/decks ───
+  // Returns deck coverage for all 4 difficulty levels within a topic.
+  // Used by the topics page expanded row view (Phase 2A).
+  fastify.get(
+    '/exams/:examId/subjects/:subjectId/topics/:topicSlug/decks',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { examId, subjectId, topicSlug } = request.params as {
+        examId: string; subjectId: string; topicSlug: string;
+      };
+
+      // Resolve all 4 levels in parallel — null means deck doesn't exist yet
+      const levelDecks = await Promise.all(
+        SUBJECT_LEVELS.map(async (level) => {
+          const deck = await deckRepository.findByHierarchy(examId, subjectId, topicSlug, level);
+          return {
+            level,
+            deckId:    deck?.id    ?? null,
+            cardCount: deck?.cardCount ?? 0,
+            exists:    !!deck,
+          };
+        }),
+      );
+
+      return reply.send({
+        success: true,
+        data: { examId, subjectId, topicSlug, levels: levelDecks },
         timestamp: new Date().toISOString(),
       });
     },

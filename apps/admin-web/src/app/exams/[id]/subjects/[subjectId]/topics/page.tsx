@@ -2,18 +2,23 @@
 
 // ─── Topics Management Page ──────────────────────────────────
 // Lists and manages topics for a specific exam+subject pair.
+// Each topic row expands to show 4 difficulty-level decks with
+// card counts, drill-down links, and find-or-create actions.
+//
 // Routes wired:
 //   GET    /api/admin/exams/:examId/subjects/:subjectId/topics
 //   POST   /api/admin/exams/:examId/subjects/:subjectId/topics
 //   PATCH  /api/admin/exams/:examId/subjects/:subjectId/topics/:topicId
 //   DELETE /api/admin/exams/:examId/subjects/:subjectId/topics/:topicId
 //   POST   /api/admin/exams/:examId/subjects/:subjectId/topics/bulk
+//   GET    /api/admin/exams/:examId/subjects/:subjectId/topics/:topicSlug/decks  ← (Phase 2A)
+//   POST   /api/admin/exams/:examId/subjects/:subjectId/topics/:topicSlug/levels/:level/deck  ← find-or-create
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { adminApi } from '@/lib/api';
-import { PageShell, Spinner, ErrorBanner } from '@/components/page-shell';
-import { ArrowLeft, Plus, Pencil, Trash2, Upload, X } from 'lucide-react';
+import { PageShell, ErrorBanner } from '@/components/page-shell';
+import { ArrowLeft, Plus, Pencil, Trash2, Upload, X, ChevronDown, ChevronRight, BookOpen, Layers } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -30,8 +35,29 @@ interface TopicsResponse {
   topics: Topic[];
 }
 
-const INPUT = 'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500';
-const LABEL = 'block text-xs font-medium text-zinc-400 mb-1.5';
+interface LevelDeck {
+  level: 'Emerging' | 'Developing' | 'Proficient' | 'Master';
+  deckId: string | null;
+  cardCount: number;
+  exists: boolean;
+}
+
+interface TopicDecksResponse {
+  examId: string;
+  subjectId: string;
+  topicSlug: string;
+  levels: LevelDeck[];
+}
+
+const LEVEL_COLORS: Record<LevelDeck['level'], { bg: string; text: string; badge: string }> = {
+  Emerging:   { bg: 'bg-sky-950/40',     text: 'text-sky-300',     badge: 'border-sky-800/50 text-sky-400' },
+  Developing: { bg: 'bg-violet-950/40',  text: 'text-violet-300',  badge: 'border-violet-800/50 text-violet-400' },
+  Proficient: { bg: 'bg-amber-950/40',   text: 'text-amber-300',   badge: 'border-amber-800/50 text-amber-400' },
+  Master:     { bg: 'bg-rose-950/40',    text: 'text-rose-300',    badge: 'border-rose-800/50 text-rose-400' },
+};
+
+const INPUT  = 'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500';
+const LABEL  = 'block text-xs font-medium text-zinc-400 mb-1.5';
 
 // ─── Topic Modal (create / edit) ──────────────────────────────
 
@@ -202,6 +228,188 @@ function BulkImportModal({
   );
 }
 
+// ─── Topic Row (with expandable deck levels) ──────────────────
+
+function TopicRow({
+  topic,
+  examId,
+  subjectId,
+  deleting,
+  onEdit,
+  onDelete,
+  router,
+}: {
+  topic: Topic;
+  examId: string;
+  subjectId: string;
+  deleting: string | null;
+  onEdit: (t: Topic) => void;
+  onDelete: (t: Topic) => void;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const [expanded, setExpanded]         = useState(false);
+  const [decksData, setDecksData]       = useState<TopicDecksResponse | null>(null);
+  const [decksLoading, setDecksLoading] = useState(false);
+  const [creating, setCreating]         = useState<string | null>(null);
+
+  const loadDecks = useCallback(async () => {
+    if (decksData) return; // cache after first load
+    setDecksLoading(true);
+    try {
+      const res = await adminApi.get<{ data: TopicDecksResponse }>(
+        `/api/admin/exams/${examId}/subjects/${subjectId}/topics/${topic.slug}/decks`,
+      );
+      setDecksData(res.data.data);
+    } catch {
+      // silently fail — user can collapse and re-expand
+    } finally {
+      setDecksLoading(false);
+    }
+  }, [decksData, examId, subjectId, topic.slug]);
+
+  const handleExpand = () => {
+    const next = !expanded;
+    setExpanded(next);
+    if (next) loadDecks();
+  };
+
+  const handleCreateDeck = async (level: string) => {
+    setCreating(level);
+    try {
+      const res = await adminApi.post<{ data: { deckId: string; cardCount: number } }>(
+        `/api/admin/exams/${examId}/subjects/${subjectId}/topics/${topic.slug}/levels/${level}/deck`,
+      );
+      // Refresh decks so the new row appears
+      setDecksData(null); // bust cache
+      const refreshed = await adminApi.get<{ data: TopicDecksResponse }>(
+        `/api/admin/exams/${examId}/subjects/${subjectId}/topics/${topic.slug}/decks`,
+      );
+      setDecksData(refreshed.data.data);
+      // Navigate directly to the newly created deck
+      router.push(`/decks/${res.data.data.deckId}`);
+    } catch {
+      // ignore
+    } finally {
+      setCreating(null);
+    }
+  };
+
+  const covered = decksData ? decksData.levels.filter(l => l.exists).length : 0;
+
+  return (
+    <>
+      {/* ── Main topic row ── */}
+      <tr className="bg-zinc-900 hover:bg-zinc-800/40 transition">
+        <td className="px-4 py-3 text-zinc-500 font-mono text-xs">{topic.order}</td>
+        <td className="px-4 py-3">
+          <button
+            onClick={handleExpand}
+            className="flex items-center gap-2 font-medium text-white hover:text-violet-300 transition text-left group"
+          >
+            <span className="text-zinc-600 group-hover:text-violet-400 transition">
+              {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </span>
+            {topic.displayName}
+          </button>
+        </td>
+        <td className="px-4 py-3 text-zinc-500 font-mono text-xs">{topic.slug}</td>
+        <td className="px-4 py-3">
+          {decksData ? (
+            <span className={`text-xs font-medium tabular-nums ${covered === 4 ? 'text-emerald-400' : covered > 0 ? 'text-amber-400' : 'text-zinc-600'}`}>
+              {covered}/4
+            </span>
+          ) : (
+            <span className="text-xs text-zinc-700">—</span>
+          )}
+        </td>
+        <td className="px-4 py-3">
+          <div className="flex items-center justify-end gap-1">
+            <button
+              onClick={() => onEdit(topic)}
+              className="p-2 rounded-lg text-zinc-500 hover:text-violet-400 hover:bg-zinc-800 transition"
+              title="Edit topic"
+            >
+              <Pencil size={13} />
+            </button>
+            <button
+              onClick={() => onDelete(topic)}
+              disabled={deleting === topic.id}
+              className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50"
+              title="Delete topic"
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
+        </td>
+      </tr>
+
+      {/* ── Expandable level rows ── */}
+      {expanded && (
+        <tr>
+          <td colSpan={5} className="p-0">
+            <div className="bg-zinc-950/60 border-t border-b border-zinc-800/80 px-6 py-3">
+              {decksLoading ? (
+                <div className="flex items-center gap-2 py-2 text-xs text-zinc-500">
+                  <Spinner size="sm" /> Loading decks…
+                </div>
+              ) : !decksData ? (
+                <p className="text-xs text-zinc-600 py-2">Failed to load deck data.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                  {decksData.levels.map(ld => {
+                    const colors = LEVEL_COLORS[ld.level];
+                    return (
+                      <div
+                        key={ld.level}
+                        className={`rounded-xl border px-4 py-3 flex flex-col gap-1.5 ${colors.bg} ${colors.badge} border`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={`text-xs font-semibold ${colors.text}`}>{ld.level}</span>
+                          {ld.exists && (
+                            <span className="text-xs text-zinc-500 tabular-nums">{ld.cardCount} cards</span>
+                          )}
+                        </div>
+                        {ld.exists && ld.deckId ? (
+                          <button
+                            onClick={() => router.push(`/decks/${ld.deckId}`)}
+                            className="mt-1 flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition"
+                          >
+                            <BookOpen size={11} /> View Cards
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleCreateDeck(ld.level)}
+                            disabled={creating === ld.level}
+                            className="mt-1 flex items-center gap-1.5 text-xs text-zinc-600 hover:text-violet-400 transition disabled:opacity-50"
+                          >
+                            <Layers size={11} />
+                            {creating === ld.level ? 'Creating…' : 'Create Deck'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+// ─── Tiny inline Spinner (accepts size prop) ──────────────────
+function Spinner({ size = 'default' }: { size?: 'sm' | 'default' }) {
+  const sz = size === 'sm' ? 'h-3 w-3' : 'h-6 w-6';
+  return (
+    <svg className={`${sz} animate-spin text-violet-500`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+    </svg>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────
 
 export default function TopicsPage() {
@@ -292,45 +500,32 @@ export default function TopicsPage() {
 
       {loading ? <Spinner /> : sorted.length === 0 ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-12 text-center text-zinc-600 text-sm">
-          No topics yet. Click "New Topic" or use "Bulk Import".
+          No topics yet. Click &ldquo;New Topic&rdquo; or use &ldquo;Bulk Import&rdquo;.
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-zinc-800">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-800 bg-zinc-900/60">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400 uppercase tracking-wider">Order</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400 uppercase tracking-wider w-16">Order</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400 uppercase tracking-wider">Display Name</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400 uppercase tracking-wider">Slug</th>
-                <th className="px-4 py-3" />
+                <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400 uppercase tracking-wider w-20" title="Decks created (out of 4 levels)">Decks</th>
+                <th className="px-4 py-3 w-20" />
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/60">
               {sorted.map(topic => (
-                <tr key={topic.id} className="bg-zinc-900 hover:bg-zinc-800/40 transition">
-                  <td className="px-4 py-3 text-zinc-500 font-mono text-xs">{topic.order}</td>
-                  <td className="px-4 py-3 text-white font-medium">{topic.displayName}</td>
-                  <td className="px-4 py-3 text-zinc-500 font-mono text-xs">{topic.slug}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => setModal(topic)}
-                        className="p-2 rounded-lg text-zinc-500 hover:text-violet-400 hover:bg-zinc-800 transition"
-                        title="Edit"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(topic)}
-                        disabled={deleting === topic.id}
-                        className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50"
-                        title="Delete"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                <TopicRow
+                  key={topic.id}
+                  topic={topic}
+                  examId={examId}
+                  subjectId={subjectId}
+                  deleting={deleting}
+                  onEdit={t => setModal(t)}
+                  onDelete={handleDelete}
+                  router={router}
+                />
               ))}
             </tbody>
           </table>

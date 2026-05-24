@@ -2,20 +2,21 @@
 
 // ─── Institutes Page ──────────────────────────────────────────
 // Manage institutes: list, create, toggle active, grant subscriptions,
-// view members, sync Firebase role claims.
+// view members, sync Firebase role claims, and delete.
 // Routes wired:
-//   GET   /api/admin/institutes
-//   POST  /api/admin/institutes
-//   PATCH /api/admin/institutes/:id/activate
-//   POST  /api/admin/institutes/:id/subscriptions
-//   GET   /api/admin/institutes/:id/members
-//   POST  /api/admin/claims/sync
+//   GET    /api/admin/institutes
+//   POST   /api/admin/institutes
+//   PATCH  /api/admin/institutes/:id/activate
+//   DELETE /api/admin/institutes/:id
+//   POST   /api/admin/institutes/:id/subscriptions
+//   GET    /api/admin/institutes/:id/members
+//   POST   /api/admin/claims/sync
 
 import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api';
 import { PageShell, Badge, Spinner, ErrorBanner } from '@/components/page-shell';
 import { DataTable } from '@/components/data-table';
-import { Plus, X, Users, ToggleLeft, ToggleRight, BadgeCheck } from 'lucide-react';
+import { Plus, X, Users, ToggleLeft, ToggleRight, BadgeCheck, Trash2 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -256,10 +257,12 @@ export default function InstitutesPage() {
   const [institutes, setInstitutes] = useState<Institute[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
-  const [showCreate, setShowCreate] = useState(false);
-  const [grantSub, setGrantSub]     = useState<Institute | null>(null);
-  const [members, setMembers]       = useState<Institute | null>(null);
-  const [toggling, setToggling]     = useState<string | null>(null);
+  const [showCreate, setShowCreate]   = useState(false);
+  const [grantSub, setGrantSub]       = useState<Institute | null>(null);
+  const [members, setMembers]         = useState<Institute | null>(null);
+  const [toggling, setToggling]       = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Institute | null>(null);
+  const [deleting, setDeleting]       = useState(false);
 
   const fetchInstitutes = useCallback(async () => {
     setLoading(true); setError('');
@@ -277,6 +280,15 @@ export default function InstitutesPage() {
       await adminApi.patch(`/api/admin/institutes/${inst.id}/activate`, { isActive: !inst.isActive });
       await fetchInstitutes();
     } catch (err) { setError(apiError(err)); } finally { setToggling(null); }
+  };
+
+  const handleDelete = async (inst: Institute) => {
+    setDeleting(true); setError('');
+    try {
+      await adminApi.delete(`/api/admin/institutes/${inst.id}`);
+      setDeleteTarget(null);
+      await fetchInstitutes();
+    } catch (err) { setError(apiError(err)); } finally { setDeleting(false); }
   };
 
   const COLUMNS: ColumnDef<Institute, unknown>[] = [
@@ -315,6 +327,7 @@ export default function InstitutesPage() {
         <div className="flex items-center justify-end gap-1">
           <button onClick={() => setMembers(row.original)} className="p-2 rounded-lg text-zinc-500 hover:text-violet-400 hover:bg-zinc-800 transition" title="Members"><Users size={13} /></button>
           <button onClick={() => setGrantSub(row.original)} className="p-2 rounded-lg text-zinc-500 hover:text-emerald-400 hover:bg-zinc-800 transition" title="Grant Subscription"><BadgeCheck size={13} /></button>
+          <button onClick={() => setDeleteTarget(row.original)} className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition" title="Delete Institute"><Trash2 size={13} /></button>
         </div>
       ),
     },
@@ -330,9 +343,43 @@ export default function InstitutesPage() {
         </button>
       }
     >
-      {showCreate && <CreateModal onClose={() => setShowCreate(false)} onCreated={fetchInstitutes} />}
-      {grantSub   && <GrantSubModal institute={grantSub} onClose={() => setGrantSub(null)} onGranted={fetchInstitutes} />}
-      {members    && <MembersPanel institute={members} onClose={() => setMembers(null)} />}
+      {showCreate    && <CreateModal onClose={() => setShowCreate(false)} onCreated={fetchInstitutes} />}
+      {grantSub     && <GrantSubModal institute={grantSub} onClose={() => setGrantSub(null)} onGranted={fetchInstitutes} />}
+      {members      && <MembersPanel institute={members} onClose={() => setMembers(null)} />}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm p-6 shadow-2xl mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-white">Delete Institute</h2>
+              <button onClick={() => setDeleteTarget(null)}><X size={16} className="text-zinc-500 hover:text-white" /></button>
+            </div>
+            <p className="text-sm text-zinc-400 mb-1">
+              Are you sure you want to permanently delete
+              <span className="text-white font-medium"> {deleteTarget.name}</span>?
+            </p>
+            <p className="text-xs text-zinc-500 mb-5">
+              This action cannot be undone. The institute must have no active members before it can be deleted.
+            </p>
+            {error && <ErrorBanner message={error} />}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setDeleteTarget(null); setError(''); }}
+                className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 text-sm hover:text-white transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(deleteTarget)}
+                disabled={deleting}
+                className="flex-1 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition disabled:opacity-50"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {error && <ErrorBanner message={error} />}
       {loading ? <Spinner /> : <DataTable columns={COLUMNS} data={institutes} pageSize={20} />}

@@ -485,6 +485,34 @@ class InstituteRepository {
       [instituteSubscriptionId],
     );
   }
+
+  // ─── Delete Institute ──────────────────────────────────────────
+
+  /**
+   * Permanently deletes an institute.
+   * Refuses if the institute still has active members to prevent data loss.
+   * Returns { deleted: true } on success or { deleted: false, reason } otherwise.
+   */
+  async delete(id: string): Promise<{ deleted: boolean; reason?: string }> {
+    // Guard: reject if active members exist
+    const memberCheck = await this.pool.query(
+      `SELECT COUNT(*) FROM institute_members WHERE institute_id = $1 AND is_active = TRUE`,
+      [id],
+    );
+    const activeMemberCount = parseInt(memberCheck.rows[0]['count'] as string, 10);
+    if (activeMemberCount > 0) {
+      return { deleted: false, reason: 'HAS_ACTIVE_MEMBERS' };
+    }
+
+    const result = await this.pool.query(
+      `DELETE FROM institutes WHERE id = $1 RETURNING id`,
+      [id],
+    );
+    if ((result.rowCount ?? 0) === 0) {
+      return { deleted: false, reason: 'NOT_FOUND' };
+    }
+    return { deleted: true };
+  }
 }
 
 export const instituteRepository = new InstituteRepository();

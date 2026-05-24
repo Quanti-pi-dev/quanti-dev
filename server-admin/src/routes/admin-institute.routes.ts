@@ -71,6 +71,24 @@ export async function adminInstituteRoutes(fastify: FastifyInstance): Promise<vo
     },
   );
 
+  // ── DELETE /admin/institutes/:id — Permanently delete an institute ─
+  // Rejected with 409 if the institute has active members.
+  fastify.delete<{ Params: { id: string } }>(
+    '/institutes/:id',
+    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const result = await instituteRepository.delete(request.params.id);
+      if (!result.deleted) {
+        if (result.reason === 'NOT_FOUND') {
+          return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Institute not found.' }, timestamp: new Date().toISOString() });
+        }
+        if (result.reason === 'HAS_ACTIVE_MEMBERS') {
+          return reply.status(409).send({ success: false, error: { code: 'HAS_ACTIVE_MEMBERS', message: 'Cannot delete an institute that still has active members. Remove or deactivate all members first.' }, timestamp: new Date().toISOString() });
+        }
+      }
+      return reply.send({ success: true, data: { deleted: true }, timestamp: new Date().toISOString() });
+    },
+  );
+
   // ── POST /admin/institutes/:id/subscriptions — Grant subscription ─
   fastify.post<{ Params: { id: string }; Body: unknown }>(
     '/institutes/:id/subscriptions',
