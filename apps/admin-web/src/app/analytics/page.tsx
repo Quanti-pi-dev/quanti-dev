@@ -11,19 +11,16 @@ import {
 
 interface OverviewData {
   totalUsers: number;
-  activeTodayUsers: number;
+  activeUsersToday: number;
   totalSessions: number;
-  totalCardsStudied: number;
-  avgAccuracy: number;
+  totalCardsAnswered: number;
+  avgAccuracyPct: number;
   totalCoinsEarned: number;
   totalCoinsSpent: number;
-  activeSubscriptions: number;
-  expiredSubscriptions: number;
-  revenue: {
-    totalRevenuePaise: number;
-    monthlyRevenuePaise: number;
-    paidUsers: number;
-  };
+  totalCoinsInCirculation: number;
+  shopItemCount: number;
+  purchasedPackCount: number;
+  purchasedThemeCount: number;
 }
 
 function paise(v: number) {
@@ -51,12 +48,8 @@ export default function AnalyticsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [overview, revenue] = await Promise.all([
-        adminApi.get<{ data: OverviewData }>('/api/admin/analytics'),
-        adminApi.get<{ data: { monthly: { month: string; revenue: number }[] } }>('/api/admin/analytics/revenue'),
-      ]);
+      const overview = await adminApi.get<{ data: OverviewData }>('/api/admin/analytics');
       setData(overview.data.data);
-      setRevenueChart(revenue.data.data.monthly ?? []);
     } catch { setError('Failed to load analytics.'); }
     finally  { setLoading(false); }
   }, []);
@@ -73,48 +66,19 @@ export default function AnalyticsPage() {
             <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-4">Users</h2>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard label="Total Users"     value={data.totalUsers.toLocaleString()} />
-              <StatCard label="Active Today"    value={data.activeTodayUsers.toLocaleString()} />
+              <StatCard label="Active Today"    value={data.activeUsersToday.toLocaleString()} />
               <StatCard label="Total Sessions"  value={data.totalSessions.toLocaleString()} />
-              <StatCard label="Avg Accuracy"    value={`${data.avgAccuracy.toFixed(1)}%`} />
+              <StatCard label="Avg Accuracy"    value={`${data.avgAccuracyPct.toFixed(1)}%`} />
             </div>
           </section>
 
-          {/* Revenue */}
-          <section>
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-4">Revenue</h2>
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-              <StatCard label="Total Revenue"   value={paise(data.revenue.totalRevenuePaise)} />
-              <StatCard label="This Month"      value={paise(data.revenue.monthlyRevenuePaise)} />
-              <StatCard label="Paid Users"      value={data.revenue.paidUsers.toLocaleString()}
-                        sub={`${data.activeSubscriptions} active subs`} />
-            </div>
-
-            {revenueChart.length > 0 && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-                <p className="text-sm font-medium text-zinc-400 mb-4">Monthly Revenue (₹)</p>
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={revenueChart} barSize={28}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                    <XAxis dataKey="month" tick={{ fill: '#71717a', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: '#71717a', fontSize: 11 }} axisLine={false} tickLine={false}
-                           tickFormatter={(v) => `₹${(v / 100).toLocaleString('en-IN')}`} />
-                    <Tooltip
-                      contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', borderRadius: 8 }}
-                      labelStyle={{ color: '#a1a1aa' }}
-                      formatter={(v: number) => [paise(v), 'Revenue']}
-                    />
-                    <Bar dataKey="revenue" fill="#7c3aed" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </section>
+          {/* Revenue section — coming soon when backend adds revenue endpoint */}
 
           {/* Gamification */}
           <section>
             <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-4">Gamification</h2>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-              <StatCard label="Cards Studied"   value={data.totalCardsStudied.toLocaleString()} />
+              <StatCard label="Cards Studied"   value={data.totalCardsAnswered.toLocaleString()} />
               <StatCard label="Coins Earned"    value={data.totalCoinsEarned.toLocaleString()} />
               <StatCard label="Coins Spent"     value={data.totalCoinsSpent.toLocaleString()} />
             </div>

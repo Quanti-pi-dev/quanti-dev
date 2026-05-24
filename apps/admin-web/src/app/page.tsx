@@ -46,7 +46,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!user) return;
-    adminApi.get<{ data: Stats }>('/api/admin/analytics/overview')
+    adminApi.get<{ data: Stats }>('/api/admin/analytics')
       .then((r) => setStats(r.data.data))
       .catch(() => {/* stats unavailable — show skeleton */})
       .finally(() => setFetching(false));
