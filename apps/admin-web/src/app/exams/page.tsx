@@ -95,8 +95,8 @@ export default function ExamsPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await adminApi.get<{ data: { data: ExamRow[] } }>('/api/admin/exams');
-      setExams(res.data.data.data);
+      const res = await adminApi.get<{ data: ExamRow[]; pagination: unknown }>('/api/admin/exams');
+      setExams(res.data.data);
     } catch {
       setError('Failed to load exams.');
     } finally {

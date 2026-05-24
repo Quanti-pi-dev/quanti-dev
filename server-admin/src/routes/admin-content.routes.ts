@@ -62,15 +62,39 @@ export async function adminContentRoutes(fastify: FastifyInstance): Promise<void
     return reply.send({ success: true, data: { id }, timestamp: new Date().toISOString() });
   });
 
-  // GET /admin/decks — list all decks (admin)
+  // GET /admin/decks — list standalone + shop decks (admin)
+  // Mastery decks are managed via the exam → subject → topic hierarchy.
+  // Pass ?types=mastery to include them (or ?types=all for everything).
   fastify.get('/decks', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { page, pageSize, search } = request.query as { page?: string; pageSize?: string; search?: string };
+    const { page, pageSize, search, types } = request.query as {
+      page?: string; pageSize?: string; search?: string; types?: string;
+    };
+
+    // Resolve the types filter:
+    //   ?types=all           → no filter (every deck)
+    //   ?types=mastery,shop  → only those types
+    //   (omitted)            → default: shop + standalone
+    let typeFilter: string[] | undefined;
+    if (types === 'all') {
+      typeFilter = undefined;
+    } else if (types) {
+      typeFilter = types.split(',').map(t => t.trim()).filter(Boolean);
+    } else {
+      typeFilter = ['shop', 'standalone'];
+    }
+
     const result = await deckRepository.findAllAdmin({
       page: parseInt(page ?? '1', 10) || 1,
       pageSize: Math.min(parseInt(pageSize ?? '50', 10) || 50, 200),
       search,
+      types: typeFilter,
     });
-    return reply.send({ success: true, data: result.data, pagination: { total: result.total, page: result.page, pageSize: result.pageSize }, timestamp: new Date().toISOString() });
+    return reply.send({
+      success: true,
+      data: result.data,
+      pagination: { total: result.total, page: result.page, pageSize: result.pageSize },
+      timestamp: new Date().toISOString(),
+    });
   });
 
   // DELETE /admin/decks/:id — delete a deck

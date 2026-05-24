@@ -136,8 +136,8 @@ export default function DecksPage() {
   const fetchDecks = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const res = await adminApi.get<{ data: { data: DeckRow[] } }>('/api/admin/decks');
-      setDecks(res.data.data.data);
+      const res = await adminApi.get<{ data: DeckRow[]; pagination: unknown }>('/api/admin/decks');
+      setDecks(res.data.data);
     } catch { setError('Failed to load decks.'); }
     finally { setLoading(false); }
   }, []);

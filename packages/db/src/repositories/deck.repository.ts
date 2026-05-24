@@ -270,9 +270,12 @@ class DeckRepository {
   // ─── Admin Write Operations ────────────────────────────────
 
   /** List all decks (admin — includes unpublished, supports search). */
-  async findAllAdmin({ page = 1, pageSize = 50, search }: { page?: number; pageSize?: number; search?: string } = {}) {
+  async findAllAdmin({ page = 1, pageSize = 50, search, types }: { page?: number; pageSize?: number; search?: string; types?: string[] } = {}) {
     const skip = (page - 1) * pageSize;
     const query: Record<string, unknown> = {};
+    if (types && types.length > 0) {
+      query.type = { $in: types };
+    }
     if (search) {
       if (ObjectId.isValid(search)) {
         query._id = new ObjectId(search);
