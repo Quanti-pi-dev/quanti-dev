@@ -8,7 +8,6 @@ import {
   fetchCoinHistory,
   fetchUnlockedDecks,
   fetchCoinsToday,
-  fetchAdminAnalytics,
   fetchLevelProgressSummary,
 } from '../services/api-contracts';
 import type { PurchaseEffect } from '@kd/shared';
@@ -22,7 +21,7 @@ export const gamificationKeys = {
   leaderboard: (type: string) => [...gamificationKeys.all, 'leaderboard', type] as const,
   shop: () => [...gamificationKeys.all, 'shop'] as const,
   unlockedDecks: () => [...gamificationKeys.all, 'unlockedDecks'] as const,
-  adminAnalytics: () => [...gamificationKeys.all, 'admin', 'analytics'] as const, // FIX A4
+
 };
 
 export function useCoinBalance() {
@@ -107,15 +106,6 @@ export function useCoinsToday() {
   });
 }
 
-/** Platform-wide stats for the admin analytics screen. */
-export function useAdminAnalytics() {
-  return useQuery({
-    queryKey: gamificationKeys.adminAnalytics(),
-    queryFn: fetchAdminAnalytics,
-    staleTime: 30_000, // 30s — fresh enough for an admin dashboard
-  });
-}
-
 /** All subjects the user has studied, with their highest reached level. */
 export function useLevelProgressSummary() {
   return useQuery({
@@ -125,21 +115,4 @@ export function useLevelProgressSummary() {
   });
 }
 
-/** Revenue dashboard combining subscription + coin pack revenue. */
-export function useRevenueDashboard() {
-  return useQuery({
-    queryKey: ['admin', 'revenue-dashboard'] as const,
-    queryFn: async () => {
-      const { adminApi } = await import('../services/api');
-      const { data } = await adminApi.get('/analytics/revenue-dashboard');
-      return data?.data as {
-        subscriptions: { totalRevenuePaise: number; paymentCount: number; last7dPaise: number; last30dPaise: number };
-        coinPacks: { totalRevenuePaise: number; purchaseCount: number; last7dPaise: number; last30dPaise: number };
-        totalRevenuePaise: number;
-        totalUsers: number;
-        activeToday: number;
-      };
-    },
-    staleTime: 30_000,
-  });
-}
+

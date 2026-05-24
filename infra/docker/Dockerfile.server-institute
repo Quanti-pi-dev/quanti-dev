@@ -1,0 +1,21 @@
+# ─── Dockerfile — @kd/server-institute (Dev) ──────────────────
+# Runs tsx watch for hot-reload in development.
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install dependencies first (layer cached unless package-lock changes)
+COPY package.json package-lock.json ./
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/db/package.json ./packages/db/
+COPY server-institute/package.json ./server-institute/
+RUN npm ci
+
+# Copy source (mounted as :ro volume in dev, so this layer rarely matters)
+COPY packages/ ./packages/
+COPY server-institute/ ./server-institute/
+COPY tsconfig.base.json ./
+
+EXPOSE 3002
+
+CMD ["npm", "run", "dev", "--workspace=@kd/server-institute"]

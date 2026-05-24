@@ -1,0 +1,38 @@
+{
+  "name": "@kd/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1019.0",
+    "@aws-sdk/s3-request-presigner": "^3.1019.0",
+    "@google/genai": "^1.51.0",
+    "@kd/shared": "*",
+    "@types/node": "^20.0.0",
+    "@types/pg": "^8.11.0",
+    "firebase-admin": "^13.0.0",
+    "google-auth-library": "^10.6.2",
+    "ioredis": "^5.4.0",
+    "mongodb": "^6.8.0",
+    "pg": "^8.12.0",
+    "pino": "^9.0.0",
+    "pino-pretty": "^11.0.0",
+    "resend": "^6.12.2",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0",
+    "zod": "^3.23.0"
+  }
+}

@@ -125,7 +125,6 @@ function RootNavigation() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(onboarding)" />
         <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(admin)" />
         <Stack.Screen name="shop" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="coins-history" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="subscription" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />

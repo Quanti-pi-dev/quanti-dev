@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  user-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.user
+    image: ghcr.io/${GITHUB_REPOSITORY:-kd-study-platform}/user-api:latest
+    container_name: quanti-pi-user-api
+    restart: always
+    ports:
+      - "10000:10000"
+    environment:
+      - NODE_ENV=production
+      - PORT=10000
+      - POSTGRES_URL=${POSTGRES_URL}
+      - MONGO_URL=${MONGO_URL}
+      - REDIS_URL=${REDIS_URL}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - FIREBASE_SERVICE_ACCOUNT_PATH=/app/firebase-service-account.json
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
+      - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET}
+      - R2_ENDPOINT=${R2_ENDPOINT}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - R2_BUCKET=${R2_BUCKET}
+      - CDN_BASE_URL=${CDN_BASE_URL}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - FCM_SERVICE_ACCOUNT_PATH=/app/firebase-service-account.json
+      - NOTIFICATIONS_ENABLED=${NOTIFICATIONS_ENABLED:-true}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    volumes:
+      - ./firebase-service-account.json:/app/firebase-service-account.json:ro
+
+  admin-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.admin
+    image: ghcr.io/${GITHUB_REPOSITORY:-kd-study-platform}/admin-api:latest
+    container_name: quanti-pi-admin-api
+    restart: always
+    ports:
+      - "10001:10001"
+    environment:
+      - NODE_ENV=production
+      - PORT=10001
+      - POSTGRES_URL=${POSTGRES_URL}
+      - MONGO_URL=${MONGO_URL}
+      - REDIS_URL=${REDIS_URL}
+      - ADMIN_WEB_ORIGIN=${ADMIN_WEB_ORIGIN}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - FIREBASE_SERVICE_ACCOUNT_PATH=/app/firebase-service-account.json
+      - R2_ENDPOINT=${R2_ENDPOINT}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - R2_BUCKET=${R2_BUCKET}
+      - CDN_BASE_URL=${CDN_BASE_URL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    volumes:
+      - ./firebase-service-account.json:/app/firebase-service-account.json:ro
+
+  institute-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.institute
+    image: ghcr.io/${GITHUB_REPOSITORY:-kd-study-platform}/institute-api:latest
+    container_name: quanti-pi-institute-api
+    restart: always
+    ports:
+      - "10002:10002"
+    environment:
+      - NODE_ENV=production
+      - PORT=10002
+      - POSTGRES_URL=${POSTGRES_URL}
+      - MONGO_URL=${MONGO_URL}
+      - REDIS_URL=${REDIS_URL}
+      - INSTITUTE_WEB_ORIGIN=${INSTITUTE_WEB_ORIGIN}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - FIREBASE_SERVICE_ACCOUNT_PATH=/app/firebase-service-account.json
+      - R2_ENDPOINT=${R2_ENDPOINT}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - R2_BUCKET=${R2_BUCKET}
+      - CDN_BASE_URL=${CDN_BASE_URL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    volumes:
+      - ./firebase-service-account.json:/app/firebase-service-account.json:ro

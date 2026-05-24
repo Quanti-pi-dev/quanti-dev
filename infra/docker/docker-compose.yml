@@ -1,6 +1,9 @@
 # ============================================================
 # Docker Compose — Development Environment
-# Study Platform: PostgreSQL + MongoDB + Redis + API Server
+# Study Platform: PostgreSQL + MongoDB + Redis
+#                 + User API      (port 3000)
+#                 + Admin API     (port 3001)
+#                 + Institute API (port 3002)
 # ============================================================
 
 services:
@@ -62,12 +65,37 @@ services:
       timeout: 5s
       retries: 5
 
-  # ─── API Server ────────────────────────────────────────────
-  api:
+  # ─── Common env anchor ───────────────────────────────────
+  # Shared environment variables injected into both API services.
+  # x-api-env is a YAML anchor — not a Docker service.
+  x-api-env: &api-env
+    NODE_ENV: development
+    LOG_LEVEL: debug
+    POSTGRES_URL: postgresql://${POSTGRES_USER:-kd_user}:${POSTGRES_PASSWORD:-kd_secret_dev}@postgres:5432/${POSTGRES_DB:-kd_study}
+    MONGO_URL: mongodb://${MONGO_USER:-kd_user}:${MONGO_PASSWORD:-kd_secret_dev}@mongo:27017/${MONGO_DB:-kd_content}?authSource=admin
+    REDIS_URL: redis://redis:6379
+    FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+    FIREBASE_SERVICE_ACCOUNT_PATH: ${FIREBASE_SERVICE_ACCOUNT_PATH:-}
+    RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+    RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+    RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+    R2_ENDPOINT: ${R2_ENDPOINT:-}
+    R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+    R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+    R2_BUCKET: ${R2_BUCKET:-}
+    CDN_BASE_URL: ${CDN_BASE_URL:-}
+    RESEND_API_KEY: ${RESEND_API_KEY:-}
+    GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    FCM_SERVICE_ACCOUNT_PATH: ${FCM_SERVICE_ACCOUNT_PATH:-}
+    NOTIFICATIONS_ENABLED: ${NOTIFICATIONS_ENABLED:-false}
+
+  # ─── User API (port 3000) ───────────────────────────────
+  # Student-facing routes + all cron jobs.
+  api-user:
     build:
       context: ../../
-      dockerfile: infra/docker/Dockerfile.dev
-    container_name: kd-api
+      dockerfile: infra/docker/Dockerfile.server-user
+    container_name: kd-api-user
     restart: unless-stopped
     depends_on:
       postgres:
@@ -77,16 +105,94 @@ services:
       redis:
         condition: service_healthy
     environment:
-      NODE_ENV: development
-      PORT: 3000
+      <<: *api-env
       HOST: 0.0.0.0
-      LOG_LEVEL: debug
-      POSTGRES_URL: postgresql://${POSTGRES_USER:-kd_user}:${POSTGRES_PASSWORD:-kd_secret_dev}@postgres:5432/${POSTGRES_DB:-kd_study}
-      MONGO_URL: mongodb://${MONGO_USER:-kd_user}:${MONGO_PASSWORD:-kd_secret_dev}@mongo:27017/${MONGO_DB:-kd_content}?authSource=admin
-      REDIS_URL: redis://redis:6379
+      PORT: 3000
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8081}
     ports:
-      - "${API_PORT:-3000}:3000"
+      - "${USER_API_PORT:-3000}:3000"
+    volumes:
+      - ../../server-user/src:/app/server-user/src:ro
+      - ../../packages:/app/packages:ro
+
+  # ─── Admin API (port 3001) ──────────────────────────────
+  # Admin-only routes. Stateless — no cron jobs.
+  # Rejects all non-admin tokens at the auth plugin level.
+  api-admin:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.server-admin
+    container_name: kd-api-admin
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *api-env
+      HOST: 0.0.0.0
+      PORT: 3001
+      ADMIN_WEB_ORIGIN: ${ADMIN_WEB_ORIGIN:-http://localhost:3002}
+    ports:
+      - "${ADMIN_API_PORT:-3001}:3001"
+    volumes:
+      - ../../server-admin/src:/app/server-admin/src:ro
+      - ../../packages:/app/packages:ro
+
+  # ─── Institute API (port 3002) ─────────────────────────────
+  # Institute staff routes (educator, examiner, institute_admin).
+  # Shares the same DB stack; no cron jobs.
+  api-institute:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.server-institute
+    container_name: kd-api-institute
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *api-env
+      HOST: 0.0.0.0
+      PORT: 3002
+      INSTITUTE_WEB_ORIGIN: ${INSTITUTE_WEB_ORIGIN:-http://localhost:3003}
+    ports:
+      - "${INSTITUTE_API_PORT:-3002}:3002"
+    volumes:
+      - ../../server-institute/src:/app/server-institute/src:ro
+      - ../../packages:/app/packages:ro
+
+  # ─── Legacy Monolith (port 3099) — for reference during cutover ──
+  # Keep running until server-user + server-admin are fully validated.
+  # Remove once cutover is complete.
+  api-legacy:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.dev
+    container_name: kd-api-legacy
+    restart: "no"
+    profiles: ["legacy"]     # Only starts with: docker compose --profile legacy up
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *api-env
+      HOST: 0.0.0.0
+      PORT: 3099
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8081}
+    ports:
+      - "3099:3099"
     volumes:
       - ../../server/src:/app/server/src:ro
       - ../../packages:/app/packages:ro

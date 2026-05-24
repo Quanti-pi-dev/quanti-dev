@@ -19,7 +19,6 @@ function makeInstance(baseURL: string) {
 }
 
 export const api = makeInstance(`${API_BASE_URL}/api/v1`);
-export const adminApi = makeInstance(`${API_BASE_URL}/api/admin`);
 
 // ─── Token Injection (Firebase) ─────────────────────────────
 // Firebase handles token refresh transparently — getIdToken()
@@ -39,7 +38,6 @@ async function injectToken(config: InternalAxiosRequestConfig) {
 }
 
 api.interceptors.request.use(injectToken);
-adminApi.interceptors.request.use(injectToken);
 
 // ─── Response / Error Handling ───────────────────────────────
 
@@ -181,7 +179,4 @@ api.interceptors.response.use(
   makeNetworkErrorHandler(api),
 );
 
-adminApi.interceptors.response.use(
-  makeResponseHandler(adminApi),
-  makeNetworkErrorHandler(adminApi),
-);
+

@@ -1,0 +1,15 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "paths": {
+      "@kd/shared": ["../packages/shared/src/index.ts"],
+      "@kd/db": ["../packages/db/src/index.ts"]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "../packages/shared/src/**/*",
+    "../packages/db/src/**/*"
+  ]
+}
