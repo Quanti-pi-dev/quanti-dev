@@ -45,7 +45,6 @@ COPY --from=builder /app/server-user ./server-user
 RUN echo '#!/bin/sh' > /app/start.sh && \
     echo 'npm --workspace=@kd/server exec -- tsx db/scripts/migrate.ts && \' >> /app/start.sh && \
     echo 'npm --workspace=@kd/server exec -- tsx db/scripts/create-mongo-indexes.ts && \' >> /app/start.sh && \
-
     echo 'npm run start --workspace=@kd/server-user' >> /app/start.sh && \
     chmod +x /app/start.sh
 
