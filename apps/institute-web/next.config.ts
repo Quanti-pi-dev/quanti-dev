@@ -1,10 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Required for Render Node runtime deployment
-  output: "standalone",
-
-  // Security headers for the admin dashboard
+  // Security headers for the institute dashboard
   async headers() {
     return [
       {
