@@ -1,0 +1,40 @@
+Unresolved imports (1)
+babel-preset-expo  babel.config.js
+Unused exports (31)
+GlassToast             function  src/components/ui/GlassToast.tsx:63:17
+SUBJECT_ICON_OPTIONS             src/constants/subject-icons.ts:19:14  
+DEFAULT_SUBJECT_ICON             src/constants/subject-icons.ts:47:14  
+useConfigContext       function  src/contexts/ConfigContext.tsx:108:17 
+useConfigNumber        function  src/contexts/ConfigContext.tsx:121:17 
+useConfigBool          function  src/contexts/ConfigContext.tsx:128:17 
+useBlockUser           function  src/hooks/useFriend.ts:101:17         
+fetchCurrentUser       function  src/services/api-contracts.ts:42:23   
+fetchPreferences       function  src/services/api-contracts.ts:49:23   
+updatePreferences      function  src/services/api-contracts.ts:54:23   
+fetchExams             function  src/services/api-contracts.ts:60:23   
+joinInstitute          function  src/services/api-contracts.ts:828:23  
+getQueueSize           function  src/services/offlineQueue.ts:110:23   
+withSpring                       src/theme/animations.ts:129:3         
+withTiming                       src/theme/animations.ts:130:3         
+withSequence                     src/theme/animations.ts:131:3         
+withDelay                        src/theme/animations.ts:132:3         
+useSharedValue                   src/theme/animations.ts:133:3         
+useAnimatedStyle                 src/theme/animations.ts:134:3         
+interpolate                      src/theme/animations.ts:135:3         
+Easing                           src/theme/animations.ts:136:3         
+runOnJS                          src/theme/animations.ts:137:3         
+lightTheme                       src/theme/index.ts:1:10               
+darkTheme                        src/theme/index.ts:1:22               
+typography                       src/theme/index.ts:1:33               
+spacing                          src/theme/index.ts:1:45               
+radius                           src/theme/index.ts:1:54               
+shadows                          src/theme/index.ts:1:62               
+formatDateTime         function  src/utils/constants.ts:33:17          
+computeSubjectMastery  function  src/utils/mastery.ts:26:17            
+isValidPassword        function  src/utils/validation.ts:12:17         
+Unused exported types (5)
+SubjectIconOption          interface  src/constants/subject-icons.ts:12:18  
+AlertButton                interface  src/contexts/GlobalUIContext.tsx:34:18
+TutorConceptMastery        interface  src/services/api-contracts.ts:499:18  
+InstituteLeaderboardEntry  interface  src/services/api-contracts.ts:881:18  
+Theme                      type       src/theme/index.ts:2:15               
