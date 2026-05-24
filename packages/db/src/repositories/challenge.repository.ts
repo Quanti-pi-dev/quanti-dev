@@ -281,6 +281,48 @@ class ChallengeRepository {
     );
   }
 
+  // ─── Admin: platform-wide challenge listing ───────────────
+  // No user scoping — returns all challenges with pagination.
+  async findAllAdmin(opts: {
+    status?: ChallengeStatus | 'all';
+    limit: number;
+    offset: number;
+  }): Promise<{ data: ChallengeDetail[]; total: number }> {
+    const { status = 'all', limit, offset } = opts;
+    const filterClause = status !== 'all' ? `WHERE c.status = $3` : '';
+    const params: unknown[] = status !== 'all'
+      ? [limit, offset, status]
+      : [limit, offset];
+
+    const [rowsRes, countRes] = await Promise.all([
+      this.pg.query(
+        `SELECT c.*,
+                creator.display_name  AS creator_name,
+                opponent.display_name AS opponent_name
+         FROM challenges c
+         JOIN users creator  ON creator.id  = c.creator_id
+         JOIN users opponent ON opponent.id = c.opponent_id
+         ${filterClause}
+         ORDER BY c.created_at DESC
+         LIMIT $1 OFFSET $2`,
+        params,
+      ),
+      this.pg.query(
+        `SELECT COUNT(*) AS total FROM challenges c ${filterClause}`,
+        status !== 'all' ? [status] : [],
+      ),
+    ]);
+
+    return {
+      data: rowsRes.rows.map((row: Record<string, unknown>) => ({
+        ...rowToChallenge(row),
+        creatorName:  row['creator_name']  as string,
+        opponentName: row['opponent_name'] as string,
+      })),
+      total: parseInt(countRes.rows[0]?.total ?? '0', 10),
+    };
+  }
+
   // ═══════════════════════════════════════════════════════
   // FRIENDSHIPS
   // ═══════════════════════════════════════════════════════

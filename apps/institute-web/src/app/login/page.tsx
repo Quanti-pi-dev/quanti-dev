@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
-import { BookOpen, Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
+import { Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
+import Image from 'next/image';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -37,10 +38,14 @@ export default function LoginPage() {
 
       <div className="glass w-full max-w-md p-8 animate-fade-in">
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #6366f1 0%, #c084fc 100%)' }}>
-            <BookOpen className="w-5 h-5 text-white" />
-          </div>
+          <Image
+            src="/logo.jpg"
+            alt="QuantiPi"
+            width={44}
+            height={44}
+            className="rounded-xl shadow-md shadow-indigo-900/50"
+            priority
+          />
           <div>
             <p className="text-xs text-indigo-400 font-medium tracking-widest uppercase">QuantiPi</p>
             <h1 className="text-white font-bold text-lg leading-tight">Institute Portal</h1>

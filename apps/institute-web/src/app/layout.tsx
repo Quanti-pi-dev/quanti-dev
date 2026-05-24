@@ -8,6 +8,10 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'sw
 export const metadata: Metadata = {
   title: 'QuantiPi Institute',
   description: 'Institute staff dashboard — manage tests, members and leaderboards',
+  icons: {
+    icon: '/favicon-brand.jpg',
+    apple: '/favicon-brand.jpg',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

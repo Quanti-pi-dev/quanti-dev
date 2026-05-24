@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { api } from '@/lib/api';
-import { Users, Search, Shield, GraduationCap, BookOpen, ChevronRight } from 'lucide-react';
+import { Users, Search, Shield, GraduationCap, BookOpen, UserMinus } from 'lucide-react';
 
 interface Member {
   id: string;
@@ -29,21 +29,35 @@ export default function MembersPage() {
   const [total, setTotal]     = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch]   = useState('');
+  const [removing, setRemoving] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadMembers = async () => {
     if (!instituteId) return;
-    const load = async () => {
-      setLoading(true);
-      try {
-        const res = await api.get(`/api/inst/v1/institutes/${instituteId}/members?limit=100`);
-        setMembers(res.data.data);
-        setTotal(res.data.pagination?.total ?? 0);
-      } finally {
-        setLoading(false);
-      }
-    };
-    void load();
-  }, [instituteId]);
+    setLoading(true);
+    try {
+      const res = await api.get(`/api/inst/v1/institutes/${instituteId}/members?limit=100`);
+      setMembers(res.data.data);
+      setTotal(res.data.pagination?.total ?? 0);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void loadMembers(); }, [instituteId]);
+
+  const handleRemove = async (member: Member) => {
+    if (!confirm(`Remove ${member.displayName} (${member.role}) from this institute?`)) return;
+    setRemoving(member.id);
+    try {
+      await api.delete(`/api/inst/v1/institutes/${instituteId}/members/${member.id}`);
+      await loadMembers();
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? 'Remove failed';
+      alert(msg);
+    } finally {
+      setRemoving(null);
+    }
+  };
 
   const filtered = members.filter(m =>
     m.displayName.toLowerCase().includes(search.toLowerCase()) ||
@@ -112,10 +126,10 @@ export default function MembersPage() {
       ) : (
         <>
           {staff.length > 0 && (
-            <MemberSection title="Staff" members={staff} />
+            <MemberSection title="Staff" members={staff} onRemove={handleRemove} removing={removing} />
           )}
           {students.length > 0 && (
-            <MemberSection title="Students" members={students} />
+            <MemberSection title="Students" members={students} onRemove={handleRemove} removing={removing} />
           )}
           {filtered.length === 0 && (
             <div className="glass p-10 text-center">
@@ -129,7 +143,12 @@ export default function MembersPage() {
   );
 }
 
-function MemberSection({ title, members }: { title: string; members: Member[] }) {
+function MemberSection({ title, members, onRemove, removing }: {
+  title: string;
+  members: Member[];
+  onRemove: (m: Member) => void;
+  removing: string | null;
+}) {
   return (
     <div className="mb-8">
       <h2 className="text-sm font-semibold uppercase tracking-widest mb-3 px-1"
@@ -143,7 +162,7 @@ function MemberSection({ title, members }: { title: string; members: Member[] })
           const initials = m.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
           return (
             <div key={m.id}
-              className="glass p-4 flex items-center gap-4 hover:border-indigo-500/30 transition-all duration-150 cursor-default">
+              className="glass p-4 flex items-center gap-4 hover:border-indigo-500/30 transition-all duration-150">
               {/* Avatar */}
               <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
                 style={{ background: cfg.bg, color: cfg.color }}>
@@ -168,7 +187,18 @@ function MemberSection({ title, members }: { title: string; members: Member[] })
               <div className="text-xs shrink-0" style={{ color: 'var(--color-surface-400)' }}>
                 {new Date(m.joinedAt).toLocaleDateString()}
               </div>
-              <ChevronRight className="w-4 h-4 shrink-0 opacity-30" style={{ color: 'var(--color-surface-300)' }} />
+              {/* Remove button — only for non-admin members */}
+              {m.role !== 'institute_admin' && (
+                <button
+                  onClick={() => onRemove(m)}
+                  disabled={removing === m.id}
+                  title="Remove from institute"
+                  className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all disabled:opacity-50 shrink-0"
+                  style={{ color: 'var(--color-surface-500)', background: 'var(--color-surface-800)' }}
+                >
+                  <UserMinus className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           );
         })}

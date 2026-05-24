@@ -8,6 +8,10 @@ const geist = Geist({ subsets: ['latin'], variable: '--font-geist' });
 export const metadata: Metadata = {
   title: 'QuantiPi Admin',
   description: 'Admin control panel for the QuantiPi learning platform',
+  icons: {
+    icon: '/favicon-brand.jpg',
+    apple: '/favicon-brand.jpg',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

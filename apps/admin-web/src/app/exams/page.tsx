@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { adminApi } from '@/lib/api';
 import { PageShell, Badge, Spinner, ErrorBanner } from '@/components/page-shell';
 import { DataTable } from '@/components/data-table';
@@ -26,8 +27,13 @@ const COLUMNS: ColumnDef<ExamRow, unknown>[] = [
   {
     accessorKey: 'title',
     header: 'Title',
-    cell: ({ getValue }) => (
-      <span className="font-medium text-white">{getValue() as string}</span>
+    cell: ({ row, table }) => (
+      <button
+        onClick={() => (table.options.meta as { onRowClick: (e: ExamRow) => void }).onRowClick(row.original)}
+        className="font-medium text-white hover:text-violet-400 transition text-left"
+      >
+        {row.original.title}
+      </button>
     ),
   },
   {
@@ -55,32 +61,35 @@ const COLUMNS: ColumnDef<ExamRow, unknown>[] = [
   {
     id: 'actions',
     header: '',
-    cell: ({ row }) => (
+    cell: ({ row, table }) => (
       <div className="flex gap-2">
         <button
-          onClick={() => togglePublish(row.original)}
+          onClick={() => (table.options.meta as { onTogglePublish: (e: ExamRow) => void }).onTogglePublish(row.original)}
           className="px-2.5 py-1 rounded-lg text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
         >
           {row.original.isPublished ? 'Unpublish' : 'Publish'}
+        </button>
+        <button
+          onClick={() => (table.options.meta as { onRowClick: (e: ExamRow) => void }).onRowClick(row.original)}
+          className="px-2.5 py-1 rounded-lg text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+        >
+          Edit →
         </button>
       </div>
     ),
   },
 ];
 
-// Extracted so the column definition can reference it
-async function togglePublish(exam: ExamRow) {
-  await adminApi.post(`/api/admin/exams/${exam.id}/toggle-published`);
-  // Reload handled by parent — a real implementation would use React state
-  window.location.reload();
-}
+
 
 // ─── Page ─────────────────────────────────────────────────────
 
 export default function ExamsPage() {
+  const router  = useRouter();
   const [exams, setExams]     = useState<ExamRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
+  const [toggling, setToggling] = useState<string | null>(null);
 
   const fetchExams = useCallback(async () => {
     setLoading(true);
@@ -97,6 +106,21 @@ export default function ExamsPage() {
 
   useEffect(() => { fetchExams(); }, [fetchExams]);
 
+  // ── Fix: was POST .../toggle-published; backend expects PATCH .../publish ──
+  const handleTogglePublish = useCallback(async (exam: ExamRow) => {
+    setToggling(exam.id);
+    try {
+      await adminApi.patch(`/api/admin/exams/${exam.id}/publish`, {
+        isPublished: !exam.isPublished,
+      });
+      await fetchExams();
+    } catch {
+      setError(`Failed to ${exam.isPublished ? 'unpublish' : 'publish'} exam.`);
+    } finally {
+      setToggling(null);
+    }
+  }, [fetchExams]);
+
   const published   = exams.filter((e) => e.isPublished).length;
   const unpublished = exams.length - published;
 
@@ -105,15 +129,24 @@ export default function ExamsPage() {
       title="Exams"
       subtitle={`${published} published · ${unpublished} drafts`}
       actions={
-        <button className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500
-                           text-white text-sm font-medium rounded-lg transition-colors">
+        <button
+          onClick={() => router.push('/exams/new')}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500
+                     text-white text-sm font-medium rounded-lg transition-colors">
           <Plus size={14} />
           New Exam
         </button>
       }
     >
       {error && <ErrorBanner message={error} />}
-      {loading ? <Spinner /> : <DataTable columns={COLUMNS} data={exams} pageSize={20} />}
+      {loading ? <Spinner /> : (
+        <DataTable
+          columns={COLUMNS}
+          data={exams}
+          pageSize={20}
+          meta={{ onTogglePublish: handleTogglePublish, toggling, onRowClick: (e: ExamRow) => router.push(`/exams/${e.id}`) }}
+        />
+      )}
     </PageShell>
   );
 }

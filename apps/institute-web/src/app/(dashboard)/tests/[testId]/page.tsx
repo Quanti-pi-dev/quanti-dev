@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, BarChart3, Send, Trash2, Clock, Users,
-  CheckCircle2, Edit3, Save, X, Plus,
+  CheckCircle2, Edit3, Save, X, Plus, ListOrdered, Medal,
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────
@@ -44,6 +44,17 @@ const STATUS_CONFIG = {
   graded:    { label: 'Graded',    color: '#a5b4fc', bg: 'rgba(99,102,241,0.15)' },
 };
 
+interface Submission {
+  firebaseUid: string;
+  displayName: string;
+  score: number;
+  maxScore: number;
+  percentage: number;
+  timeTakenMinutes: number;
+  submittedAt: string;
+  rank: number;
+}
+
 // ── Page ─────────────────────────────────────────────────────────
 
 export default function TestDetailPage({ params }: { params: Promise<{ testId: string }> }) {
@@ -58,6 +69,12 @@ export default function TestDetailPage({ params }: { params: Promise<{ testId: s
   const [editingTitle, setEditingTitle] = useState(false);
   const [draftTitle, setDraftTitle]     = useState('');
   const [saving, setSaving]             = useState(false);
+
+  // Submissions
+  const [activeTab, setActiveTab]         = useState<'questions' | 'submissions'>('questions');
+  const [submissions, setSubmissions]     = useState<Submission[]>([]);
+  const [subLoading, setSubLoading]       = useState(false);
+  const [subTotal, setSubTotal]           = useState(0);
 
   const canEdit = !test?.isPublished && (instituteRole === 'institute_admin' || instituteRole === 'educator');
 
@@ -75,6 +92,21 @@ export default function TestDetailPage({ params }: { params: Promise<{ testId: s
   }, [instituteId, testId]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const loadSubmissions = useCallback(async () => {
+    if (!instituteId) return;
+    setSubLoading(true);
+    try {
+      const r = await api.get(`/api/inst/v1/institutes/${instituteId}/tests/${testId}/submissions?limit=100`);
+      setSubmissions(r.data.data);
+      setSubTotal(r.data.pagination?.total ?? r.data.data.length);
+    } catch { /* silent — submissions may be empty */ }
+    finally { setSubLoading(false); }
+  }, [instituteId, testId]);
+
+  useEffect(() => {
+    if (activeTab === 'submissions') void loadSubmissions();
+  }, [activeTab, loadSubmissions]);
 
   const handlePublish = async () => {
     setPublishing(true);
@@ -199,10 +231,10 @@ export default function TestDetailPage({ params }: { params: Promise<{ testId: s
       {/* Settings cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[
-          { icon: Clock,        label: 'Duration',      value: `${test.durationMinutes} min` },
-          { icon: Users,        label: 'Submissions',   value: test.questionCount > 0 ? '—' : '0' },
-          { icon: CheckCircle2, label: 'Passing Score', value: `${test.settings.passingScore}%` },
-          { icon: BarChart3,    label: 'Total Marks',   value: totalMarks },
+          { icon: Clock,        label: 'Duration',    value: `${test.durationMinutes} min` },
+          { icon: Users,        label: 'Submissions', value: subTotal > 0 ? subTotal : (test.questionCount > 0 ? '—' : '0') },
+          { icon: CheckCircle2, label: 'Pass Score',  value: `${test.settings.passingScore}%` },
+          { icon: BarChart3,    label: 'Total Marks', value: totalMarks },
         ].map(({ icon: Icon, label, value }) => (
           <div key={label} className="glass p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -214,7 +246,7 @@ export default function TestDetailPage({ params }: { params: Promise<{ testId: s
         ))}
       </div>
 
-      {/* Settings badge row */}
+      {/* Settings badges */}
       <div className="flex flex-wrap gap-2 mb-6">
         <SettingBadge label={`Results: ${test.settings.showResults.replace('_', ' ')}`} />
         <SettingBadge label={test.settings.shuffleQuestions ? '🔀 Shuffled' : 'Fixed order'} />
@@ -223,41 +255,122 @@ export default function TestDetailPage({ params }: { params: Promise<{ testId: s
           : 'No negative marking'} />
       </div>
 
-      {/* Questions list */}
-      <div className="glass p-6">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-white font-semibold">Questions ({test.questions.length})</h2>
-          {canEdit && (
-            <Link href={`/tests/${testId}/edit`}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all hover:text-indigo-300"
-              style={{ color: 'var(--color-surface-300)', background: 'var(--color-surface-800)' }}>
-              <Plus className="w-4 h-4" /> Edit Questions
-            </Link>
-          )}
-        </div>
+      {/* Tabs */}
+      <div className="flex gap-1 mb-4" style={{ borderBottom: '1px solid var(--color-surface-700)' }}>
+        {[{ key: 'questions', label: `Questions (${test.questions.length})`, icon: ListOrdered },
+          { key: 'submissions', label: 'Submissions', icon: Medal }]
+          .map(({ key, label, icon: Icon }) => (
+          <button key={key} onClick={() => setActiveTab(key as 'questions' | 'submissions')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              activeTab === key
+                ? 'border-indigo-500 text-indigo-300'
+                : 'border-transparent text-zinc-500 hover:text-zinc-300'
+            }`}>
+            <Icon className="w-4 h-4" />{label}
+          </button>
+        ))}
+      </div>
 
-        {test.questions.length === 0 ? (
-          <div className="py-10 text-center">
-            <p className="text-white font-medium mb-2">No questions yet</p>
-            <p className="text-sm mb-4" style={{ color: 'var(--color-surface-400)' }}>
-              Add questions to publish this test.
-            </p>
+      {/* Questions panel */}
+      {activeTab === 'questions' && (
+        <div className="glass p-6">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-white font-semibold">Questions ({test.questions.length})</h2>
             {canEdit && (
               <Link href={`/tests/${testId}/edit`}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white"
-                style={{ background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.3)' }}>
-                <Plus className="w-4 h-4" /> Add Questions
+                className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all hover:text-indigo-300"
+                style={{ color: 'var(--color-surface-300)', background: 'var(--color-surface-800)' }}>
+                <Plus className="w-4 h-4" /> Edit Questions
               </Link>
             )}
           </div>
-        ) : (
-          <div className="space-y-4">
-            {test.questions.map((q, idx) => (
-              <QuestionCard key={q.id} question={q} index={idx} />
-            ))}
-          </div>
-        )}
-      </div>
+          {test.questions.length === 0 ? (
+            <div className="py-10 text-center">
+              <p className="text-white font-medium mb-2">No questions yet</p>
+              <p className="text-sm mb-4" style={{ color: 'var(--color-surface-400)' }}>Add questions to publish this test.</p>
+              {canEdit && (
+                <Link href={`/tests/${testId}/edit`}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white"
+                  style={{ background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.3)' }}>
+                  <Plus className="w-4 h-4" /> Add Questions
+                </Link>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {test.questions.map((q, idx) => <QuestionCard key={q.id} question={q} index={idx} />)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Submissions panel */}
+      {activeTab === 'submissions' && (
+        <div className="glass p-6">
+          {subLoading ? (
+            <div className="space-y-2">
+              {[1,2,3].map(i => <div key={i} className="skeleton h-10 rounded-xl" />)}
+            </div>
+          ) : submissions.length === 0 ? (
+            <div className="py-12 text-center">
+              <Medal className="w-10 h-10 mx-auto mb-3 opacity-25" style={{ color: 'var(--color-surface-300)' }} />
+              <p className="text-white font-medium">No submissions yet</p>
+              <p className="text-sm mt-1" style={{ color: 'var(--color-surface-400)' }}>
+                {test.isPublished ? 'Waiting for students to attempt this test.' : 'Publish the test so students can attempt it.'}
+              </p>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs mb-4" style={{ color: 'var(--color-surface-400)' }}>
+                {subTotal} submission{subTotal !== 1 ? 's' : ''} · sorted by rank
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--color-surface-700)' }}>
+                      {['Rank','Student','Score','%','Time','Submitted'].map(h => (
+                        <th key={h} className="pb-3 text-left text-xs font-semibold uppercase tracking-wider"
+                          style={{ color: 'var(--color-surface-400)' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y" style={{ '--tw-divide-opacity': 1 } as React.CSSProperties}>
+                    {submissions.map((s) => (
+                      <tr key={s.firebaseUid} className="hover:bg-white/2 transition-colors">
+                        <td className="py-3 pr-4">
+                          <span className="font-bold text-base" style={{
+                            color: s.rank === 1 ? '#fbbf24' : s.rank === 2 ? '#d1d5db' : s.rank === 3 ? '#d97706' : 'var(--color-surface-300)',
+                          }}>
+                            {s.rank === 1 ? '🥇' : s.rank === 2 ? '🥈' : s.rank === 3 ? '🥉' : `#${s.rank}`}
+                          </span>
+                        </td>
+                        <td className="py-3 pr-6">
+                          <p className="text-white font-medium">{s.displayName || s.firebaseUid.slice(0,8)}</p>
+                        </td>
+                        <td className="py-3 pr-6 tabular-nums">
+                          <span className="text-white">{s.score}</span>
+                          <span className="text-xs ml-1" style={{ color: 'var(--color-surface-400)' }}>/ {s.maxScore}</span>
+                        </td>
+                        <td className="py-3 pr-6">
+                          <span className={`font-semibold ${
+                            s.percentage >= test.settings.passingScore ? 'text-emerald-400' : 'text-red-400'
+                          }`}>{s.percentage.toFixed(1)}%</span>
+                        </td>
+                        <td className="py-3 pr-6 tabular-nums" style={{ color: 'var(--color-surface-300)' }}>
+                          {s.timeTakenMinutes}m
+                        </td>
+                        <td className="py-3" style={{ color: 'var(--color-surface-400)' }}>
+                          {new Date(s.submittedAt).toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -4,7 +4,8 @@ import { useAuth } from '@/contexts/auth-context';
 import { Sidebar } from '@/components/sidebar';
 import { adminApi } from '@/lib/api';
 import { useEffect, useState } from 'react';
-import { Users, BookOpen, Layers, CreditCard } from 'lucide-react';
+import { Users, BookOpen, Layers, CreditCard, Coins, BarChart3, ClipboardList } from 'lucide-react';
+import Link from 'next/link';
 
 // ─── Stat Card ────────────────────────────────────────────────
 
@@ -34,9 +35,16 @@ function StatCard({
 
 interface Stats {
   totalUsers?: number;
-  activeSubscriptions?: number;
-  totalExams?: number;
-  totalDecks?: number;
+  activeUsersToday?: number;
+  totalSessions?: number;
+  totalCardsAnswered?: number;
+  avgAccuracyPct?: number;
+  totalCoinsEarned?: number;
+  totalCoinsSpent?: number;
+  totalCoinsInCirculation?: number;
+  shopItemCount?: number;
+  purchasedPackCount?: number;
+  purchasedThemeCount?: number;
 }
 
 export default function DashboardPage() {
@@ -72,33 +80,74 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* Stats grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-10">
+        {/* KPI grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <StatCard
             label="Total Users"
             icon={Users}
             value={fetching ? '—' : (stats.totalUsers?.toLocaleString() ?? '—')}
           />
           <StatCard
-            label="Active Subscriptions"
-            icon={CreditCard}
-            value={fetching ? '—' : (stats.activeSubscriptions?.toLocaleString() ?? '—')}
+            label="Active Today"
+            icon={BarChart3}
+            value={fetching ? '—' : (stats.activeUsersToday?.toLocaleString() ?? '—')}
+          />
+          <StatCard
+            label="Cards Studied"
+            icon={ClipboardList}
+            value={fetching ? '—' : (stats.totalCardsAnswered?.toLocaleString() ?? '—')}
+          />
+          <StatCard
+            label="Avg Accuracy"
+            icon={BookOpen}
+            value={fetching ? '—' : (stats.avgAccuracyPct != null ? `${stats.avgAccuracyPct.toFixed(1)}%` : '—')}
+          />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-10">
+          <StatCard
+            label="Coins Earned"
+            icon={Coins}
+            value={fetching ? '—' : (stats.totalCoinsEarned?.toLocaleString() ?? '—')}
+          />
+          <StatCard
+            label="Coins in Circulation"
+            icon={Coins}
+            value={fetching ? '—' : (stats.totalCoinsInCirculation?.toLocaleString() ?? '—')}
           />
           <StatCard
             label="Exams"
             icon={BookOpen}
-            value={fetching ? '—' : (stats.totalExams?.toLocaleString() ?? '—')}
+            value={fetching ? '—' : (stats.shopItemCount?.toLocaleString() ?? '—')}
+            delta="Shop items active"
           />
           <StatCard
-            label="Decks"
+            label="Pack Purchases"
             icon={Layers}
-            value={fetching ? '—' : (stats.totalDecks?.toLocaleString() ?? '—')}
+            value={fetching ? '—' : (stats.purchasedPackCount?.toLocaleString() ?? '—')}
           />
         </div>
 
-        {/* Placeholder — more widgets in Phase 4 */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-600 text-sm">
-          More analytics widgets coming in Phase 4 (Users, Revenue, Engagement charts)
+        {/* Quick-access grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+          {[
+            { href: '/users',         label: 'Users',         sub: 'Manage accounts' },
+            { href: '/exams',         label: 'Exams',         sub: 'Published content' },
+            { href: '/subscriptions', label: 'Subscriptions', sub: 'Active plans' },
+            { href: '/payments',      label: 'Payments',      sub: 'Revenue & refunds' },
+            { href: '/plans',         label: 'Plans',         sub: 'Tier catalogue' },
+            { href: '/coupons',       label: 'Coupons',       sub: 'Discount codes' },
+            { href: '/gamification',  label: 'Gamification',  sub: 'Badges & shop' },
+            { href: '/analytics',     label: 'Analytics',     sub: 'Full dashboard' },
+          ].map(({ href, label, sub }) => (
+            <Link
+              key={href}
+              href={href}
+              className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 hover:border-violet-700/50 hover:bg-zinc-800/50 transition group"
+            >
+              <p className="text-sm font-semibold text-white group-hover:text-violet-300 transition">{label}</p>
+              <p className="text-xs text-zinc-600 mt-0.5">{sub}</p>
+            </Link>
+          ))}
         </div>
       </main>
     </div>

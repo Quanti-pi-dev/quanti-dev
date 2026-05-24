@@ -292,6 +292,13 @@ class NotificationService {
     }
   }
 
+  // ─── Public: Admin broadcast push ────────────────────────
+  // Called directly by admin routes to send arbitrary push notifications.
+  // Delegates to the shared private sendPush which handles FCM auth + dispatch.
+  async sendDirectPush(payload: PushPayload): Promise<void> {
+    return this.sendPush(payload);
+  }
+
   // ─── Push Notification Dispatch (FCM HTTP v1) ──────────
   private async sendPush(payload: PushPayload): Promise<void> {
     if (config.env === 'development') {

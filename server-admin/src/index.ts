@@ -24,6 +24,8 @@ import { adminConfigRoutes } from './routes/config.routes.js';
 import { adminCoinPackRoutes } from './routes/coinpack.routes.js';
 import { adminTournamentRoutes } from './routes/tournament.routes.js';
 import { adminInstituteRoutes } from './routes/admin-institute.routes.js';
+import { adminNotificationRoutes } from './routes/admin-notifications.routes.js';
+import { adminChallengeRoutes }    from './routes/admin-challenges.routes.js';
 
 // ─── Fastify Instance ─────────────────────────────────────────
 
@@ -108,6 +110,8 @@ async function registerRoutes() {
   await server.register(adminCoinPackRoutes,     { prefix: '/api/admin' });
   await server.register(adminTournamentRoutes,   { prefix: '/api/admin' });
   await server.register(adminInstituteRoutes,    { prefix: '/api/admin' });
+  await server.register(adminNotificationRoutes, { prefix: '/api/admin' });
+  await server.register(adminChallengeRoutes,    { prefix: '/api/admin' });
 }
 
 // ─── Startup ──────────────────────────────────────────────────

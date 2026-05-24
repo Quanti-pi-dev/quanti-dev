@@ -17,14 +17,16 @@ interface DataTableProps<TData> {
   columns: ColumnDef<TData, unknown>[];
   data: TData[];
   pageSize?: number;
+  meta?: Record<string, unknown>;
 }
 
-export function DataTable<TData>({ columns, data, pageSize = 20 }: DataTableProps<TData>) {
+export function DataTable<TData>({ columns, data, pageSize = 20, meta }: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([]);
 
   const table = useReactTable({
     data,
     columns,
+    meta,
     state: { sorting },
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),

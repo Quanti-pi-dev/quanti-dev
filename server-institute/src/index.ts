@@ -38,7 +38,11 @@ const server = Fastify({
 // ─── Plugins ──────────────────────────────────────────────────────
 
 async function registerPlugins() {
-  const instituteWebOrigin = process.env['INSTITUTE_WEB_ORIGIN'] ?? config.cors.origin;
+  // Institute API allows requests from the institute web app origin (supports comma-separated list)
+  const rawInstOrigin = process.env['INSTITUTE_WEB_ORIGIN'] ?? config.cors.origin;
+  const instituteWebOrigin = rawInstOrigin.includes(',')
+    ? rawInstOrigin.split(',').map((o: string) => o.trim())
+    : rawInstOrigin;
   await server.register(cors, { origin: instituteWebOrigin, credentials: true });
   await server.register(helmet, { contentSecurityPolicy: false });
   // Moderate rate limit — staff operations

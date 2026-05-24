@@ -30,6 +30,7 @@ export default function MockTestsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch]   = useState('');
   const [publishing, setPublishing] = useState<string | null>(null);
+  const [deleting, setDeleting]     = useState<string | null>(null);
 
   const fetchTests = async () => {
     if (!instituteId) return;
@@ -55,6 +56,20 @@ export default function MockTestsPage() {
       alert(msg);
     } finally {
       setPublishing(null);
+    }
+  };
+
+  const handleDelete = async (test: MockTest) => {
+    if (!confirm(`Delete "${test.title}"? This cannot be undone.`)) return;
+    setDeleting(test.id);
+    try {
+      await api.delete(`/api/inst/v1/institutes/${instituteId}/mock-tests/${test.id}`);
+      await fetchTests();
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? 'Delete failed';
+      alert(msg);
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -133,10 +148,11 @@ export default function MockTestsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button className="p-2 rounded-lg transition-colors hover:text-amber-400"
+                  <Link href={`/mock-tests/${test.id}`}
+                    className="p-2 rounded-lg transition-colors hover:text-amber-400"
                     style={{ color: 'var(--color-surface-400)', background: 'var(--color-surface-800)' }}>
                     <Eye className="w-4 h-4" />
-                  </button>
+                  </Link>
                   {test.status === 'draft' && (
                     <>
                       <button onClick={() => handlePublish(test.id)} disabled={publishing === test.id}
@@ -144,7 +160,8 @@ export default function MockTestsPage() {
                         style={{ color: 'var(--color-surface-400)', background: 'var(--color-surface-800)' }}>
                         <Send className="w-4 h-4" />
                       </button>
-                      <button className="p-2 rounded-lg transition-colors hover:text-red-400"
+                      <button onClick={() => handleDelete(test)} disabled={deleting === test.id}
+                        className="p-2 rounded-lg transition-colors hover:text-red-400 disabled:opacity-50"
                         style={{ color: 'var(--color-surface-400)', background: 'var(--color-surface-800)' }}>
                         <Trash2 className="w-4 h-4" />
                       </button>

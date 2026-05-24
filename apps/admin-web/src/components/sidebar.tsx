@@ -1,28 +1,40 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
+import Image from 'next/image';
 import {
   LayoutDashboard, Users, BookOpen, Trophy, CreditCard,
-  Settings, LogOut, Layers, Swords, Bell, BarChart3, Building2,
+  Settings, LogOut, Layers, Bell, BarChart3, Building2, BookMarked,
+  Tag, ReceiptText, Banknote, Coins, Medal, FileQuestion, ClipboardList,
+  Swords, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 // ─── Nav items ────────────────────────────────────────────────
 
 const NAV = [
-  { label: 'Dashboard',     href: '/',                icon: LayoutDashboard },
-  { label: 'Users',         href: '/users',           icon: Users },
-  { label: 'Exams',         href: '/exams',           icon: BookOpen },
-  { label: 'Decks',         href: '/decks',           icon: Layers },
-  { label: 'Institutes',    href: '/institutes',      icon: Building2 },
-  { label: 'Subscriptions', href: '/subscriptions',   icon: CreditCard },
-  { label: 'Tournaments',   href: '/tournaments',     icon: Trophy },
-  { label: 'Challenges',    href: '/challenges',      icon: Swords },
-  { label: 'Notifications', href: '/notifications',   icon: Bell },
-  { label: 'Analytics',     href: '/analytics',       icon: BarChart3 },
-  { label: 'Config',        href: '/config',          icon: Settings },
+  { label: 'Dashboard',     href: '/',              icon: LayoutDashboard },
+  { label: 'Users',         href: '/users',         icon: Users },
+  { label: 'Exams',         href: '/exams',         icon: BookOpen },
+  { label: 'Subjects',      href: '/subjects',      icon: BookMarked },
+  { label: 'Decks',         href: '/decks',         icon: Layers },
+  { label: 'PYQ',           href: '/pyq',           icon: FileQuestion },
+  { label: 'Mock Tests',    href: '/mock-tests',    icon: ClipboardList },
+  { label: 'Institutes',    href: '/institutes',    icon: Building2 },
+  { label: 'Subscriptions', href: '/subscriptions', icon: CreditCard },
+  { label: 'Plans',         href: '/plans',         icon: Banknote },
+  { label: 'Coupons',       href: '/coupons',       icon: Tag },
+  { label: 'Payments',      href: '/payments',      icon: ReceiptText },
+  { label: 'Gamification',  href: '/gamification',  icon: Medal },
+  { label: 'Coin Packs',    href: '/coin-packs',    icon: Coins },
+  { label: 'Tournaments',   href: '/tournaments',   icon: Trophy },
+  { label: 'Challenges',    href: '/challenges',    icon: Swords },
+  { label: 'Notifications', href: '/notifications', icon: Bell },
+  { label: 'Analytics',     href: '/analytics',     icon: BarChart3 },
+  { label: 'Config',        href: '/config',        icon: Settings },
 ];
 
 // ─── Component ────────────────────────────────────────────────
@@ -30,56 +42,132 @@ const NAV = [
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const [collapsed, setCollapsed] = useState(false);
+
+  // Restore persisted preference after mount
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('admin-sidebar-collapsed') === 'true') {
+        setCollapsed(true);
+      }
+    } catch { /* SSR / private browsing */ }
+  }, []);
+
+  const toggle = () => {
+    setCollapsed(prev => {
+      const next = !prev;
+      try { localStorage.setItem('admin-sidebar-collapsed', String(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   return (
-    <aside className="flex flex-col w-60 shrink-0 bg-zinc-900 border-r border-zinc-800 min-h-screen">
-      {/* Wordmark */}
-      <div className="h-16 flex items-center px-5 border-b border-zinc-800">
-        <span className="text-lg font-bold tracking-tight text-white">
+    <aside
+      className={clsx(
+        'flex flex-col shrink-0 bg-zinc-900 border-r border-zinc-800 min-h-screen transition-[width] duration-300 ease-in-out',
+        collapsed ? 'w-16' : 'w-60',
+      )}
+    >
+      {/* ── Header: logo + wordmark + collapse toggle ─────────── */}
+      <div className="flex h-16 shrink-0 items-center border-b border-zinc-800 px-3 gap-2 overflow-hidden">
+        {/* Logo mark — always visible */}
+        <Image
+          src="/logo.jpg"
+          alt="QuantiPi"
+          width={30}
+          height={30}
+          className="rounded-lg shadow-sm shadow-violet-900/60 shrink-0"
+          priority
+        />
+
+        {/* Wordmark — hidden when collapsed */}
+        <span
+          className={clsx(
+            'flex-1 text-sm font-bold tracking-tight text-white whitespace-nowrap transition-all duration-300',
+            collapsed ? 'opacity-0 w-0 pointer-events-none' : 'opacity-100',
+          )}
+        >
           QuantiPi <span className="text-violet-400">Admin</span>
         </span>
+
+        {/* Collapse toggle — always visible, flips icon */}
+        <button
+          onClick={toggle}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className={clsx(
+            'shrink-0 flex items-center justify-center rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white',
+            collapsed && 'mx-auto',
+          )}
+        >
+          {collapsed
+            ? <PanelLeftOpen  size={15} />
+            : <PanelLeftClose size={15} />}
+        </button>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
+      {/* ── Nav ───────────────────────────────────────────────── */}
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-0.5 px-2">
         {NAV.map(({ label, href, icon: Icon }) => {
           const active = pathname === href || (href !== '/' && pathname.startsWith(href));
           return (
             <Link
               key={href}
               href={href}
+              title={label}
               className={clsx(
-                'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                'flex items-center rounded-lg text-sm font-medium transition-colors',
+                collapsed ? 'justify-center py-2.5 px-0' : 'gap-3 px-3 py-2',
                 active
                   ? 'bg-violet-600/20 text-violet-300'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800',
+                  : 'text-zinc-400 hover:bg-zinc-800 hover:text-white',
               )}
             >
-              <Icon size={16} />
-              {label}
+              <Icon size={16} className="shrink-0" />
+              {!collapsed && <span className="truncate">{label}</span>}
             </Link>
           );
         })}
       </nav>
 
-      {/* User footer */}
-      <div className="border-t border-zinc-800 p-3">
-        <div className="flex items-center gap-3 px-2 py-2">
-          <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-xs font-bold text-white">
-            {user?.email?.[0]?.toUpperCase() ?? 'A'}
+      {/* ── User footer ───────────────────────────────────────── */}
+      <div className={clsx(
+        'shrink-0 border-t border-zinc-800 transition-all duration-300',
+        collapsed ? 'p-2' : 'p-3',
+      )}>
+        {collapsed ? (
+          <div className="flex flex-col items-center gap-2 py-1">
+            <div
+              title={user?.email ?? 'Admin'}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white cursor-default"
+            >
+              {user?.email?.[0]?.toUpperCase() ?? 'A'}
+            </div>
+            <button
+              onClick={logout}
+              title="Sign out"
+              className="rounded-lg p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-red-400"
+            >
+              <LogOut size={14} />
+            </button>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-white truncate">{user?.email ?? 'Admin'}</p>
-            <p className="text-xs text-zinc-500">Administrator</p>
+        ) : (
+          <div className="flex items-center gap-3 px-2 py-2">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white">
+              {user?.email?.[0]?.toUpperCase() ?? 'A'}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-white">{user?.email ?? 'Admin'}</p>
+              <p className="text-xs text-zinc-500">Administrator</p>
+            </div>
+            <button
+              onClick={logout}
+              title="Sign out"
+              className="rounded-lg p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-red-400"
+            >
+              <LogOut size={14} />
+            </button>
           </div>
-          <button
-            onClick={logout}
-            title="Sign out"
-            className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition-colors"
-          >
-            <LogOut size={14} />
-          </button>
-        </div>
+        )}
       </div>
     </aside>
   );

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 export default function LoginPage() {
   const { login }        = useAuth();
@@ -31,6 +32,16 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Logo / Wordmark */}
         <div className="mb-8 text-center">
+          <div className="flex items-center justify-center mb-4">
+            <Image
+              src="/logo.jpg"
+              alt="QuantiPi"
+              width={80}
+              height={80}
+              className="rounded-2xl shadow-lg shadow-violet-900/40"
+              priority
+            />
+          </div>
           <span className="text-2xl font-bold tracking-tight text-white">
             QuantiPi <span className="text-violet-400">Admin</span>
           </span>
