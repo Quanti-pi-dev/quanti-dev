@@ -144,3 +144,4 @@ update_graph.py
 clean_graph.py
 merge.py
 run_semantic*.py
+knip_output.txt
