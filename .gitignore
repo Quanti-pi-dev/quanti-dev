@@ -44,6 +44,8 @@ mobile/web-build/
 mobile/dist/
 mobile/ios/
 mobile/android/
+mobile/google-services.json
+mobile/GoogleService-Info.plist
 *.jks
 *.p8
 *.p12
