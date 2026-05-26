@@ -11,6 +11,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api';
 import { PageShell, Badge, Spinner, ErrorBanner } from '@/components/page-shell';
+import { ConfirmModal } from '@/components/confirm-modal';
+import { useToast } from '@/components/toast';
 import { Plus, Pencil, Trash2, X, ToggleLeft, ToggleRight } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -78,7 +80,10 @@ function PackModal({ pack, onClose, onSaved }: { pack: CoinPack | null; onClose:
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+    >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md p-6 shadow-2xl mx-4">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-white">{isEdit ? 'Edit Coin Pack' : 'New Coin Pack'}</h2>
@@ -143,11 +148,20 @@ export default function CoinPacksPage() {
 
   useEffect(() => { fetchPacks(); }, [fetchPacks]);
 
-  const handleDelete = async (pack: CoinPack) => {
-    if (!confirm(`Delete "${pack.name}"?`)) return;
-    setDeleting(pack.id); setError('');
-    try { await adminApi.delete(`/api/admin/coin-packs/${pack.id}`); await fetchPacks(); }
-    catch (err) { setError(apiError(err)); } finally { setDeleting(null); }
+  const [deleteTarget, setDeleteTarget] = useState<CoinPack | null>(null);
+  const [deleteError, setDeleteError]   = useState('');
+  const { toast } = useToast();
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(deleteTarget.id); setDeleteError('');
+    try {
+      await adminApi.delete(`/api/admin/coin-packs/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      toast.success('Coin pack deleted');
+      await fetchPacks();
+    }
+    catch (err) { setDeleteError(apiError(err)); } finally { setDeleting(null); }
   };
 
   return (
@@ -161,6 +175,18 @@ export default function CoinPacksPage() {
       }
     >
       {modal !== false && <PackModal pack={typeof modal === 'object' ? modal : null} onClose={() => setModal(false)} onSaved={() => { setModal(false); fetchPacks(); }} />}
+      {deleteTarget && (
+        <ConfirmModal
+          title="Delete Coin Pack"
+          description={`Are you sure you want to delete "${deleteTarget.name}"?`}
+          confirmLabel="Delete Pack"
+          destructive
+          loading={deleting === deleteTarget.id}
+          error={deleteError}
+          onConfirm={handleDelete}
+          onCancel={() => { setDeleteTarget(null); setDeleteError(''); }}
+        />
+      )}
       {error && <ErrorBanner message={error} />}
       {loading ? <Spinner /> : packs.length === 0 ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-12 text-center text-zinc-600 text-sm">No coin packs yet.</div>
@@ -184,7 +210,7 @@ export default function CoinPacksPage() {
               <p className="text-xs text-zinc-600 mb-4">Sort order: {pack.sortOrder} · ID: <span className="font-mono">{pack.id.slice(0, 8)}…</span></p>
               <div className="flex gap-2 pt-3 border-t border-zinc-800 mt-auto">
                 <button onClick={() => setModal(pack)} className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs transition"><Pencil size={12} /> Edit</button>
-                <button onClick={() => handleDelete(pack)} disabled={deleting === pack.id} className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-red-950/40 hover:text-red-400 text-zinc-500 text-xs transition disabled:opacity-50"><Trash2 size={12} /> Delete</button>
+                <button onClick={() => { setDeleteTarget(pack); setDeleteError(''); }} disabled={deleting === pack.id} className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-red-950/40 hover:text-red-400 text-zinc-500 text-xs transition disabled:opacity-50"><Trash2 size={12} /> Delete</button>
               </div>
             </div>
           ))}

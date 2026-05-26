@@ -11,6 +11,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api';
 import { PageShell, Spinner, ErrorBanner } from '@/components/page-shell';
+import { ConfirmModal } from '@/components/confirm-modal';
+import { useToast } from '@/components/toast';
 import { Plus, Trash2, X, Save } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -52,7 +54,10 @@ function NewKeyModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+    >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md p-6 shadow-2xl mx-4">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-white">New Config Key</h2>
@@ -151,11 +156,20 @@ export default function ConfigPage() {
     finally { setSaving(null); }
   };
 
-  const handleDelete = async (key: string) => {
-    if (!confirm(`Delete config key "${key}"? This cannot be undone.`)) return;
-    setDeleting(key); setError('');
-    try { await adminApi.delete(`/api/admin/config/${key}`); await fetchConfig(); }
-    catch { setError(`Failed to delete ${key}.`); }
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleteError, setDeleteError]   = useState('');
+  const { toast } = useToast();
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(deleteTarget); setDeleteError('');
+    try {
+      await adminApi.delete(`/api/admin/config/${deleteTarget}`);
+      setDeleteTarget(null);
+      toast.success('Config key deleted');
+      await fetchConfig();
+    }
+    catch { setDeleteError(`Failed to delete ${deleteTarget}.`); }
     finally { setDeleting(null); }
   };
 
@@ -175,6 +189,18 @@ export default function ConfigPage() {
       }
     >
       {showNew && <NewKeyModal onClose={() => setShowNew(false)} onSaved={fetchConfig} />}
+      {deleteTarget && (
+        <ConfirmModal
+          title="Delete Config Key"
+          description={`Are you sure you want to delete config key "${deleteTarget}"? This cannot be undone.`}
+          confirmLabel="Delete Key"
+          destructive
+          loading={deleting === deleteTarget}
+          error={deleteError}
+          onConfirm={handleDelete}
+          onCancel={() => { setDeleteTarget(null); setDeleteError(''); }}
+        />
+      )}
       {error && <ErrorBanner message={error} />}
 
       {/* Category tabs */}
@@ -213,7 +239,7 @@ export default function ConfigPage() {
                     {new Date(entry.updatedAt).toLocaleDateString('en-IN')}
                   </span>
                   <button
-                    onClick={() => handleDelete(entry.key)}
+                    onClick={() => { setDeleteTarget(entry.key); setDeleteError(''); }}
                     disabled={deleting === entry.key}
                     className="p-2 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50"
                     title="Delete key"

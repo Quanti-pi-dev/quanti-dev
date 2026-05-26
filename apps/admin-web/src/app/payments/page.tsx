@@ -10,6 +10,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api';
 import { PageShell, Badge, Spinner, ErrorBanner } from '@/components/page-shell';
 import { DataTable } from '@/components/data-table';
+import { useToast } from '@/components/toast';
 import { RotateCcw, X } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 
@@ -49,6 +50,7 @@ const INPUT = 'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 te
 const LABEL = 'block text-xs font-medium text-zinc-400 mb-1.5';
 
 // ─── Refund Modal ─────────────────────────────────────────────
+// #4 fix: input is now in rupees (₹), converted to paise before API call.
 
 function RefundModal({
   payment,
@@ -59,21 +61,26 @@ function RefundModal({
   onClose: () => void;
   onRefunded: () => void;
 }) {
+  const { toast } = useToast();
   const maxRefundable = payment.amountPaise - (payment.refundedPaise ?? 0);
-  const [amountPaise, setAmountPaise] = useState(maxRefundable);
+  const maxRefundableRupees = maxRefundable / 100;
+  // Display in rupees; convert to paise only when submitting
+  const [amountRupees, setAmountRupees] = useState(maxRefundableRupees);
   const [saving, setSaving]  = useState(false);
   const [error, setError]    = useState('');
-  const [done, setDone]      = useState(false);
+
+  const amountPaise = Math.round(amountRupees * 100);
 
   const handleRefund = async () => {
     if (amountPaise <= 0 || amountPaise > maxRefundable) {
-      setError(`Amount must be between ₹1 and ${paise(maxRefundable)}.`);
+      setError(`Amount must be between ₹0.01 and ${paise(maxRefundable)}.`);
       return;
     }
     setSaving(true); setError('');
     try {
       await adminApi.post(`/api/admin/payments/${payment.id}/refund`, { amountPaise });
-      setDone(true);
+      toast.success(`Refund of ${paise(amountPaise)} initiated`);
+      onRefunded(); onClose();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
       setError(msg ?? 'Refund failed. Check Razorpay status.');
@@ -81,58 +88,54 @@ function RefundModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md p-6 shadow-2xl mx-4">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-white">Issue Refund</h2>
           <button onClick={onClose} className="text-zinc-500 hover:text-white transition"><X size={16} /></button>
         </div>
 
-        {done ? (
-          <div className="space-y-4">
-            <div className="bg-emerald-950/50 border border-emerald-800 text-emerald-400 text-sm rounded-xl px-4 py-3">
-              ✓ Refund of {paise(amountPaise)} initiated via Razorpay. It may take 5–7 business days to reflect.
-            </div>
-            <button onClick={() => { onRefunded(); onClose(); }} className="w-full px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-sm transition">
-              Done
-            </button>
+        <div className="space-y-4">
+          <div className="bg-zinc-800 rounded-xl p-4 space-y-1.5 text-sm">
+            <p className="text-zinc-400">User: <span className="text-white">{payment.userEmail}</span></p>
+            <p className="text-zinc-400">Payment: <span className="text-white font-mono text-xs">{payment.razorpayPaymentId ?? payment.id}</span></p>
+            <p className="text-zinc-400">Original: <span className="text-white">{paise(payment.amountPaise)}</span></p>
+            {payment.refundedPaise && payment.refundedPaise > 0 && (
+              <p className="text-zinc-400">Already refunded: <span className="text-yellow-400">{paise(payment.refundedPaise)}</span></p>
+            )}
+            <p className="text-zinc-400">Max refundable: <span className="text-emerald-400 font-semibold">{paise(maxRefundable)}</span></p>
           </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="bg-zinc-800 rounded-xl p-4 space-y-1.5 text-sm">
-              <p className="text-zinc-400">User: <span className="text-white">{payment.userEmail}</span></p>
-              <p className="text-zinc-400">Payment: <span className="text-white font-mono text-xs">{payment.razorpayPaymentId ?? payment.id}</span></p>
-              <p className="text-zinc-400">Original: <span className="text-white">{paise(payment.amountPaise)}</span></p>
-              {payment.refundedPaise && payment.refundedPaise > 0 && (
-                <p className="text-zinc-400">Already refunded: <span className="text-yellow-400">{paise(payment.refundedPaise)}</span></p>
-              )}
-              <p className="text-zinc-400">Max refundable: <span className="text-emerald-400 font-semibold">{paise(maxRefundable)}</span></p>
-            </div>
-            {error && <ErrorBanner message={error} />}
-            <div>
-              <label className={LABEL}>Refund Amount (paise) — ₹100 = 10000</label>
+          {error && <ErrorBanner message={error} />}
+          <div>
+            <label className={LABEL}>Refund Amount (₹)</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-sm font-medium">₹</span>
               <input
                 type="number"
-                min={1}
-                max={maxRefundable}
-                value={amountPaise}
-                onChange={e => setAmountPaise(Number(e.target.value))}
-                className={INPUT}
+                min={0.01}
+                max={maxRefundableRupees}
+                step={0.01}
+                value={amountRupees}
+                onChange={e => setAmountRupees(Number(e.target.value))}
+                className={INPUT + ' pl-7'}
               />
-              <p className="text-xs text-zinc-600 mt-1">{paise(amountPaise)} will be refunded</p>
             </div>
-            <div className="flex gap-3">
-              <button type="button" onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 text-sm hover:text-white transition">Cancel</button>
-              <button
-                onClick={handleRefund}
-                disabled={saving}
-                className="flex-1 px-4 py-2 rounded-lg bg-red-800 hover:bg-red-700 text-white text-sm font-medium transition disabled:opacity-50"
-              >
-                {saving ? 'Processing…' : `Refund ${paise(amountPaise)}`}
-              </button>
-            </div>
+            <p className="text-xs text-zinc-600 mt-1">{paise(amountPaise)} will be refunded · max {paise(maxRefundable)}</p>
           </div>
-        )}
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 text-sm hover:text-white transition">Cancel</button>
+            <button
+              onClick={handleRefund}
+              disabled={saving}
+              className="flex-1 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition disabled:opacity-50"
+            >
+              {saving ? 'Processing…' : `Refund ${paise(amountPaise)}`}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

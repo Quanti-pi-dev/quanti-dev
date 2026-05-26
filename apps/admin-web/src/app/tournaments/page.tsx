@@ -17,6 +17,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api';
 import { PageShell, Badge, Spinner, ErrorBanner } from '@/components/page-shell';
 import { DataTable } from '@/components/data-table';
+import { ConfirmModal } from '@/components/confirm-modal';
+import { useToast } from '@/components/toast';
 import { Plus, Pencil, Trash2, X, Trophy, Crown, Medal, Download } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 
@@ -99,7 +101,10 @@ function LeaderboardPanel({ tournament, onClose }: { tournament: TournamentRow; 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/50">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex justify-end bg-black/50"
+    >
       <div className="bg-zinc-900 border-l border-zinc-700 w-full max-w-lg h-full overflow-y-auto flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 shrink-0">
           <div>
@@ -216,7 +221,10 @@ function TournamentModal({ tournament, onClose, onSaved }: { tournament: Tournam
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-6">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-6"
+    >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-2xl p-6 shadow-2xl mx-4">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-white">{isEdit ? 'Edit Tournament' : 'New Tournament'}</h2>
@@ -293,11 +301,20 @@ export default function TournamentsPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleDelete = async (t: TournamentRow) => {
-    if (!confirm(`Delete tournament "${t.name}"? This cannot be undone.`)) return;
-    setDeleting(t.id); setError('');
-    try { await adminApi.delete(`/api/admin/tournaments/${t.id}`); await fetchData(); }
-    catch (err) { setError(apiError(err)); } finally { setDeleting(null); }
+  const [deleteTarget, setDeleteTarget] = useState<TournamentRow | null>(null);
+  const [deleteError, setDeleteError]   = useState('');
+  const { toast } = useToast();
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(deleteTarget.id); setDeleteError('');
+    try {
+      await adminApi.delete(`/api/admin/tournaments/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      toast.success('Tournament deleted');
+      await fetchData();
+    }
+    catch (err) { setDeleteError(apiError(err)); } finally { setDeleting(null); }
   };
 
   const COLUMNS: ColumnDef<TournamentRow, unknown>[] = [
@@ -341,7 +358,7 @@ export default function TournamentsPage() {
         <div className="flex items-center justify-end gap-1">
           <button onClick={() => setLeaderboard(row.original)} className="p-2 rounded-lg text-zinc-500 hover:text-yellow-400 hover:bg-zinc-800 transition" title="Leaderboard"><Trophy size={13} /></button>
           <button onClick={() => setModal(row.original)} className="p-2 rounded-lg text-zinc-500 hover:text-violet-400 hover:bg-zinc-800 transition"><Pencil size={13} /></button>
-          <button onClick={() => handleDelete(row.original)} disabled={deleting === row.original.id} className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50"><Trash2 size={13} /></button>
+          <button onClick={() => { setDeleteTarget(row.original); setDeleteError(''); }} disabled={deleting === row.original.id} className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50"><Trash2 size={13} /></button>
         </div>
       ),
     },
@@ -361,6 +378,18 @@ export default function TournamentsPage() {
     >
       {modal !== false && <TournamentModal tournament={typeof modal === 'object' ? modal : null} onClose={() => setModal(false)} onSaved={() => { setModal(false); fetchData(); }} />}
       {leaderboard && <LeaderboardPanel tournament={leaderboard} onClose={() => setLeaderboard(null)} />}
+      {deleteTarget && (
+        <ConfirmModal
+          title="Delete Tournament"
+          description={`Are you sure you want to delete tournament "${deleteTarget.name}"? This cannot be undone.`}
+          confirmLabel="Delete Tournament"
+          destructive
+          loading={deleting === deleteTarget.id}
+          error={deleteError}
+          onConfirm={handleDelete}
+          onCancel={() => { setDeleteTarget(null); setDeleteError(''); }}
+        />
+      )}
       {error && <ErrorBanner message={error} />}
       {loading ? <Spinner /> : <DataTable columns={COLUMNS} data={rows} pageSize={20} />}
     </PageShell>

@@ -11,6 +11,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api';
 import { PageShell, Badge, Spinner, ErrorBanner } from '@/components/page-shell';
+import { ConfirmModal } from '@/components/confirm-modal';
+import { useToast } from '@/components/toast';
 import { Plus, Pencil, Trash2, X, Check, ToggleLeft, ToggleRight } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -134,7 +136,10 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-8">
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-8"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-2xl p-6 shadow-2xl mx-4">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-white">{isEdit ? 'Edit Plan' : 'New Plan'}</h2>
@@ -254,11 +259,14 @@ function PlanModal({ plan, onClose, onSaved }: { plan: Plan | null; onClose: () 
 // ─── Page ─────────────────────────────────────────────────────
 
 export default function PlansPage() {
+  const { toast } = useToast();
   const [plans, setPlans]     = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
   const [modal, setModal]     = useState<false | 'new' | Plan>(false);
+  const [deleteTarget, setDeleteTarget] = useState<Plan | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState('');
 
   const fetchPlans = useCallback(async () => {
     setLoading(true); setError('');
@@ -271,15 +279,17 @@ export default function PlansPage() {
 
   useEffect(() => { fetchPlans(); }, [fetchPlans]);
 
-  const handleDelete = async (plan: Plan) => {
-    if (!confirm(`Delete plan "${plan.displayName}"? This cannot be undone.`)) return;
-    setDeleting(plan.id); setError('');
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(deleteTarget.id); setDeleteError('');
     try {
-      await adminApi.delete(`/api/admin/plans/${plan.id}`);
+      await adminApi.delete(`/api/admin/plans/${deleteTarget.id}`);
+      toast.success(`Plan "${deleteTarget.displayName}" deleted`);
+      setDeleteTarget(null);
       await fetchPlans();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
-      setError(msg ?? 'Failed to delete plan.');
+      setDeleteError(msg ?? 'Failed to delete plan.');
     } finally { setDeleting(null); }
   };
 
@@ -301,6 +311,19 @@ export default function PlansPage() {
           plan={typeof modal === 'object' ? modal : null}
           onClose={() => setModal(false)}
           onSaved={() => { setModal(false); fetchPlans(); }}
+        />
+      )}
+
+      {deleteTarget && (
+        <ConfirmModal
+          title="Delete Plan"
+          description={`Permanently delete "${deleteTarget.displayName}"? Any active subscribers will not be immediately affected, but new signups will be blocked. This cannot be undone.`}
+          confirmLabel="Delete Plan"
+          destructive
+          loading={deleting !== null}
+          error={deleteError}
+          onConfirm={handleDelete}
+          onCancel={() => { setDeleteTarget(null); setDeleteError(''); }}
         />
       )}
 
@@ -351,7 +374,7 @@ export default function PlansPage() {
                   <Pencil size={12} /> Edit
                 </button>
                 <button
-                  onClick={() => handleDelete(plan)}
+                  onClick={() => { setDeleteTarget(plan); setDeleteError(''); }}
                   disabled={deleting === plan.id}
                   className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-red-950/40 hover:text-red-400 text-zinc-500 text-xs transition disabled:opacity-50"
                 >

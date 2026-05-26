@@ -17,6 +17,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { adminApi } from '@/lib/api';
 import { PageShell, Badge, Spinner, ErrorBanner } from '@/components/page-shell';
+import { ConfirmModal } from '@/components/confirm-modal';
+import { useToast } from '@/components/toast';
 import { ArrowLeft, Plus, Pencil, Trash2, Upload, X, ChevronRight } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -127,7 +129,10 @@ function CardModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-8">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-8"
+    >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-2xl p-6 shadow-2xl mx-4">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-white">{isEdit ? 'Edit Flashcard' : 'New Flashcard'}</h2>
@@ -227,7 +232,10 @@ function BulkImportModal({ deckId, onClose, onImported }: { deckId: string; onCl
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+    >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-2xl p-6 shadow-2xl mx-4">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-white">Bulk Import Cards</h2>
@@ -372,13 +380,22 @@ export default function DeckFlashcardsPage() {
 
   useEffect(() => { fetchCards(); }, [fetchCards]);
 
-  const handleDelete = async (card: Flashcard) => {
-    if (!confirm('Delete this flashcard? This cannot be undone.')) return;
-    setDeleting(card.id); setError('');
+  const [deleteTarget, setDeleteTarget] = useState<Flashcard | null>(null);
+  const [deleteError, setDeleteError]   = useState('');
+  const { toast } = useToast();
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(deleteTarget.id); setDeleteError('');
     try {
-      await adminApi.delete(`/api/admin/decks/${deckId}/flashcards/${card.id}`);
+      await adminApi.delete(`/api/admin/decks/${deckId}/flashcards/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      toast.success('Flashcard deleted');
       await fetchCards();
-    } catch { setError('Failed to delete flashcard.'); }
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
+      setDeleteError(msg ?? 'Failed to delete flashcard.');
+    }
     finally { setDeleting(null); }
   };
 
@@ -419,6 +436,19 @@ export default function DeckFlashcardsPage() {
         <BulkImportModal deckId={deckId} onClose={() => setModal(false)} onImported={fetchCards} />
       )}
 
+      {deleteTarget && (
+        <ConfirmModal
+          title="Delete Flashcard"
+          description="Are you sure you want to delete this flashcard? This cannot be undone."
+          confirmLabel="Delete Card"
+          destructive
+          loading={!!deleting}
+          error={deleteError}
+          onConfirm={handleDelete}
+          onCancel={() => { setDeleteTarget(null); setDeleteError(''); }}
+        />
+      )}
+
       {/* Hierarchy breadcrumb for mastery decks */}
       {deck && <HierarchyBreadcrumb deck={deck} router={router} />}
 
@@ -449,7 +479,7 @@ export default function DeckFlashcardsPage() {
                     />
                   )}
                   <button onClick={() => setModal(card)} className="p-2 rounded-lg text-zinc-500 hover:text-violet-400 hover:bg-zinc-800 transition"><Pencil size={13} /></button>
-                  <button onClick={() => handleDelete(card)} disabled={deleting === card.id} className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50"><Trash2 size={13} /></button>
+                  <button onClick={() => { setDeleteTarget(card); setDeleteError(''); }} disabled={deleting === card.id} className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50"><Trash2 size={13} /></button>
                 </div>
               </div>
 

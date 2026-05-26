@@ -12,6 +12,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api';
 import { PageShell, Badge, Spinner, ErrorBanner } from '@/components/page-shell';
 import { DataTable } from '@/components/data-table';
+import { ConfirmModal } from '@/components/confirm-modal';
+import { useToast } from '@/components/toast';
 import { Plus, Pencil, Trash2, X, ToggleLeft, ToggleRight } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 
@@ -85,7 +87,10 @@ function MockTestModal({ test, onClose, onSaved }: { test: MockTest | null; onCl
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-6">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-6"
+    >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-lg p-6 shadow-2xl mx-4">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-white">{isEdit ? 'Edit Mock Test' : 'New Mock Test'}</h2>
@@ -144,11 +149,20 @@ export default function MockTestsPage() {
 
   useEffect(() => { fetchTests(); }, [fetchTests]);
 
-  const handleDelete = async (t: MockTest) => {
-    if (!confirm(`Delete mock test "${t.title}"?`)) return;
-    setDeleting(t._id); setError('');
-    try { await adminApi.delete(`/api/admin/mock-tests/${t._id}`); await fetchTests(); }
-    catch (err) { setError(apiError(err)); } finally { setDeleting(null); }
+  const [deleteTarget, setDeleteTarget] = useState<MockTest | null>(null);
+  const [deleteError, setDeleteError]   = useState('');
+  const { toast } = useToast();
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(deleteTarget._id); setDeleteError('');
+    try {
+      await adminApi.delete(`/api/admin/mock-tests/${deleteTarget._id}`);
+      setDeleteTarget(null);
+      toast.success('Mock test deleted');
+      await fetchTests();
+    }
+    catch (err) { setDeleteError(apiError(err)); } finally { setDeleting(null); }
   };
 
   const COLUMNS: ColumnDef<MockTest, unknown>[] = [
@@ -185,7 +199,7 @@ export default function MockTestsPage() {
       cell: ({ row }) => (
         <div className="flex items-center justify-end gap-1">
           <button onClick={() => setModal(row.original)} className="p-2 rounded-lg text-zinc-500 hover:text-violet-400 hover:bg-zinc-800 transition"><Pencil size={13} /></button>
-          <button onClick={() => handleDelete(row.original)} disabled={deleting === row.original._id} className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50"><Trash2 size={13} /></button>
+          <button onClick={() => { setDeleteTarget(row.original); setDeleteError(''); }} disabled={deleting === row.original._id} className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50"><Trash2 size={13} /></button>
         </div>
       ),
     },
@@ -202,6 +216,18 @@ export default function MockTestsPage() {
       }
     >
       {modal !== false && <MockTestModal test={typeof modal === 'object' ? modal : null} onClose={() => setModal(false)} onSaved={() => { setModal(false); fetchTests(); }} />}
+      {deleteTarget && (
+        <ConfirmModal
+          title="Delete Mock Test"
+          description={`Are you sure you want to delete mock test "${deleteTarget.title}"?`}
+          confirmLabel="Delete Mock Test"
+          destructive
+          loading={deleting === deleteTarget._id}
+          error={deleteError}
+          onConfirm={handleDelete}
+          onCancel={() => { setDeleteTarget(null); setDeleteError(''); }}
+        />
+      )}
       {error && <ErrorBanner message={error} />}
       {loading ? <Spinner /> : <DataTable columns={COLUMNS} data={tests} pageSize={20} />}
     </PageShell>

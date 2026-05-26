@@ -87,8 +87,12 @@ const grantSubscriptionSchema = z.object({
 });
 
 const userSearchSchema = z.object({
-  q: z.string().min(1).max(100),
-  limit: z.coerce.number().min(1).max(20).default(10),
+  q: z.string().max(100).optional(),
+  limit: z.coerce.number().min(1).max(200).default(50),
+});
+
+const updateUserRoleSchema = z.object({
+  role: z.enum(['user', 'admin', 'moderator']),
 });
 
 // ─── Route plugin ─────────────────────────────────────────────
@@ -236,11 +240,124 @@ export async function adminSubscriptionRoutes(fastify: FastifyInstance): Promise
     }
   });
 
-  // ─── User search (for grant modal typeahead) ───────────
+  // ─── User search (admin) ──────────────────────────────
   fastify.get('/users/search', async (request: FastifyRequest, reply: FastifyReply) => {
     const { q, limit } = userSearchSchema.parse(request.query);
-    const users = await userRepository.searchByEmail(q, limit);
+    const pool = getPostgresPool();
+
+    let users;
+    if (q && q.trim().length > 0) {
+      users = await userRepository.searchByEmail(q, limit);
+    } else {
+      // No query — return most recent users
+      const result = await pool.query(
+        `SELECT id, display_name, avatar_url, email, role, enrollment_id, created_at, plan_tier
+         FROM users ORDER BY created_at DESC LIMIT $1`,
+        [limit],
+      );
+      users = result.rows.map((row: Record<string, unknown>) => ({
+        id: row.id,
+        displayName: row.display_name,
+        avatarUrl: row.avatar_url,
+        email: row.email,
+        role: row.role,
+        enrollmentId: row.enrollment_id,
+        planTier: row.plan_tier ?? 0,
+        joinedAt: (row.created_at as Date).toISOString(),
+      }));
+    }
     return reply.send({ success: true, data: users, timestamp: new Date().toISOString() });
+  });
+
+  // ─── User detail (profile + subscriptions + payments) ──
+  fastify.get('/users/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const pool = getPostgresPool();
+
+    const user = await userRepository.findById(id);
+    if (!user) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'User not found' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Fetch active subscription, payment history, and planTier in parallel
+    const [subResult, payResult, tierResult] = await Promise.all([
+      subscriptionRepository.listAll({ limit: 5, offset: 0 }).catch(() => ({ subscriptions: [] })),
+      pool.query(
+        `SELECT p.id, p.amount_paise, p.status, p.created_at, p.razorpay_payment_id
+         FROM payments p
+         WHERE p.user_id = $1
+         ORDER BY p.created_at DESC
+         LIMIT 10`,
+        [id],
+      ),
+      pool.query(
+        `SELECT plan_tier, firebase_uid FROM users WHERE id = $1`,
+        [id],
+      ),
+    ]);
+
+    // Get subscriptions for this specific user
+    const subsByUser = await pool.query(
+      `SELECT s.id, s.status, s.start_date, s.end_date, s.cancel_at_period_end, s.created_at,
+              p.display_name AS plan_name, p.tier AS plan_tier, p.billing_cycle
+       FROM subscriptions s
+       JOIN plans p ON p.id = s.plan_id
+       WHERE s.user_id = $1
+       ORDER BY s.created_at DESC
+       LIMIT 10`,
+      [id],
+    );
+
+    const payments = payResult.rows.map((r: Record<string, unknown>) => ({
+      id: r.id,
+      amountPaise: r.amount_paise,
+      status: r.status,
+      createdAt: (r.created_at as Date).toISOString(),
+      razorpayPaymentId: r.razorpay_payment_id,
+    }));
+
+    const subscriptions = subsByUser.rows.map((r: Record<string, unknown>) => ({
+      id: r.id,
+      status: r.status,
+      planName: r.plan_name,
+      planTier: r.plan_tier,
+      billingCycle: r.billing_cycle,
+      startDate: r.start_date ? (r.start_date as Date).toISOString() : null,
+      endDate: r.end_date ? (r.end_date as Date).toISOString() : null,
+      cancelAtPeriodEnd: r.cancel_at_period_end,
+      createdAt: (r.created_at as Date).toISOString(),
+    }));
+
+    return reply.send({
+      success: true,
+      data: {
+        ...user,
+        planTier: tierResult.rows[0]?.plan_tier ?? 0,
+        firebaseUid: tierResult.rows[0]?.firebase_uid ?? null,
+        subscriptions,
+        payments,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ─── Update user role ──────────────────────────────────
+  fastify.patch('/users/:id/role', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const { role } = updateUserRoleSchema.parse(request.body);
+    const pool = getPostgresPool();
+    const result = await pool.query(
+      `UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2 RETURNING id, role`,
+      [role, id],
+    );
+    if (result.rows.length === 0) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' }, timestamp: new Date().toISOString() });
+    }
+    return reply.send({ success: true, data: result.rows[0], timestamp: new Date().toISOString() });
   });
 
   // ─── Coupons CRUD ───────────────────────────────────────

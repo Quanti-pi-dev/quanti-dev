@@ -8,7 +8,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api';
-import { PageShell, Spinner, ErrorBanner, Badge } from '@/components/page-shell';
+import { PageShell, Badge, InlineSpinner, ErrorBanner } from '@/components/page-shell';
 import { Bell, Send, Users, Smartphone, AlertTriangle, CheckCircle2, X } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -378,7 +378,7 @@ export default function NotificationsPage() {
                 disabled={sending || !canSend}
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition"
               >
-                {sending ? <Spinner /> : <Send size={14} />}
+                {sending ? <InlineSpinner /> : <Send size={14} />}
                 {sending ? 'Sending…' : 'Send Notification'}
               </button>
             </div>

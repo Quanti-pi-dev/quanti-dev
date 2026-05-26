@@ -16,6 +16,8 @@ import { useRouter } from 'next/navigation';
 import { adminApi } from '@/lib/api';
 import { PageShell, Badge, Spinner, ErrorBanner } from '@/components/page-shell';
 import { DataTable } from '@/components/data-table';
+import { ConfirmModal } from '@/components/confirm-modal';
+import { useToast } from '@/components/toast';
 import { Plus, Pencil, Trash2, BookOpen, X, Info } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 
@@ -50,6 +52,7 @@ function DeckModal({
   onSaved: () => void;
 }) {
   const isEdit = !!deck;
+  const { toast } = useToast();
   const [form, setForm] = useState({
     title:       deck?.title       ?? '',
     description: deck?.description ?? '',
@@ -77,8 +80,10 @@ function DeckModal({
     try {
       if (isEdit) {
         await adminApi.put(`/api/admin/decks/${deck!.id}`, payload);
+        toast.success('Content pack updated');
       } else {
         await adminApi.post('/api/admin/decks', payload);
+        toast.success('Content pack created');
       }
       onSaved();
     } catch (err: unknown) {
@@ -89,7 +94,10 @@ function DeckModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-white">{isEdit ? 'Edit Pack' : 'New Content Pack'}</h2>
@@ -131,11 +139,14 @@ function DeckModal({
 
 export default function DecksPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [decks, setDecks]       = useState<DeckRow[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState('');
   const [modal, setModal]       = useState<false | 'new' | DeckRow>(false);
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeckRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const fetchDecks = useCallback(async () => {
     setLoading(true); setError('');
@@ -149,14 +160,18 @@ export default function DecksPage() {
 
   useEffect(() => { fetchDecks(); }, [fetchDecks]);
 
-  const handleDelete = async (deck: DeckRow) => {
-    if (!confirm(`Delete "${deck.title}"? This will also remove all flashcards inside.`)) return;
-    setDeleting(deck.id); setError('');
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true); setDeleteError('');
     try {
-      await adminApi.delete(`/api/admin/decks/${deck.id}`);
+      await adminApi.delete(`/api/admin/decks/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      toast.success(`"${deleteTarget.title}" deleted`);
       await fetchDecks();
-    } catch { setError('Failed to delete deck.'); }
-    finally { setDeleting(null); }
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
+      setDeleteError(msg ?? 'Failed to delete deck.');
+    } finally { setDeleting(false); }
   };
 
   const COLUMNS: ColumnDef<DeckRow, unknown>[] = [
@@ -220,9 +235,8 @@ export default function DecksPage() {
             <Pencil size={13} />
           </button>
           <button
-            onClick={() => handleDelete(row.original)}
-            disabled={deleting === row.original.id}
-            className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50"
+            onClick={() => { setDeleteTarget(row.original); setDeleteError(''); }}
+            className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition"
             title="Delete pack"
           >
             <Trash2 size={13} />
@@ -255,6 +269,19 @@ export default function DecksPage() {
         />
       )}
 
+      {deleteTarget && (
+        <ConfirmModal
+          title="Delete Content Pack"
+          description={`Permanently delete "${deleteTarget.title}"? This will also remove all flashcards inside. This cannot be undone.`}
+          confirmLabel="Delete Pack"
+          destructive
+          loading={deleting}
+          error={deleteError}
+          onConfirm={handleDelete}
+          onCancel={() => { setDeleteTarget(null); setDeleteError(''); }}
+        />
+      )}
+
       {/* Info callout — explains mastery decks are in exam hierarchy */}
       <div className="flex items-start gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 mb-5 text-sm text-zinc-400">
         <Info size={15} className="mt-0.5 text-violet-400 shrink-0" />
@@ -267,7 +294,19 @@ export default function DecksPage() {
       </div>
 
       {error && <ErrorBanner message={error} />}
-      {loading ? <Spinner /> : <DataTable columns={COLUMNS} data={decks} pageSize={20} />}
+      {loading ? (
+        <Spinner />
+      ) : decks.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4">
+            <BookOpen size={20} className="text-zinc-600" />
+          </div>
+          <p className="text-zinc-400 font-medium">No content packs yet</p>
+          <p className="text-zinc-600 text-sm mt-1">Click &ldquo;New Pack&rdquo; to create your first shop or standalone deck.</p>
+        </div>
+      ) : (
+        <DataTable columns={COLUMNS} data={decks} pageSize={20} />
+      )}
     </PageShell>
   );
 }

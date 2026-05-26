@@ -54,7 +54,10 @@ function GrantSubModal({ instituteId, onClose }: { instituteId: string; onClose:
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+    >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm p-6 shadow-2xl">
         <h2 className="text-lg font-semibold text-white mb-1">Grant Subscription</h2>
         <p className="text-xs text-zinc-500 mb-5">Admin-granted — no payment required.</p>

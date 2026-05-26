@@ -101,7 +101,10 @@ function DetailPanel({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/50">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex justify-end bg-black/50"
+    >
       <div className="bg-zinc-900 border-l border-zinc-700 w-full max-w-md h-full overflow-y-auto flex flex-col shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 shrink-0">
@@ -252,7 +255,10 @@ function GrantModal({ onClose, onGranted }: { onClose: () => void; onGranted: ()
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-8">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-8"
+    >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-lg p-6 shadow-2xl mx-4">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-white">Grant Subscription</h2>

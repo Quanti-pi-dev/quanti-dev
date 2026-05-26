@@ -7,9 +7,9 @@ import { useAuth } from '@/contexts/auth-context';
 import Image from 'next/image';
 import {
   LayoutDashboard, Users, BookOpen, Trophy, CreditCard,
-  Settings, LogOut, Layers, Bell, BarChart3, Building2, BookMarked,
+  Settings, LogOut, Layers, Bell, BarChart3, Building2,
   Tag, ReceiptText, Banknote, Coins, Medal, FileQuestion, ClipboardList,
-  Swords, PanelLeftClose, PanelLeftOpen,
+  Swords, PanelLeftClose, PanelLeftOpen, Brain,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -26,7 +26,6 @@ const NAV_SECTIONS = [
     label: 'Content',
     items: [
       { label: 'Exams',      href: '/exams',      icon: BookOpen },
-      { label: 'Subjects',   href: '/subjects',   icon: BookMarked },
       { label: 'Decks',      href: '/decks',      icon: Layers },
       { label: 'PYQ',        href: '/pyq',        icon: FileQuestion },
       { label: 'Mock Tests', href: '/mock-tests', icon: ClipboardList },
@@ -61,8 +60,9 @@ const NAV_SECTIONS = [
   {
     label: 'System',
     items: [
-      { label: 'Analytics', href: '/analytics', icon: BarChart3 },
-      { label: 'Config',    href: '/config',    icon: Settings },
+      { label: 'Analytics',    href: '/analytics',    icon: BarChart3 },
+      { label: 'AI Settings',  href: '/ai-settings',  icon: Brain },
+      { label: 'Config',       href: '/config',       icon: Settings },
     ],
   },
 ];

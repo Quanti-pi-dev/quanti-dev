@@ -1,155 +1,175 @@
 'use client';
 
-import { useAuth } from '@/contexts/auth-context';
-import { Sidebar } from '@/components/sidebar';
-import { adminApi } from '@/lib/api';
+// ─── Admin Dashboard ──────────────────────────────────────────
+// Landing page: platform KPIs + quick-access navigation links.
+// Fix #7: shimmer skeleton instead of '—'
+// Fix #16: icons on quick-access grid
+
 import { useEffect, useState } from 'react';
-import { Users, BookOpen, Layers, CreditCard, Coins, BarChart3, ClipboardList } from 'lucide-react';
+import { adminApi } from '@/lib/api';
+import { PageShell, ErrorBanner } from '@/components/page-shell';
+import {
+  Users, BookOpen, CreditCard, BarChart3, Layers, Building2,
+  Tag, ReceiptText, Bell, Settings, TrendingUp, Coins,
+  FileQuestion, ClipboardList, Medal, Trophy, Swords, Brain,
+} from 'lucide-react';
 import Link from 'next/link';
+
+// ─── Types ────────────────────────────────────────────────────
+
+interface Stats {
+  totalUsers: number;
+  activeSubscriptions: number;
+  totalRevenuePaise: number;
+  activeExams: number;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────
+
+function paiseToRupee(v: number) {
+  return `₹${(v / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+}
+
+// ─── Shimmer skeleton for a single stat value ─────────────────
+
+function StatSkeleton() {
+  return (
+    <div className="h-8 w-24 rounded-lg bg-zinc-800 animate-pulse" />
+  );
+}
 
 // ─── Stat Card ────────────────────────────────────────────────
 
 function StatCard({
-  label, value, icon: Icon, delta,
+  label,
+  value,
+  icon: Icon,
+  loading,
+  accent = 'violet',
 }: {
   label: string;
-  value: string | number;
+  value: string;
   icon: React.ElementType;
-  delta?: string;
+  loading: boolean;
+  accent?: 'violet' | 'emerald' | 'amber' | 'sky';
 }) {
+  const accentMap = {
+    violet: { icon: 'text-violet-400', bg: 'bg-violet-950/40 border-violet-800/50' },
+    emerald: { icon: 'text-emerald-400', bg: 'bg-emerald-950/40 border-emerald-800/50' },
+    amber: { icon: 'text-amber-400', bg: 'bg-amber-950/40 border-amber-800/50' },
+    sky: { icon: 'text-sky-400', bg: 'bg-sky-950/40 border-sky-800/50' },
+  };
+  const a = accentMap[accent];
+
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-zinc-500 font-medium">{label}</span>
-        <div className="w-8 h-8 rounded-lg bg-violet-600/20 flex items-center justify-center">
-          <Icon size={16} className="text-violet-400" />
-        </div>
+    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-start gap-4">
+      <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${a.bg}`}>
+        <Icon size={18} className={a.icon} />
       </div>
-      <p className="text-3xl font-bold tracking-tight text-white">{value}</p>
-      {delta && <p className="text-xs text-emerald-400">{delta}</p>}
+      <div className="min-w-0">
+        <p className="text-xs text-zinc-500 font-medium uppercase tracking-widest mb-1">{label}</p>
+        {loading ? <StatSkeleton /> : (
+          <p className="text-2xl font-bold text-white tabular-nums">{value}</p>
+        )}
+      </div>
     </div>
   );
 }
 
+// ─── Quick-access nav items ───────────────────────────────────
+
+const QUICK_LINKS = [
+  { label: 'Exams',         href: '/exams',         icon: BookOpen,       desc: 'Manage exam hierarchy' },
+  { label: 'Users',         href: '/users',         icon: Users,          desc: 'Search & audit users' },
+  { label: 'Institutes',    href: '/institutes',    icon: Building2,      desc: 'Coaching & schools' },
+  { label: 'Plans',         href: '/plans',         icon: CreditCard,     desc: 'Subscription tiers' },
+  { label: 'Coupons',       href: '/coupons',       icon: Tag,            desc: 'Discount codes' },
+  { label: 'Payments',      href: '/payments',      icon: ReceiptText,    desc: 'Refunds & history' },
+  { label: 'Analytics',     href: '/analytics',     icon: BarChart3,      desc: 'Revenue & engagement' },
+  { label: 'Notifications', href: '/notifications', icon: Bell,           desc: 'Push broadcasts' },
+  { label: 'Decks',         href: '/decks',         icon: Layers,         desc: 'Shop content packs' },
+  { label: 'Gamification',  href: '/gamification',  icon: Medal,          desc: 'Badges & streaks' },
+  { label: 'Tournaments',   href: '/tournaments',   icon: Trophy,         desc: 'Competition events' },
+  { label: 'Challenges',    href: '/challenges',    icon: Swords,         desc: 'Daily challenges' },
+  { label: 'PYQ',           href: '/pyq',           icon: FileQuestion,   desc: 'Previous year papers' },
+  { label: 'Mock Tests',    href: '/mock-tests',    icon: ClipboardList,  desc: 'Practice tests' },
+  { label: 'Coin Packs',    href: '/coin-packs',    icon: Coins,          desc: 'In-app currency' },
+  { label: 'Subscriptions', href: '/subscriptions', icon: TrendingUp,     desc: 'Active subscriptions' },
+  { label: 'Config',        href: '/config',        icon: Settings,   desc: 'Platform settings' },
+  { label: 'AI Settings',   href: '/ai-settings',   icon: Brain,      desc: 'API keys & AI models' },
+];
+
 // ─── Page ─────────────────────────────────────────────────────
 
-interface Stats {
-  totalUsers?: number;
-  activeUsersToday?: number;
-  totalSessions?: number;
-  totalCardsAnswered?: number;
-  avgAccuracyPct?: number;
-  totalCoinsEarned?: number;
-  totalCoinsSpent?: number;
-  totalCoinsInCirculation?: number;
-  shopItemCount?: number;
-  purchasedPackCount?: number;
-  purchasedThemeCount?: number;
-}
-
 export default function DashboardPage() {
-  const { user, loading } = useAuth();
-  const [stats, setStats] = useState<Stats>({});
-  const [fetching, setFetching] = useState(true);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]   = useState('');
 
   useEffect(() => {
-    if (!user) return;
-    adminApi.get<{ data: Stats }>('/api/admin/analytics')
-      .then((r) => setStats(r.data.data))
-      .catch(() => {/* stats unavailable — show skeleton */})
-      .finally(() => setFetching(false));
-  }, [user]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+    adminApi.get<{ data: Stats }>('/api/admin/analytics/overview')
+      .then(r => setStats(r.data.data))
+      .catch(() => setError('Failed to load platform stats.'))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 p-8 overflow-y-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-sm text-zinc-500 mt-1">
-            Welcome back, {user?.email}
-          </p>
-        </div>
+    <PageShell title="Dashboard" subtitle="QuantiPi platform overview">
+      {error && <ErrorBanner message={error} />}
 
-        {/* KPI grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-          <StatCard
-            label="Total Users"
-            icon={Users}
-            value={fetching ? '—' : (stats.totalUsers?.toLocaleString() ?? '—')}
-          />
-          <StatCard
-            label="Active Today"
-            icon={BarChart3}
-            value={fetching ? '—' : (stats.activeUsersToday?.toLocaleString() ?? '—')}
-          />
-          <StatCard
-            label="Cards Studied"
-            icon={ClipboardList}
-            value={fetching ? '—' : (stats.totalCardsAnswered?.toLocaleString() ?? '—')}
-          />
-          <StatCard
-            label="Avg Accuracy"
-            icon={BookOpen}
-            value={fetching ? '—' : (stats.avgAccuracyPct != null ? `${stats.avgAccuracyPct.toFixed(1)}%` : '—')}
-          />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-10">
-          <StatCard
-            label="Coins Earned"
-            icon={Coins}
-            value={fetching ? '—' : (stats.totalCoinsEarned?.toLocaleString() ?? '—')}
-          />
-          <StatCard
-            label="Coins in Circulation"
-            icon={Coins}
-            value={fetching ? '—' : (stats.totalCoinsInCirculation?.toLocaleString() ?? '—')}
-          />
-          <StatCard
-            label="Exams"
-            icon={BookOpen}
-            value={fetching ? '—' : (stats.shopItemCount?.toLocaleString() ?? '—')}
-            delta="Shop items active"
-          />
-          <StatCard
-            label="Pack Purchases"
-            icon={Layers}
-            value={fetching ? '—' : (stats.purchasedPackCount?.toLocaleString() ?? '—')}
-          />
-        </div>
+      {/* ── KPI Cards ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+        <StatCard
+          label="Total Users"
+          value={stats ? stats.totalUsers.toLocaleString('en-IN') : ''}
+          icon={Users}
+          loading={loading}
+          accent="violet"
+        />
+        <StatCard
+          label="Active Subscriptions"
+          value={stats ? stats.activeSubscriptions.toLocaleString('en-IN') : ''}
+          icon={CreditCard}
+          loading={loading}
+          accent="emerald"
+        />
+        <StatCard
+          label="Total Revenue"
+          value={stats ? paiseToRupee(stats.totalRevenuePaise) : ''}
+          icon={BarChart3}
+          loading={loading}
+          accent="amber"
+        />
+        <StatCard
+          label="Active Exams"
+          value={stats ? stats.activeExams.toLocaleString('en-IN') : ''}
+          icon={BookOpen}
+          loading={loading}
+          accent="sky"
+        />
+      </div>
 
-        {/* Quick-access grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-          {[
-            { href: '/users',         label: 'Users',         sub: 'Manage accounts' },
-            { href: '/exams',         label: 'Exams',         sub: 'Published content' },
-            { href: '/subscriptions', label: 'Subscriptions', sub: 'Active plans' },
-            { href: '/payments',      label: 'Payments',      sub: 'Revenue & refunds' },
-            { href: '/plans',         label: 'Plans',         sub: 'Tier catalogue' },
-            { href: '/coupons',       label: 'Coupons',       sub: 'Discount codes' },
-            { href: '/gamification',  label: 'Gamification',  sub: 'Badges & shop' },
-            { href: '/analytics',     label: 'Analytics',     sub: 'Full dashboard' },
-          ].map(({ href, label, sub }) => (
+      {/* ── Quick Access ── */}
+      <div>
+        <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-4">Quick Access</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3">
+          {QUICK_LINKS.map(({ label, href, icon: Icon, desc }) => (
             <Link
               key={href}
               href={href}
-              className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 hover:border-violet-700/50 hover:bg-zinc-800/50 transition group"
+              title={desc}
+              className="group flex flex-col items-center gap-2 bg-zinc-900 border border-zinc-800 hover:border-violet-700/60 hover:bg-zinc-800/60 rounded-2xl p-4 text-center transition-all duration-150"
             >
-              <p className="text-sm font-semibold text-white group-hover:text-violet-300 transition">{label}</p>
-              <p className="text-xs text-zinc-600 mt-0.5">{sub}</p>
+              <div className="w-9 h-9 rounded-xl bg-zinc-800 group-hover:bg-violet-950/50 border border-zinc-700 group-hover:border-violet-700/50 flex items-center justify-center transition-all">
+                <Icon size={16} className="text-zinc-400 group-hover:text-violet-400 transition-colors" />
+              </div>
+              <span className="text-xs font-medium text-zinc-400 group-hover:text-white transition-colors leading-tight">
+                {label}
+              </span>
             </Link>
           ))}
         </div>
-      </main>
-    </div>
+      </div>
+    </PageShell>
   );
 }

@@ -15,6 +15,7 @@ export const adminApi = axios.create({
 
 // ─── Request Interceptor — Inject Firebase ID token ──────────
 adminApi.interceptors.request.use(async (config) => {
+  await auth.authStateReady();
   const user = auth.currentUser;
   if (user) {
     const token = await user.getIdToken();

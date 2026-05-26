@@ -13,6 +13,8 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { adminApi } from '@/lib/api';
 import { PageShell, Badge, Spinner, ErrorBanner } from '@/components/page-shell';
 import { DataTable } from '@/components/data-table';
+import { ConfirmModal } from '@/components/confirm-modal';
+import { useToast } from '@/components/toast';
 import { Plus, Pencil, Trash2, X, ShieldCheck, ShoppingBag, Upload, Loader2 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 
@@ -154,7 +156,10 @@ function BadgeModal({ badge, onClose, onSaved }: { badge: BadgeItem | null; onCl
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+    >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md p-6 shadow-2xl mx-4">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-white">{isEdit ? 'Edit Badge' : 'New Badge'}</h2>
@@ -195,11 +200,20 @@ function BadgesTab() {
   }, []);
   useEffect(() => { fetch(); }, [fetch]);
 
-  const handleDelete = async (b: BadgeItem) => {
-    if (!confirm(`Delete badge "${b.name}"?`)) return;
-    setDeleting(b.id); setError('');
-    try { await adminApi.delete(`/api/admin/badges/${b.id}`); await fetch(); }
-    catch (err) { setError(apiError(err)); } finally { setDeleting(null); }
+  const [deleteTarget, setDeleteTarget] = useState<BadgeItem | null>(null);
+  const [deleteError, setDeleteError]   = useState('');
+  const { toast } = useToast();
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(deleteTarget.id); setDeleteError('');
+    try {
+      await adminApi.delete(`/api/admin/badges/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      toast.success('Badge deleted');
+      await fetch();
+    }
+    catch (err) { setDeleteError(apiError(err)); } finally { setDeleting(null); }
   };
 
   const COLS: ColumnDef<BadgeItem, unknown>[] = [
@@ -223,7 +237,7 @@ function BadgesTab() {
       cell: ({ row }) => (
         <div className="flex items-center justify-end gap-1">
           <button onClick={() => setModal(row.original)} className="p-2 rounded-lg text-zinc-500 hover:text-violet-400 hover:bg-zinc-800 transition"><Pencil size={13} /></button>
-          <button onClick={() => handleDelete(row.original)} disabled={deleting === row.original.id} className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50"><Trash2 size={13} /></button>
+          <button onClick={() => { setDeleteTarget(row.original); setDeleteError(''); }} disabled={deleting === row.original.id} className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50"><Trash2 size={13} /></button>
         </div>
       ),
     },
@@ -232,6 +246,18 @@ function BadgesTab() {
   return (
     <div>
       {modal !== false && <BadgeModal badge={typeof modal === 'object' ? modal : null} onClose={() => setModal(false)} onSaved={() => { setModal(false); fetch(); }} />}
+      {deleteTarget && (
+        <ConfirmModal
+          title="Delete Badge"
+          description={`Are you sure you want to delete badge "${deleteTarget.name}"?`}
+          confirmLabel="Delete Badge"
+          destructive
+          loading={deleting === deleteTarget.id}
+          error={deleteError}
+          onConfirm={handleDelete}
+          onCancel={() => { setDeleteTarget(null); setDeleteError(''); }}
+        />
+      )}
       <div className="flex justify-end mb-4">
         <button onClick={() => setModal('new')} className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition"><Plus size={14} /> New Badge</button>
       </div>
@@ -287,7 +313,10 @@ function ShopItemModal({ item, onClose, onSaved }: { item: ShopItem | null; onCl
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-8">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-8"
+    >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-lg p-6 shadow-2xl mx-4">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-white">{isEdit ? 'Edit Shop Item' : 'New Shop Item'}</h2>
@@ -350,11 +379,20 @@ function ShopTab() {
   }, []);
   useEffect(() => { fetch(); }, [fetch]);
 
-  const handleDelete = async (item: ShopItem) => {
-    if (!confirm(`Delete shop item "${item.name}"?`)) return;
-    setDeleting(item.id); setError('');
-    try { await adminApi.delete(`/api/admin/shop-items/${item.id}`); await fetch(); }
-    catch (err) { setError(apiError(err)); } finally { setDeleting(null); }
+  const [deleteTarget, setDeleteTarget] = useState<ShopItem | null>(null);
+  const [deleteError, setDeleteError]   = useState('');
+  const { toast } = useToast();
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(deleteTarget.id); setDeleteError('');
+    try {
+      await adminApi.delete(`/api/admin/shop-items/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      toast.success('Shop item deleted');
+      await fetch();
+    }
+    catch (err) { setDeleteError(apiError(err)); } finally { setDeleting(null); }
   };
 
   const COLS: ColumnDef<ShopItem, unknown>[] = [
@@ -371,7 +409,7 @@ function ShopTab() {
       cell: ({ row }) => (
         <div className="flex items-center justify-end gap-1">
           <button onClick={() => setModal(row.original)} className="p-2 rounded-lg text-zinc-500 hover:text-violet-400 hover:bg-zinc-800 transition"><Pencil size={13} /></button>
-          <button onClick={() => handleDelete(row.original)} disabled={deleting === row.original.id} className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50"><Trash2 size={13} /></button>
+          <button onClick={() => { setDeleteTarget(row.original); setDeleteError(''); }} disabled={deleting === row.original.id} className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50"><Trash2 size={13} /></button>
         </div>
       ),
     },
@@ -380,6 +418,18 @@ function ShopTab() {
   return (
     <div>
       {modal !== false && <ShopItemModal item={typeof modal === 'object' ? modal : null} onClose={() => setModal(false)} onSaved={() => { setModal(false); fetch(); }} />}
+      {deleteTarget && (
+        <ConfirmModal
+          title="Delete Shop Item"
+          description={`Are you sure you want to delete shop item "${deleteTarget.name}"?`}
+          confirmLabel="Delete Item"
+          destructive
+          loading={deleting === deleteTarget.id}
+          error={deleteError}
+          onConfirm={handleDelete}
+          onCancel={() => { setDeleteTarget(null); setDeleteError(''); }}
+        />
+      )}
       <div className="flex justify-end mb-4">
         <button onClick={() => setModal('new')} className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition"><Plus size={14} /> New Item</button>
       </div>

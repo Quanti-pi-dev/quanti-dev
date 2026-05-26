@@ -26,7 +26,7 @@ export { withCronLock } from './lib/cron-lock.js';
 export { getFirebaseAdmin } from './lib/firebase-admin.js';
 export { generateAvatarPresignedUrl, generateAdminPresignedUrl } from './lib/storage.js';
 export type { PresignedUploadResult } from './lib/storage.js';
-export { getGeminiClient, geminiGenerate, geminiGenerateJSON } from './lib/gemini.js';
+export { geminiGenerate, geminiGenerateJSON, resolveGeminiModel } from './lib/gemini.js';
 
 // ─── Repositories ────────────────────────────────────────────
 export { userRepository } from './repositories/user.repository.js';

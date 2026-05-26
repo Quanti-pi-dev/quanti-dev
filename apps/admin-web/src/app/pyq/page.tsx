@@ -11,6 +11,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api';
 import { PageShell, Spinner, ErrorBanner } from '@/components/page-shell';
+import { ConfirmModal } from '@/components/confirm-modal';
+import { useToast } from '@/components/toast';
 import { Upload, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -95,7 +97,10 @@ function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImpor
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-6">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-6"
+    >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-2xl p-6 shadow-2xl mx-4">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-white">Bulk Import PYQ Cards</h2>
@@ -198,12 +203,21 @@ export default function PYQPage() {
   useEffect(() => { fetchMeta(); }, [fetchMeta]);
   useEffect(() => { setPage(1); fetchCards(1); }, [fetchCards]);
 
-  const handleDelete = async (cardId: string) => {
-    if (!confirm('Delete this PYQ card permanently?')) return;
-    setDeleting(cardId); setError('');
-    try { await adminApi.delete(`/api/admin/pyq/${cardId}`); await fetchCards(page); }
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleteError, setDeleteError]   = useState('');
+  const { toast } = useToast();
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(deleteTarget); setDeleteError('');
+    try {
+      await adminApi.delete(`/api/admin/pyq/${deleteTarget}`);
+      setDeleteTarget(null);
+      toast.success('PYQ card deleted');
+      await fetchCards(page);
+    }
     catch (err: unknown) {
-      setError((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? 'Failed to delete card.');
+      setDeleteError((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? 'Failed to delete card.');
     } finally { setDeleting(null); }
   };
 
@@ -220,6 +234,18 @@ export default function PYQPage() {
       }
     >
       {showBulk && <BulkImportModal onClose={() => setShowBulk(false)} onImported={() => { fetchMeta(); fetchCards(1); }} />}
+      {deleteTarget && (
+        <ConfirmModal
+          title="Delete PYQ Card"
+          description="Are you sure you want to permanently delete this PYQ card?"
+          confirmLabel="Delete Card"
+          destructive
+          loading={deleting === deleteTarget}
+          error={deleteError}
+          onConfirm={handleDelete}
+          onCancel={() => { setDeleteTarget(null); setDeleteError(''); }}
+        />
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-6">
@@ -257,7 +283,7 @@ export default function PYQPage() {
                   <p className="text-sm text-white font-medium leading-relaxed">{card.question}</p>
                 </div>
                 <button
-                  onClick={() => handleDelete(card.id)}
+                  onClick={() => { setDeleteTarget(card.id); setDeleteError(''); }}
                   disabled={deleting === card.id}
                   className="p-2 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50 shrink-0"
                 >

@@ -15,7 +15,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { adminApi } from '@/lib/api';
 import { PageShell, Badge, Spinner, ErrorBanner } from '@/components/page-shell';
-import { ArrowLeft, Trash2, Plus, ChevronUp, ChevronDown, BookOpen, Layers } from 'lucide-react';
+import { ConfirmModal } from '@/components/confirm-modal';
+import { useToast } from '@/components/toast';
+import { Trash2, Plus, ChevronUp, ChevronDown, BookOpen, Layers } from 'lucide-react';
 import Link from 'next/link';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -39,13 +41,6 @@ interface ExamSubject {
   subject: { id: string; name: string; iconName?: string; accent?: string } | null;
 }
 
-interface Subject {
-  id: string;
-  name: string;
-  iconName?: string;
-  accent?: string;
-}
-
 // ─── Shared input style ───────────────────────────────────────
 const INPUT = 'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500';
 const LABEL = 'block text-xs font-medium text-zinc-400 mb-1.5';
@@ -53,6 +48,7 @@ const LABEL = 'block text-xs font-medium text-zinc-400 mb-1.5';
 // ─── Edit Form ────────────────────────────────────────────────
 
 function EditForm({ exam, onSaved }: { exam: Exam; onSaved: () => void }) {
+  const { toast } = useToast();
   const [form, setForm] = useState({
     title: exam.title,
     description: exam.description,
@@ -61,19 +57,17 @@ function EditForm({ exam, onSaved }: { exam: Exam; onSaved: () => void }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
-  const [saved, setSaved]   = useState(false);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm(prev => ({ ...prev, [k]: k === 'durationMinutes' ? Number(e.target.value) : e.target.value }));
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true); setError(''); setSaved(false);
+    setSaving(true); setError('');
     try {
       await adminApi.put(`/api/admin/exams/${exam.id}`, form);
-      setSaved(true);
+      toast.success('Exam details saved');
       onSaved();
-      setTimeout(() => setSaved(false), 2000);
     } catch { setError('Failed to save changes.'); }
     finally { setSaving(false); }
   };
@@ -81,11 +75,6 @@ function EditForm({ exam, onSaved }: { exam: Exam; onSaved: () => void }) {
   return (
     <form onSubmit={handleSave} className="space-y-4 max-w-lg">
       {error && <ErrorBanner message={error} />}
-      {saved && (
-        <div className="bg-emerald-950/50 border border-emerald-800 text-emerald-400 text-sm rounded-xl px-4 py-3">
-          Changes saved ✓
-        </div>
-      )}
       <div>
         <label className={LABEL}>Title</label>
         <input value={form.title} onChange={set('title')} className={INPUT} />
@@ -115,77 +104,98 @@ function EditForm({ exam, onSaved }: { exam: Exam; onSaved: () => void }) {
   );
 }
 
-// ─── Add Subject Modal ────────────────────────────────────────
+// ─── Create Subject Modal (exam-scoped) ──────────────────────
+// Creates a new subject globally then immediately maps it to the exam.
 
-function AddSubjectModal({
+function CreateSubjectModal({
   examId,
-  attachedIds,
   onClose,
   onAdded,
 }: {
   examId: string;
-  attachedIds: Set<string>;
   onClose: () => void;
   onAdded: () => void;
 }) {
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState<string | null>(null);
-  const [error, setError]       = useState('');
+  const { toast } = useToast();
+  const [form, setForm] = useState({ name: '', description: '', iconName: '', accent: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
 
-  useEffect(() => {
-    adminApi.get<{ data: Subject[] }>('/api/admin/subjects')
-      .then(r => setSubjects(r.data.data))
-      .catch(() => setError('Failed to load subjects.'))
-      .finally(() => setLoading(false));
-  }, []);
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm(prev => ({ ...prev, [k]: e.target.value }));
 
-  const handleAdd = async (subjectId: string) => {
-    setSaving(subjectId); setError('');
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) { setError('Name is required.'); return; }
+    setSaving(true); setError('');
     try {
-      await adminApi.post(`/api/admin/exams/${examId}/subjects`, { subjectId });
+      // Step 1: create the subject in the global pool
+      const subjectRes = await adminApi.post<{ data: { id: string } }>('/api/admin/subjects', {
+        name: form.name.trim(),
+        ...(form.description.trim() && { description: form.description.trim() }),
+        ...(form.iconName.trim()    && { iconName: form.iconName.trim() }),
+        ...(form.accent.trim()      && { accent: form.accent.trim() }),
+      });
+      // Step 2: attach to this exam
+      await adminApi.post(`/api/admin/exams/${examId}/subjects`, {
+        subjectId: subjectRes.data.data.id,
+      });
+      toast.success(`"${form.name.trim()}" added to exam`);
       onAdded();
-    } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
-      setError(msg ?? 'Failed to add subject.');
-      setSaving(null);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
+      setError(msg ?? 'Failed to create subject.');
+      setSaving(false);
     }
   };
 
-  const available = subjects.filter(s => !attachedIds.has(s.id));
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md p-6 shadow-2xl max-h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-white">Add Subject to Exam</h2>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-semibold text-white">New Subject</h2>
           <button onClick={onClose} className="text-zinc-500 hover:text-white transition text-sm">✕</button>
         </div>
         {error && <ErrorBanner message={error} />}
-        {loading ? <Spinner /> : available.length === 0 ? (
-          <p className="text-zinc-500 text-sm py-4 text-center">
-            All subjects are already attached, or no subjects exist.{' '}
-            <Link href="/subjects" className="text-violet-400 hover:underline">Create one</Link>
-          </p>
-        ) : (
-          <ul className="space-y-2 overflow-y-auto flex-1 mt-2">
-            {available.map(s => (
-              <li key={s.id} className="flex items-center justify-between bg-zinc-800 rounded-xl px-4 py-3">
-                <span className="text-sm text-white">{s.name}</span>
-                <button
-                  disabled={saving === s.id}
-                  onClick={() => handleAdd(s.id)}
-                  className="px-3 py-1 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium transition disabled:opacity-50"
-                >
-                  {saving === s.id ? 'Adding…' : 'Add'}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <button onClick={onClose} className="mt-4 text-zinc-400 text-sm hover:text-white transition">
-          Close
-        </button>
+        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+          <div>
+            <label className={LABEL}>Name *</label>
+            <input value={form.name} onChange={set('name')} placeholder="e.g. Physics" className={INPUT} />
+          </div>
+          <div>
+            <label className={LABEL}>Description</label>
+            <textarea value={form.description} onChange={set('description')} rows={2} placeholder="Optional short description" className={INPUT} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={LABEL}>Icon name</label>
+              <input value={form.iconName} onChange={set('iconName')} placeholder="e.g. atom" className={INPUT} />
+            </div>
+            <div>
+              <label className={LABEL}>Accent colour</label>
+              <input value={form.accent} onChange={set('accent')} placeholder="#a78bfa" className={INPUT} />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 text-sm hover:text-white transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition disabled:opacity-50"
+            >
+              {saving ? 'Creating…' : 'Create Subject'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -194,14 +204,17 @@ function AddSubjectModal({
 // ─── Subjects Tab ─────────────────────────────────────────────
 
 function SubjectsTab({ examId }: { examId: string }) {
+  const { toast } = useToast();
   const [mappings, setMappings] = useState<ExamSubject[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState('');
   const [showAdd, setShowAdd]   = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [reordering, setReordering] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<ExamSubject | null>(null);
+  const [removeError, setRemoveError] = useState('');
 
-  const fetch = useCallback(async () => {
+  const fetchSubjects = useCallback(async () => {
     setLoading(true); setError('');
     try {
       const res = await adminApi.get<{ data: ExamSubject[] }>(`/api/admin/exams/${examId}/subjects`);
@@ -210,17 +223,19 @@ function SubjectsTab({ examId }: { examId: string }) {
     finally { setLoading(false); }
   }, [examId]);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { fetchSubjects(); }, [fetchSubjects]);
 
-  const handleRemove = async (subjectId: string) => {
-    if (!confirm('Remove this subject from the exam? This will fail if topics or decks exist under it.')) return;
-    setRemoving(subjectId); setError('');
+  const handleRemove = async () => {
+    if (!removeTarget) return;
+    setRemoving(removeTarget.subjectId); setRemoveError('');
     try {
-      await adminApi.delete(`/api/admin/exams/${examId}/subjects/${subjectId}`);
-      await fetch();
+      await adminApi.delete(`/api/admin/exams/${examId}/subjects/${removeTarget.subjectId}`);
+      toast.success(`Subject removed from exam`);
+      setRemoveTarget(null);
+      await fetchSubjects();
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
-      setError(msg ?? 'Failed to remove subject.');
+      setRemoveError(msg ?? 'Failed to remove subject.');
     }
     finally { setRemoving(null); }
   };
@@ -229,21 +244,31 @@ function SubjectsTab({ examId }: { examId: string }) {
     setReordering(subjectId);
     try {
       await adminApi.patch(`/api/admin/exams/${examId}/subjects/${subjectId}/order`, { order });
-      await fetch();
+      await fetchSubjects();
     } catch { setError('Failed to reorder.'); }
     finally { setReordering(null); }
   };
 
-  const attachedIds = new Set(mappings.map(m => m.subjectId));
-
   return (
     <div>
       {showAdd && (
-        <AddSubjectModal
+        <CreateSubjectModal
           examId={examId}
-          attachedIds={attachedIds}
           onClose={() => setShowAdd(false)}
-          onAdded={() => { setShowAdd(false); fetch(); }}
+          onAdded={() => { setShowAdd(false); fetchSubjects(); }}
+        />
+      )}
+
+      {removeTarget && (
+        <ConfirmModal
+          title="Remove Subject"
+          description={`Remove "${removeTarget.subject?.name ?? 'this subject'}" from the exam? This will fail if topics or decks exist under it.`}
+          confirmLabel="Remove Subject"
+          destructive
+          loading={removing !== null}
+          error={removeError}
+          onConfirm={handleRemove}
+          onCancel={() => { setRemoveTarget(null); setRemoveError(''); }}
         />
       )}
 
@@ -260,7 +285,7 @@ function SubjectsTab({ examId }: { examId: string }) {
       {error && <ErrorBanner message={error} />}
       {loading ? <Spinner /> : mappings.length === 0 ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-10 text-center text-zinc-600 text-sm">
-          No subjects attached yet. Click "Add Subject" to begin.
+          No subjects attached yet. Click &ldquo;Add Subject&rdquo; to begin.
         </div>
       ) : (
         <ul className="space-y-2">
@@ -299,7 +324,7 @@ function SubjectsTab({ examId }: { examId: string }) {
 
               <button
                 disabled={removing === m.subjectId}
-                onClick={() => handleRemove(m.subjectId)}
+                onClick={() => setRemoveTarget(m)}
                 className="p-2 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50"
                 title="Remove from exam"
               >
@@ -313,18 +338,20 @@ function SubjectsTab({ examId }: { examId: string }) {
   );
 }
 
-// ─── Delete Exam ──────────────────────────────────────────────
+// ─── Delete Exam (Danger Zone) ────────────────────────────────
 
 function DangerZone({ exam }: { exam: Exam }) {
   const router = useRouter();
+  const { toast } = useToast();
+  const [showConfirm, setShowConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError]       = useState('');
 
   const handleDelete = async () => {
-    if (!confirm(`Permanently delete "${exam.title}"? This cannot be undone.`)) return;
     setDeleting(true); setError('');
     try {
       await adminApi.delete(`/api/admin/exams/${exam.id}`);
+      toast.success(`"${exam.title}" deleted`);
       router.push('/exams');
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
@@ -335,15 +362,25 @@ function DangerZone({ exam }: { exam: Exam }) {
 
   return (
     <div className="border border-red-900/50 rounded-xl p-5 max-w-lg">
+      {showConfirm && (
+        <ConfirmModal
+          title="Delete Exam"
+          description={`Permanently delete "${exam.title}"? This removes all subjects, topics, and metadata associated with it. This cannot be undone.`}
+          confirmLabel="Delete Exam"
+          destructive
+          loading={deleting}
+          error={error}
+          onConfirm={handleDelete}
+          onCancel={() => { setShowConfirm(false); setError(''); }}
+        />
+      )}
       <h3 className="text-sm font-semibold text-red-400 mb-1">Danger Zone</h3>
       <p className="text-xs text-zinc-500 mb-4">Deleting an exam is permanent and removes all associated metadata.</p>
-      {error && <ErrorBanner message={error} />}
       <button
-        onClick={handleDelete}
-        disabled={deleting}
-        className="px-4 py-2 rounded-lg bg-red-900/40 border border-red-800/60 text-red-400 text-sm font-medium hover:bg-red-900/60 transition disabled:opacity-50"
+        onClick={() => setShowConfirm(true)}
+        className="px-4 py-2 rounded-lg bg-red-900/40 border border-red-800/60 text-red-400 text-sm font-medium hover:bg-red-900/60 transition"
       >
-        {deleting ? 'Deleting…' : 'Delete Exam'}
+        Delete Exam
       </button>
     </div>
   );
@@ -382,21 +419,17 @@ export default function ExamDetailPage() {
     <PageShell
       title={exam?.title ?? 'Exam'}
       subtitle={exam ? `${exam.category} · ${exam.durationMinutes} min` : ''}
+      breadcrumbs={[
+        { label: 'Exams', href: '/exams' },
+        { label: exam?.title ?? 'Loading…' },
+      ]}
       actions={
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push('/exams')}
-            className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition"
-          >
-            <ArrowLeft size={14} /> Exams
-          </button>
-          {exam && (
-            <Badge
-              label={exam.isPublished ? 'Published' : 'Draft'}
-              variant={exam.isPublished ? 'green' : 'zinc'}
-            />
-          )}
-        </div>
+        exam && (
+          <Badge
+            label={exam.isPublished ? 'Published' : 'Draft'}
+            variant={exam.isPublished ? 'green' : 'zinc'}
+          />
+        )
       }
     >
       {error && <ErrorBanner message={error} />}

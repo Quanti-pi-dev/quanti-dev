@@ -11,7 +11,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api';
-import { PageShell, Spinner, ErrorBanner } from '@/components/page-shell';
+import { PageShell, InlineSpinner, ErrorBanner } from '@/components/page-shell';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   LineChart, Line, PieChart, Pie, Cell, Legend, AreaChart, Area,
@@ -151,27 +151,49 @@ export default function AnalyticsPage() {
   const [dailyRev, setDailyRev]         = useState<DailyRevenue[]>([]);
   const [subStatus, setSubStatus]       = useState<SubStatus[]>([]);
   const [coinPacks, setCoinPacks]       = useState<CoinPackAnalytics | null>(null);
-  const [loading,  setLoading]          = useState(true);
+  // Per-section loading (fix #17) — each section renders as its data arrives
+  const [loadingOverview, setLoadingOverview] = useState(true);
+  const [loadingRevDash,  setLoadingRevDash]  = useState(true);
+  const [loadingDailyRev, setLoadingDailyRev] = useState(true);
+  const [loadingSubStatus,setLoadingSubStatus]= useState(true);
+  const [loadingCoinPacks,setLoadingCoinPacks]= useState(true);
   const [error,    setError]            = useState('');
   const [refreshKey, setRefreshKey]     = useState(0);
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true); setError('');
-    const [ovRes, rdRes, drRes, ssRes, cpRes] = await Promise.allSettled([
-      adminApi.get<{ data: OverviewData }>('/api/admin/analytics'),
-      adminApi.get<{ data: RevenueDashboard }>('/api/admin/analytics/revenue-dashboard'),
-      adminApi.get<{ data: DailyRevenue[] }>('/api/admin/analytics/revenue'),
-      adminApi.get<{ data: SubStatus[] }>('/api/admin/analytics/subscriptions'),
-      adminApi.get<{ data: CoinPackAnalytics }>('/api/admin/analytics/coin-packs'),
-    ]);
+  // Convenience: still true while ANY section is loading
+  const loading = loadingOverview || loadingRevDash || loadingDailyRev || loadingSubStatus || loadingCoinPacks;
 
-    if (ovRes.status === 'fulfilled') setOverview(ovRes.value.data.data);
-    else setError('Failed to load analytics overview.');
-    if (rdRes.status === 'fulfilled') setRevDash(rdRes.value.data.data);
-    if (drRes.status === 'fulfilled') setDailyRev(drRes.value.data.data);
-    if (ssRes.status === 'fulfilled') setSubStatus(ssRes.value.data.data);
-    if (cpRes.status === 'fulfilled') setCoinPacks(cpRes.value.data.data);
-    setLoading(false);
+  const fetchAll = useCallback(async () => {
+    // Reset loading states for each section independently
+    setLoadingOverview(true); setLoadingRevDash(true); setLoadingDailyRev(true);
+    setLoadingSubStatus(true); setLoadingCoinPacks(true);
+    setError('');
+
+    // Fire all requests simultaneously; each section renders as it resolves
+    adminApi.get<{ data: OverviewData }>('/api/admin/analytics')
+      .then(r => setOverview(r.data.data))
+      .catch(() => setError('Failed to load engagement overview.'))
+      .finally(() => setLoadingOverview(false));
+
+    adminApi.get<{ data: RevenueDashboard }>('/api/admin/analytics/revenue-dashboard')
+      .then(r => setRevDash(r.data.data))
+      .catch(() => {})
+      .finally(() => setLoadingRevDash(false));
+
+    adminApi.get<{ data: DailyRevenue[] }>('/api/admin/analytics/revenue')
+      .then(r => setDailyRev(r.data.data))
+      .catch(() => {})
+      .finally(() => setLoadingDailyRev(false));
+
+    adminApi.get<{ data: SubStatus[] }>('/api/admin/analytics/subscriptions')
+      .then(r => setSubStatus(r.data.data))
+      .catch(() => {})
+      .finally(() => setLoadingSubStatus(false));
+
+    adminApi.get<{ data: CoinPackAnalytics }>('/api/admin/analytics/coin-packs')
+      .then(r => setCoinPacks(r.data.data))
+      .catch(() => {})
+      .finally(() => setLoadingCoinPacks(false));
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll, refreshKey]);
@@ -232,8 +254,14 @@ export default function AnalyticsPage() {
       }
     >
       {error && <ErrorBanner message={error} />}
-      {loading ? <Spinner /> : (
-        <div className="space-y-12">
+      <div className="space-y-12">
+
+        {/* ── Loading skeletons for sections not yet resolved ── */}
+        {(loadingRevDash || loadingDailyRev) && (
+          <div className="h-40 rounded-2xl bg-zinc-900 border border-zinc-800 animate-pulse flex items-center justify-center gap-2 text-zinc-700 text-sm">
+            <InlineSpinner className="text-zinc-700" /> Loading revenue data…
+          </div>
+        )}
 
           {/* ── Revenue Dashboard KPIs ─────────────────────── */}
           {revDash && (
@@ -418,7 +446,6 @@ export default function AnalyticsPage() {
             Data fetched: {new Date().toLocaleString('en-IN')}
           </p>
         </div>
-      )}
     </PageShell>
   );
 }

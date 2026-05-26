@@ -5,26 +5,40 @@
 
 import { Sidebar } from './sidebar';
 import { ReactNode } from 'react';
+import type { BreadcrumbItem } from './breadcrumb-types';
+import { Breadcrumb } from './breadcrumb';
+import { CommandPaletteTrigger } from './command-palette';
 
 interface PageShellProps {
   title: string;
   subtitle?: string;
   actions?: ReactNode;
+  breadcrumbs?: BreadcrumbItem[];
   children: ReactNode;
 }
 
-export function PageShell({ title, subtitle, actions, children }: PageShellProps) {
+export function PageShell({ title, subtitle, actions, breadcrumbs, children }: PageShellProps) {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-zinc-950">
       <Sidebar />
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden bg-zinc-950">
         {/* Top bar */}
-        <header className="h-16 border-b border-zinc-800 flex items-center justify-between px-8 shrink-0">
-          <div>
-            <h1 className="text-lg font-semibold text-white">{title}</h1>
-            {subtitle && <p className="text-xs text-zinc-500 mt-0.5">{subtitle}</p>}
+        <header className="h-16 border-b border-zinc-800 flex items-center justify-between px-8 shrink-0 bg-zinc-900/50 backdrop-blur-sm">
+          <div className="min-w-0">
+            {breadcrumbs && breadcrumbs.length > 0 && (
+              <div className="mb-0.5">
+                <Breadcrumb items={breadcrumbs} />
+              </div>
+            )}
+            <h1 className="text-lg font-semibold text-white truncate">{title}</h1>
+            {subtitle && !breadcrumbs && (
+              <p className="text-xs text-zinc-500 mt-0.5">{subtitle}</p>
+            )}
           </div>
-          {actions && <div className="flex items-center gap-3">{actions}</div>}
+          <div className="flex items-center gap-3 shrink-0 ml-4">
+            <CommandPaletteTrigger />
+            {actions}
+          </div>
         </header>
 
         {/* Content */}
@@ -63,6 +77,14 @@ export function Spinner() {
     <div className="flex items-center justify-center py-16">
       <div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
     </div>
+  );
+}
+
+// ─── Inline spinner (for use inside buttons) ──────────────────
+
+export function InlineSpinner({ className }: { className?: string }) {
+  return (
+    <div className={`w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin ${className ?? ''}`} />
   );
 }
 

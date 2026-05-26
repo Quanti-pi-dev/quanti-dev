@@ -11,12 +11,15 @@
 //   POST   /api/admin/institutes/:id/subscriptions
 //   GET    /api/admin/institutes/:id/members
 //   POST   /api/admin/claims/sync
+//   GET    /api/admin/plans  (for grant-sub dropdown)
 
 import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api';
 import { PageShell, Badge, Spinner, ErrorBanner } from '@/components/page-shell';
 import { DataTable } from '@/components/data-table';
-import { Plus, X, Users, ToggleLeft, ToggleRight, BadgeCheck, Trash2 } from 'lucide-react';
+import { ConfirmModal } from '@/components/confirm-modal';
+import { useToast } from '@/components/toast';
+import { Plus, X, Users, ToggleLeft, ToggleRight, BadgeCheck, Trash2, Building2 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -43,6 +46,16 @@ interface Member {
   joinedAt: string;
 }
 
+interface Plan {
+  id: string;
+  displayName: string;
+  slug: string;
+  tier: number;
+  billingCycle: string;
+  pricePaise: number;
+  isActive: boolean;
+}
+
 const INPUT = 'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500';
 const LABEL = 'block text-xs font-medium text-zinc-400 mb-1.5';
 
@@ -53,6 +66,7 @@ function apiError(err: unknown) {
 // ─── Create Institute Modal ───────────────────────────────────
 
 function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const { toast } = useToast();
   const [form, setForm] = useState({ name: '', code: '', type: 'coaching' as 'coaching' | 'school' | 'university', contactEmail: '', contactPhone: '', logoUrl: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -74,12 +88,16 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
     if (form.logoUrl) payload.logoUrl = form.logoUrl;
     try {
       await adminApi.post('/api/admin/institutes', payload);
+      toast.success(`Institute "${form.name}" created`);
       onCreated(); onClose();
     } catch (err) { setError(apiError(err)); } finally { setSaving(false); }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md p-6 shadow-2xl mx-4">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-white">New Institute</h2>
@@ -115,26 +133,46 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
 }
 
 // ─── Grant Subscription Modal ─────────────────────────────────
+// #5 fix: fetches plans from the API instead of asking for a raw UUID
 
 function GrantSubModal({ institute, onClose, onGranted }: { institute: Institute; onClose: () => void; onGranted: () => void }) {
+  const { toast } = useToast();
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(true);
   const [form, setForm] = useState({ planId: '', maxSeats: 50, periodStartDays: 0, periodDays: 365 });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm(p => ({ ...p, [k]: Number(e.target.value) }));
+  // Fetch available plans on mount
+  useEffect(() => {
+    adminApi.get<{ data: Plan[] }>('/api/admin/plans')
+      .then(r => {
+        const active = r.data.data.filter(p => p.isActive);
+        setPlans(active);
+        if (active.length > 0) setForm(f => ({ ...f, planId: active[0].id }));
+      })
+      .catch(() => setError('Failed to load plans.'))
+      .finally(() => setPlansLoading(false));
+  }, []);
+
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm(p => ({ ...p, [k]: k === 'planId' ? e.target.value : Number(e.target.value) }));
 
   const handleGrant = async () => {
-    if (!form.planId) { setError('Plan ID is required.'); return; }
+    if (!form.planId) { setError('Please select a plan.'); return; }
     setSaving(true); setError('');
     try {
       await adminApi.post(`/api/admin/institutes/${institute.id}/subscriptions`, form);
+      toast.success(`Subscription granted to ${institute.name}`);
       onGranted(); onClose();
     } catch (err) { setError(apiError(err)); } finally { setSaving(false); }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md p-6 shadow-2xl mx-4">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-white">Grant Subscription — {institute.name}</h2>
@@ -142,7 +180,24 @@ function GrantSubModal({ institute, onClose, onGranted }: { institute: Institute
         </div>
         {error && <ErrorBanner message={error} />}
         <div className="space-y-4 mt-2">
-          <div><label className={LABEL}>Plan ID (UUID) *</label><input value={form.planId} onChange={e => setForm(p => ({ ...p, planId: e.target.value }))} placeholder="From Plans page" className={INPUT} /></div>
+          <div>
+            <label className={LABEL}>Plan *</label>
+            {plansLoading ? (
+              <div className="h-10 bg-zinc-800 rounded-lg animate-pulse" />
+            ) : (
+              <select value={form.planId} onChange={set('planId')} className={INPUT}>
+                {plans.length === 0 ? (
+                  <option value="">No active plans found</option>
+                ) : (
+                  plans.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.displayName} — ₹{(p.pricePaise / 100).toLocaleString('en-IN')}/{p.billingCycle} (Tier {p.tier})
+                    </option>
+                  ))
+                )}
+              </select>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className={LABEL}>Max Seats</label><input type="number" min={1} value={form.maxSeats} onChange={set('maxSeats')} className={INPUT} /></div>
             <div><label className={LABEL}>Period (days)</label><input type="number" min={1} value={form.periodDays} onChange={set('periodDays')} className={INPUT} /></div>
@@ -150,7 +205,7 @@ function GrantSubModal({ institute, onClose, onGranted }: { institute: Institute
           <div><label className={LABEL}>Starts in (days from now)</label><input type="number" min={0} value={form.periodStartDays} onChange={set('periodStartDays')} className={INPUT} /></div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 text-sm hover:text-white transition">Cancel</button>
-            <button onClick={handleGrant} disabled={saving} className="flex-1 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition disabled:opacity-50">{saving ? 'Granting…' : 'Grant'}</button>
+            <button onClick={handleGrant} disabled={saving || plansLoading || plans.length === 0} className="flex-1 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition disabled:opacity-50">{saving ? 'Granting…' : 'Grant'}</button>
           </div>
         </div>
       </div>
@@ -161,6 +216,7 @@ function GrantSubModal({ institute, onClose, onGranted }: { institute: Institute
 // ─── Members Panel ────────────────────────────────────────────
 
 function MembersPanel({ institute, onClose }: { institute: Institute; onClose: () => void }) {
+  const { toast } = useToast();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -169,7 +225,6 @@ function MembersPanel({ institute, onClose }: { institute: Institute; onClose: (
   const [syncUid, setSyncUid] = useState('');
   const [syncRole, setSyncRole] = useState('educator');
   const [syncing, setSyncing] = useState(false);
-  const [syncMsg, setSyncMsg] = useState('');
 
   useEffect(() => {
     adminApi.get<{ data: Member[] }>(`/api/admin/institutes/${institute.id}/members`)
@@ -180,7 +235,7 @@ function MembersPanel({ institute, onClose }: { institute: Institute; onClose: (
 
   const handleSync = async () => {
     if (!syncUid) return;
-    setSyncing(true); setSyncMsg(''); setError('');
+    setSyncing(true); setError('');
     try {
       await adminApi.post('/api/admin/claims/sync', {
         firebaseUid: syncUid,
@@ -188,7 +243,7 @@ function MembersPanel({ institute, onClose }: { institute: Institute; onClose: (
         instituteId: institute.id,
         instituteRole: syncRole,
       });
-      setSyncMsg(`✓ Claims synced for ${syncUid}`);
+      toast.success(`Claims synced for ${syncUid}`);
       setSyncUid('');
     } catch (err) { setError(apiError(err)); } finally { setSyncing(false); }
   };
@@ -201,7 +256,10 @@ function MembersPanel({ institute, onClose }: { institute: Institute; onClose: (
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/50">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex justify-end bg-black/50"
+    >
       <div className="bg-zinc-900 border-l border-zinc-700 w-full max-w-2xl h-full overflow-y-auto flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 shrink-0">
           <h2 className="text-base font-semibold text-white">Members — {institute.name}</h2>
@@ -213,7 +271,6 @@ function MembersPanel({ institute, onClose }: { institute: Institute; onClose: (
           {/* Claims Sync */}
           <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-4">
             <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-3">Sync Firebase Role Claim</p>
-            {syncMsg && <p className="text-xs text-emerald-400 mb-3">{syncMsg}</p>}
             <div className="flex gap-2 flex-col sm:flex-row">
               <input
                 value={syncUid}
@@ -254,6 +311,7 @@ function MembersPanel({ institute, onClose }: { institute: Institute; onClose: (
 // ─── Page ─────────────────────────────────────────────────────
 
 export default function InstitutesPage() {
+  const { toast } = useToast();
   const [institutes, setInstitutes] = useState<Institute[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
@@ -263,6 +321,8 @@ export default function InstitutesPage() {
   const [toggling, setToggling]       = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Institute | null>(null);
   const [deleting, setDeleting]       = useState(false);
+  // Separate error state for the delete modal (fix #2 — was sharing page-level `error`)
+  const [deleteError, setDeleteError] = useState('');
 
   const fetchInstitutes = useCallback(async () => {
     setLoading(true); setError('');
@@ -278,17 +338,20 @@ export default function InstitutesPage() {
     setToggling(inst.id); setError('');
     try {
       await adminApi.patch(`/api/admin/institutes/${inst.id}/activate`, { isActive: !inst.isActive });
+      toast.success(`${inst.name} ${!inst.isActive ? 'activated' : 'deactivated'}`);
       await fetchInstitutes();
     } catch (err) { setError(apiError(err)); } finally { setToggling(null); }
   };
 
-  const handleDelete = async (inst: Institute) => {
-    setDeleting(true); setError('');
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true); setDeleteError('');
     try {
-      await adminApi.delete(`/api/admin/institutes/${inst.id}`);
+      await adminApi.delete(`/api/admin/institutes/${deleteTarget.id}`);
+      toast.success(`${deleteTarget.name} deleted`);
       setDeleteTarget(null);
       await fetchInstitutes();
-    } catch (err) { setError(apiError(err)); } finally { setDeleting(false); }
+    } catch (err) { setDeleteError(apiError(err)); } finally { setDeleting(false); }
   };
 
   const COLUMNS: ColumnDef<Institute, unknown>[] = [
@@ -327,7 +390,7 @@ export default function InstitutesPage() {
         <div className="flex items-center justify-end gap-1">
           <button onClick={() => setMembers(row.original)} className="p-2 rounded-lg text-zinc-500 hover:text-violet-400 hover:bg-zinc-800 transition" title="Members"><Users size={13} /></button>
           <button onClick={() => setGrantSub(row.original)} className="p-2 rounded-lg text-zinc-500 hover:text-emerald-400 hover:bg-zinc-800 transition" title="Grant Subscription"><BadgeCheck size={13} /></button>
-          <button onClick={() => setDeleteTarget(row.original)} className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition" title="Delete Institute"><Trash2 size={13} /></button>
+          <button onClick={() => { setDeleteTarget(row.original); setDeleteError(''); }} className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition" title="Delete Institute"><Trash2 size={13} /></button>
         </div>
       ),
     },
@@ -346,43 +409,35 @@ export default function InstitutesPage() {
       {showCreate    && <CreateModal onClose={() => setShowCreate(false)} onCreated={fetchInstitutes} />}
       {grantSub     && <GrantSubModal institute={grantSub} onClose={() => setGrantSub(null)} onGranted={fetchInstitutes} />}
       {members      && <MembersPanel institute={members} onClose={() => setMembers(null)} />}
+
+      {/* Delete confirm modal — uses its own deleteError state (fix #2) */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm p-6 shadow-2xl mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-white">Delete Institute</h2>
-              <button onClick={() => setDeleteTarget(null)}><X size={16} className="text-zinc-500 hover:text-white" /></button>
-            </div>
-            <p className="text-sm text-zinc-400 mb-1">
-              Are you sure you want to permanently delete
-              <span className="text-white font-medium"> {deleteTarget.name}</span>?
-            </p>
-            <p className="text-xs text-zinc-500 mb-5">
-              This action cannot be undone. The institute must have no active members before it can be deleted.
-            </p>
-            {error && <ErrorBanner message={error} />}
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => { setDeleteTarget(null); setError(''); }}
-                className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 text-sm hover:text-white transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDelete(deleteTarget)}
-                disabled={deleting}
-                className="flex-1 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition disabled:opacity-50"
-              >
-                {deleting ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmModal
+          title="Delete Institute"
+          description={`Permanently delete "${deleteTarget.name}"? This action cannot be undone. The institute must have no active members before it can be deleted.`}
+          confirmLabel="Delete Institute"
+          destructive
+          loading={deleting}
+          error={deleteError}
+          onConfirm={handleDelete}
+          onCancel={() => { setDeleteTarget(null); setDeleteError(''); }}
+        />
       )}
 
       {error && <ErrorBanner message={error} />}
-      {loading ? <Spinner /> : <DataTable columns={COLUMNS} data={institutes} pageSize={20} />}
+      {loading ? (
+        <Spinner />
+      ) : institutes.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4">
+            <Building2 size={20} className="text-zinc-600" />
+          </div>
+          <p className="text-zinc-400 font-medium">No institutes yet</p>
+          <p className="text-zinc-600 text-sm mt-1">Click &ldquo;New Institute&rdquo; to onboard your first coaching or school.</p>
+        </div>
+      ) : (
+        <DataTable columns={COLUMNS} data={institutes} pageSize={20} />
+      )}
     </PageShell>
   );
 }

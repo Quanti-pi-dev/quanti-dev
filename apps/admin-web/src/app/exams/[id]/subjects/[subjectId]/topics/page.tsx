@@ -18,6 +18,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { adminApi } from '@/lib/api';
 import { PageShell, ErrorBanner } from '@/components/page-shell';
+import { ConfirmModal } from '@/components/confirm-modal';
+import { useToast } from '@/components/toast';
 import { ArrowLeft, Plus, Pencil, Trash2, Upload, X, ChevronDown, ChevronRight, BookOpen, Layers } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -111,7 +113,10 @@ function TopicModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-white">{isEdit ? 'Edit Topic' : 'New Topic'}</h2>
@@ -188,7 +193,10 @@ function BulkImportModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-xl p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-white">Bulk Import Topics</h2>
@@ -415,12 +423,15 @@ function Spinner({ size = 'default' }: { size?: 'sm' | 'default' }) {
 export default function TopicsPage() {
   const { examId, subjectId } = useParams<{ examId: string; subjectId: string }>();
   const router = useRouter();
+  const { toast } = useToast();
 
   const [data, setData]       = useState<TopicsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
   const [modal, setModal]     = useState<false | 'new' | 'bulk' | Topic>(false);
+  const [deleteTarget, setDeleteTarget] = useState<Topic | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState('');
 
   const fetchTopics = useCallback(async () => {
     setLoading(true); setError('');
@@ -435,15 +446,17 @@ export default function TopicsPage() {
 
   useEffect(() => { fetchTopics(); }, [fetchTopics]);
 
-  const handleDelete = async (topic: Topic) => {
-    if (!confirm(`Delete "${topic.displayName}"? This will fail if decks exist under it.`)) return;
-    setDeleting(topic.id); setError('');
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(deleteTarget.id); setDeleteError('');
     try {
-      await adminApi.delete(`/api/admin/exams/${examId}/subjects/${subjectId}/topics/${topic.id}`);
+      await adminApi.delete(`/api/admin/exams/${examId}/subjects/${subjectId}/topics/${deleteTarget.id}`);
+      toast.success(`"${deleteTarget.displayName}" deleted`);
+      setDeleteTarget(null);
       await fetchTopics();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
-      setError(msg ?? 'Failed to delete topic.');
+      setDeleteError(msg ?? 'Failed to delete topic.');
     }
     finally { setDeleting(null); }
   };
@@ -454,6 +467,12 @@ export default function TopicsPage() {
     <PageShell
       title={data ? `Topics — ${data.subjectName}` : 'Topics'}
       subtitle={data ? `${sorted.length} topic${sorted.length !== 1 ? 's' : ''}` : ''}
+      breadcrumbs={[
+        { label: 'Exams', href: '/exams' },
+        { label: 'Exam', href: `/exams/${examId}` },
+        { label: data?.subjectName ?? 'Subject', href: `/exams/${examId}` },
+        { label: 'Topics' },
+      ]}
       actions={
         <div className="flex items-center gap-2">
           <button
@@ -496,6 +515,19 @@ export default function TopicsPage() {
         />
       )}
 
+      {deleteTarget && (
+        <ConfirmModal
+          title="Delete Topic"
+          description={`Delete "${deleteTarget.displayName}"? This will fail if decks exist under it.`}
+          confirmLabel="Delete Topic"
+          destructive
+          loading={deleting !== null}
+          error={deleteError}
+          onConfirm={handleDelete}
+          onCancel={() => { setDeleteTarget(null); setDeleteError(''); }}
+        />
+      )}
+
       {error && <ErrorBanner message={error} />}
 
       {loading ? <Spinner /> : sorted.length === 0 ? (
@@ -523,7 +555,7 @@ export default function TopicsPage() {
                   subjectId={subjectId}
                   deleting={deleting}
                   onEdit={t => setModal(t)}
-                  onDelete={handleDelete}
+                  onDelete={t => { setDeleteTarget(t); setDeleteError(''); }}
                   router={router}
                 />
               ))}
