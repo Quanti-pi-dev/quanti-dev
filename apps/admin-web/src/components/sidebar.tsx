@@ -145,7 +145,7 @@ export function Sidebar() {
       </div>
 
       {/* ── Nav ───────────────────────────────────────────────── */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2">
+      <nav className="scrollbar-hidden flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-0.5 px-2">
         {NAV_SECTIONS.map((section, si) => (
           <div key={section.label} className={si > 0 ? 'mt-3' : ''}>
             {/* Section label — hidden when collapsed */}

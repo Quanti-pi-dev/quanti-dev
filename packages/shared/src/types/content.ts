@@ -68,6 +68,8 @@ export interface Deck {
   cardCount: number;
   imageUrl: string | null;
   createdBy: string;
+  /** Whether this deck is visible to end-users. False = draft (admin only). */
+  isPublished?: boolean;
   // ─── Hierarchy-scoped fields (populated for type='mastery') ────────────
   examId?: string;     // links deck to a specific exam
   subjectId?: string;
@@ -100,6 +102,8 @@ export interface Flashcard {
   imageUrl: string | null;
   /** Content origin: platform-created, previous-year-question, or AI-generated. */
   source: FlashcardSource;
+  /** Display order within the deck (ascending). */
+  order?: number;
   /** Year the question appeared (PYQ only). */
   sourceYear?: number;
   /** Paper identifier, e.g. 'JEE Mains Shift 1' (PYQ only). */

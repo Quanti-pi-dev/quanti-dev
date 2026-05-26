@@ -3,7 +3,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireRole } from '../middleware/rbac.js';
+import { requireAuth } from '../middleware/rbac.js';
 import { gamificationRepository } from '@kd/db';
 import { getRedisClient } from '@kd/db';
 
@@ -16,12 +16,11 @@ const coinHistorySchema = z.object({
   pageSize: z.coerce.number().int().positive().max(50).default(20),
 });
 
-// Admin-only manual award schema (kept here for internal tooling / testing)
-const adminEarnCoinsSchema = z.object({
-  userId: z.string().min(1),
-  amount: z.number().int().positive(),
-  reason: z.string().min(1),
-});
+// NOTE: Admin-only coin/badge award endpoints were previously here.
+// They have been moved to server-admin at:
+//   POST /api/admin/gamify/coins/earn
+//   POST /api/admin/gamify/badges/award
+// See server-admin/src/routes/admin-gamification.routes.ts
 
 export async function gamificationRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook('preHandler', requireAuth());
@@ -66,16 +65,7 @@ export async function gamificationRoutes(fastify: FastifyInstance): Promise<void
     });
   });
 
-  // ─── POST /gamify/coins/earn — ADMIN ONLY: manual award ─
-  fastify.post('/coins/earn', { preHandler: [requireRole('admin')] }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId, amount, reason } = adminEarnCoinsSchema.parse(request.body);
-    const balance = await gamificationRepository.earnCoins(userId, amount, reason);
-    return reply.send({
-      success: true,
-      data: balance,
-      timestamp: new Date().toISOString(),
-    });
-  });
+  // NOTE: Admin endpoints removed in favor of server-admin service.
 
   // ─── GET /gamify/badges — User badges ─────────────────
   fastify.get('/badges', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -83,17 +73,6 @@ export async function gamificationRoutes(fastify: FastifyInstance): Promise<void
     return reply.send({
       success: true,
       data: badges,
-      timestamp: new Date().toISOString(),
-    });
-  });
-
-  // ─── POST /gamify/badges/award — Award badge (ADMIN) ─
-  fastify.post('/badges/award', { preHandler: [requireRole('admin')] }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { badgeId, userId } = z.object({ badgeId: z.string().uuid(), userId: z.string().min(1) }).parse(request.body);
-    const result = await gamificationRepository.awardBadge(userId, badgeId);
-    return reply.send({
-      success: true,
-      data: result,
       timestamp: new Date().toISOString(),
     });
   });

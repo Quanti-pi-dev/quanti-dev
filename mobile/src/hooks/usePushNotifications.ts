@@ -34,16 +34,18 @@ export function usePushNotifications() {
   // APNs on iOS), and POSTs it to our backend for storage.
   const registerForPushNotifications = useCallback(async (): Promise<void> => {
     try {
-      // 1. Check / request permission
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
+      // 1. Check / request permission.
+      // Cast is required: expo-notifications and expo-modules-core resolve to
+      // different copies of PermissionResponse in this monorepo, causing TS to
+      // lose track of the .status property even though it exists at runtime.
+      type Perm = { status: string };
+      let perm = await Notifications.getPermissionsAsync() as unknown as Perm;
 
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
+      if (perm.status !== 'granted') {
+        perm = await Notifications.requestPermissionsAsync() as unknown as Perm;
       }
 
-      if (finalStatus !== 'granted') {
+      if (perm.status !== 'granted') {
         // User declined — nothing we can do
         return;
       }

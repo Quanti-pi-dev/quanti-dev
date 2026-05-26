@@ -11,19 +11,19 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { useTheme } from '../../../src/theme';
-import { spacing, radius } from '../../../src/theme/tokens';
-import { ScreenWrapper } from '../../../src/components/layout/ScreenWrapper';
-import { Typography } from '../../../src/components/ui/Typography';
-import { ProgressBar } from '../../../src/components/ui/ProgressBar';
-import { Skeleton } from '../../../src/components/ui/Skeleton';
+import { useTheme } from '../../../../src/theme';
+import { spacing, radius } from '../../../../src/theme/tokens';
+import { ScreenWrapper } from '../../../../src/components/layout/ScreenWrapper';
+import { Typography } from '../../../../src/components/ui/Typography';
+import { ProgressBar } from '../../../../src/components/ui/ProgressBar';
+import { Skeleton } from '../../../../src/components/ui/Skeleton';
 import {
   fetchInstituteTest,
   startInstituteTest,
   submitInstituteTest,
   type InstituteTest,
   type InstituteTestQuestion,
-} from '../../../src/services/api-contracts';
+} from '../../../../src/services/api-contracts';
 
 // ── Timer badge ─────────────────────────────────────────────────
 
@@ -159,7 +159,7 @@ export default function TakeTestScreen() {
     try {
       await submitInstituteTest(instituteId, testId, answerPayload, timeTakenSeconds);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace(`/institute/tests/${testId}/result?instituteId=${instituteId}`);
+      router.replace(`/institute/tests/${testId}/result?instituteId=${instituteId}` as never);
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { error?: { message?: string } } } })
         ?.response?.data?.error?.message ?? 'Submission failed';
@@ -186,7 +186,7 @@ export default function TakeTestScreen() {
   if (!test) return (
     <ScreenWrapper>
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <Typography variant="body" color={theme.text.secondary}>Test not found</Typography>
+        <Typography variant="body" color={theme.textSecondary}>Test not found</Typography>
       </View>
     </ScreenWrapper>
   );
@@ -198,7 +198,7 @@ export default function TakeTestScreen() {
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }}>
           <TouchableOpacity onPress={() => router.back()}
             style={{ marginBottom: spacing.lg, alignSelf: 'flex-start' }}>
-            <Ionicons name="arrow-back" size={24} color={theme.text.secondary} />
+            <Ionicons name="arrow-back" size={24} color={theme.textSecondary} />
           </TouchableOpacity>
 
           <Animated.View entering={FadeInDown.springify()}>
@@ -208,11 +208,11 @@ export default function TakeTestScreen() {
               backgroundColor: 'rgba(99,102,241,0.1)',
               borderWidth: 1, borderColor: 'rgba(99,102,241,0.25)',
             }}>
-              <Typography variant="h2" color={theme.text.primary} style={{ marginBottom: spacing.sm }}>
+              <Typography variant="h2" color={theme.text} style={{ marginBottom: spacing.sm }}>
                 {test.title}
               </Typography>
               {test.description ? (
-                <Typography variant="body" color={theme.text.secondary}>{test.description}</Typography>
+                <Typography variant="body" color={theme.textSecondary}>{test.description}</Typography>
               ) : null}
             </View>
 
@@ -226,12 +226,12 @@ export default function TakeTestScreen() {
               ].map(({ icon, label, value }) => (
                 <View key={label} style={{
                   flex: 1, minWidth: '40%', padding: spacing.md,
-                  borderRadius: radius.lg, backgroundColor: theme.surface.secondary,
-                  borderWidth: 1, borderColor: theme.border.default, alignItems: 'center', gap: 4,
+                  borderRadius: radius.lg, backgroundColor: theme.card,
+                  borderWidth: 1, borderColor: theme.border, alignItems: 'center', gap: 4,
                 }}>
                   <Ionicons name={icon as 'timer-outline'} size={20} color="#a5b4fc" />
-                  <Typography variant="h3" color={theme.text.primary}>{value}</Typography>
-                  <Typography variant="caption" color={theme.text.tertiary}>{label}</Typography>
+                  <Typography variant="h3" color={theme.text}>{value}</Typography>
+                  <Typography variant="caption" color={theme.textTertiary}>{label}</Typography>
                 </View>
               ))}
             </View>
@@ -239,10 +239,10 @@ export default function TakeTestScreen() {
             {/* Rules */}
             <View style={{
               padding: spacing.lg, borderRadius: radius.xl, marginBottom: spacing.xl,
-              backgroundColor: theme.surface.secondary, borderWidth: 1, borderColor: theme.border.default,
+              backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border,
               gap: spacing.sm,
             }}>
-              <Typography variant="label" color={theme.text.primary} style={{ marginBottom: spacing.xs }}>
+              <Typography variant="label" color={theme.text} style={{ marginBottom: spacing.xs }}>
                 Rules
               </Typography>
               {[
@@ -256,7 +256,7 @@ export default function TakeTestScreen() {
               ].map(rule => (
                 <View key={rule} style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' }}>
                   <Ionicons name="checkmark" size={14} color="#6366f1" style={{ marginTop: 2 }} />
-                  <Typography variant="body" color={theme.text.secondary} style={{ flex: 1, fontSize: 13 }}>
+                  <Typography variant="body" color={theme.textSecondary} style={{ flex: 1, fontSize: 13 }}>
                     {rule}
                   </Typography>
                 </View>
@@ -275,7 +275,7 @@ export default function TakeTestScreen() {
               }}
             >
               <Ionicons name="play" size={18} color="white" />
-              <Typography variant="button" color="white">Start Test</Typography>
+              <Typography variant="label" color="white">Start Test</Typography>
             </TouchableOpacity>
           </Animated.View>
         </ScrollView>
@@ -295,10 +295,10 @@ export default function TakeTestScreen() {
       {/* Fixed header */}
       <View style={{
         paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm,
-        borderBottomWidth: 1, borderBottomColor: theme.border.default,
+        borderBottomWidth: 1, borderBottomColor: theme.border,
         flexDirection: 'row', alignItems: 'center', gap: spacing.md,
       }}>
-        <Typography variant="label" color={theme.text.secondary} style={{ flex: 1 }} numberOfLines={1}>
+        <Typography variant="label" color={theme.textSecondary} style={{ flex: 1 }} numberOfLines={1}>
           {test.title}
         </Typography>
         <TimerBadge seconds={timeLeft} total={totalTime} />
@@ -307,7 +307,7 @@ export default function TakeTestScreen() {
       {/* Progress */}
       <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.sm }}>
         <ProgressBar progress={answeredCount / questions.length} />
-        <Typography variant="caption" color={theme.text.tertiary} style={{ marginTop: 4, textAlign: 'right' }}>
+        <Typography variant="caption" color={theme.textTertiary} style={{ marginTop: 4, textAlign: 'right' }}>
           {answeredCount}/{questions.length} answered
         </Typography>
       </View>
@@ -324,11 +324,11 @@ export default function TakeTestScreen() {
                 Q{currentIdx + 1} of {questions.length}
               </Typography>
             </View>
-            <Typography variant="caption" color={theme.text.tertiary}>{q.marks} marks</Typography>
+            <Typography variant="caption" color={theme.textTertiary}>{q.marks} marks</Typography>
           </View>
 
           {/* Question text */}
-          <Typography variant="body" color={theme.text.primary}
+          <Typography variant="body" color={theme.text}
             style={{ fontSize: 16, lineHeight: 26, marginBottom: spacing.xl }}>
             {q.text}
           </Typography>
@@ -345,24 +345,24 @@ export default function TakeTestScreen() {
                   style={{
                     flexDirection: 'row', alignItems: 'center', gap: spacing.md,
                     padding: spacing.md, borderRadius: radius.xl,
-                    backgroundColor: selected ? 'rgba(99,102,241,0.15)' : theme.surface.secondary,
+                    backgroundColor: selected ? 'rgba(99,102,241,0.15)' : theme.card,
                     borderWidth: 2,
-                    borderColor: selected ? '#6366f1' : theme.border.default,
+                    borderColor: selected ? '#6366f1' : theme.border,
                   }}
                 >
                   {/* Option letter circle */}
                   <View style={{
                     width: 32, height: 32, borderRadius: 16,
-                    backgroundColor: selected ? '#6366f1' : theme.surface.primary,
-                    borderWidth: 1.5, borderColor: selected ? '#6366f1' : theme.border.default,
-                    alignItems: 'center', justifyContent: 'center', shrink: 0,
+                    backgroundColor: selected ? '#6366f1' : theme.background,
+                    borderWidth: 1.5, borderColor: selected ? '#6366f1' : theme.border,
+                    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                   }}>
-                    <Typography variant="caption" color={selected ? 'white' : theme.text.secondary}
+                    <Typography variant="caption" color={selected ? 'white' : theme.textSecondary}
                       style={{ fontWeight: '700' }}>
                       {String.fromCharCode(65 + oi)}
                     </Typography>
                   </View>
-                  <Typography variant="body" color={selected ? '#a5b4fc' : theme.text.primary}
+                  <Typography variant="body" color={selected ? '#a5b4fc' : theme.text}
                     style={{ flex: 1, fontSize: 14, lineHeight: 20 }}>
                     {opt.text}
                   </Typography>
@@ -376,9 +376,9 @@ export default function TakeTestScreen() {
         {/* Question palette */}
         <View style={{
           marginTop: spacing.xl, padding: spacing.md, borderRadius: radius.xl,
-          backgroundColor: theme.surface.secondary, borderWidth: 1, borderColor: theme.border.default,
+          backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border,
         }}>
-          <Typography variant="caption" color={theme.text.tertiary} style={{ marginBottom: spacing.sm }}>
+          <Typography variant="caption" color={theme.textTertiary} style={{ marginBottom: spacing.sm }}>
             Question palette
           </Typography>
           <FlatList
@@ -395,13 +395,13 @@ export default function TakeTestScreen() {
                   style={{
                     width: 34, height: 34, borderRadius: 8, marginRight: 6,
                     alignItems: 'center', justifyContent: 'center',
-                    backgroundColor: isCurrent ? '#6366f1' : answered ? 'rgba(34,197,94,0.2)' : theme.surface.primary,
+                    backgroundColor: isCurrent ? '#6366f1' : answered ? 'rgba(34,197,94,0.2)' : theme.background,
                     borderWidth: 1.5,
-                    borderColor: isCurrent ? '#6366f1' : answered ? '#22c55e' : theme.border.default,
+                    borderColor: isCurrent ? '#6366f1' : answered ? '#22c55e' : theme.border,
                   }}
                 >
                   <Typography variant="caption"
-                    color={isCurrent ? 'white' : answered ? '#4ade80' : theme.text.tertiary}
+                    color={isCurrent ? 'white' : answered ? '#4ade80' : theme.textTertiary}
                     style={{ fontWeight: '700', fontSize: 11 }}>
                     {index + 1}
                   </Typography>
@@ -416,8 +416,8 @@ export default function TakeTestScreen() {
       <View style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
         padding: spacing.lg, paddingBottom: spacing.xl,
-        backgroundColor: theme.surface.primary,
-        borderTopWidth: 1, borderTopColor: theme.border.default,
+        backgroundColor: theme.background,
+        borderTopWidth: 1, borderTopColor: theme.border,
         flexDirection: 'row', gap: spacing.md,
       }}>
         <TouchableOpacity
@@ -425,12 +425,12 @@ export default function TakeTestScreen() {
           disabled={currentIdx === 0}
           style={{
             flex: 1, paddingVertical: spacing.md, borderRadius: radius.xl,
-            backgroundColor: theme.surface.secondary,
+            backgroundColor: theme.card,
             alignItems: 'center', justifyContent: 'center',
             opacity: currentIdx === 0 ? 0.4 : 1,
           }}
         >
-          <Ionicons name="arrow-back" size={18} color={theme.text.secondary} />
+          <Ionicons name="arrow-back" size={18} color={theme.textSecondary} />
         </TouchableOpacity>
 
         {currentIdx < questions.length - 1 ? (
@@ -442,7 +442,7 @@ export default function TakeTestScreen() {
               flexDirection: 'row', gap: 6,
             }}
           >
-            <Typography variant="button" color="white">Next</Typography>
+            <Typography variant="label" color="white">Next</Typography>
             <Ionicons name="arrow-forward" size={16} color="white" />
           </TouchableOpacity>
         ) : (
@@ -456,7 +456,7 @@ export default function TakeTestScreen() {
             }}
           >
             <Ionicons name="checkmark-done" size={16} color="white" />
-            <Typography variant="button" color="white">
+            <Typography variant="label" color="white">
               {submitting ? 'Submitting…' : 'Submit Test'}
             </Typography>
           </TouchableOpacity>

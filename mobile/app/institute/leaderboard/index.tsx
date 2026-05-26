@@ -57,7 +57,7 @@ function PodiumSlot({ entry, height }: { entry: LeaderboardEntry; height: number
           ? null // RN Image would go here
           : <Typography variant="label" color="white" style={{ fontWeight: '800' }}>{initials}</Typography>}
       </View>
-      <Typography variant="caption" color={theme.text.primary} style={{ fontWeight: '700', maxWidth: 72 }} numberOfLines={1}>
+      <Typography variant="caption" color={theme.text} style={{ fontWeight: '700', maxWidth: 72 }} numberOfLines={1}>
         {entry.displayName.split(' ')[0]}
       </Typography>
       <Typography variant="caption" color={color} style={{ fontWeight: '800' }}>
@@ -65,7 +65,7 @@ function PodiumSlot({ entry, height }: { entry: LeaderboardEntry; height: number
       </Typography>
       {/* Podium block */}
       <View style={{
-        width: 72, height, borderRadius: `${radius.md}px 10px 0 0`,
+        width: 72, height, borderTopLeftRadius: radius.md, borderTopRightRadius: radius.md,
         backgroundColor: color + '22',
         borderWidth: 1, borderColor: color + '40',
         alignItems: 'center', justifyContent: 'flex-start', paddingTop: spacing.sm,
@@ -92,14 +92,14 @@ function LeaderRow({ entry, isMe }: { entry: LeaderboardEntry; isMe: boolean }) 
         flexDirection: 'row', alignItems: 'center', gap: spacing.md,
         paddingVertical: spacing.md, paddingHorizontal: spacing.lg,
         backgroundColor: isMe ? 'rgba(99,102,241,0.1)' : 'transparent',
-        borderBottomWidth: 1, borderBottomColor: theme.border.default + '60',
+        borderBottomWidth: 1, borderBottomColor: theme.border + '60',
       }}>
       {/* Rank */}
       <View style={{ width: 28, alignItems: 'center' }}>
         {rankColor ? (
           <Ionicons name={entry.rank === 1 ? 'trophy' : 'medal'} size={18} color={rankColor} />
         ) : (
-          <Typography variant="label" color={theme.text.tertiary} style={{ fontWeight: '700' }}>
+          <Typography variant="label" color={theme.textTertiary} style={{ fontWeight: '700' }}>
             {entry.rank}
           </Typography>
         )}
@@ -114,19 +114,19 @@ function LeaderRow({ entry, isMe }: { entry: LeaderboardEntry; isMe: boolean }) 
       </View>
       {/* Name */}
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Typography variant="label" color={isMe ? '#a5b4fc' : theme.text.primary} numberOfLines={1}>
+        <Typography variant="label" color={isMe ? '#a5b4fc' : theme.text} numberOfLines={1}>
           {entry.displayName} {isMe ? '(You)' : ''}
         </Typography>
         {entry.studentUid && (
-          <Typography variant="caption" color={theme.text.tertiary}>#{entry.studentUid}</Typography>
+          <Typography variant="caption" color={theme.textTertiary}>#{entry.studentUid}</Typography>
         )}
       </View>
       {/* Score */}
       <View style={{ alignItems: 'flex-end' }}>
-        <Typography variant="label" color={isMe ? '#a5b4fc' : theme.text.primary} style={{ fontWeight: '800' }}>
+        <Typography variant="label" color={isMe ? '#a5b4fc' : theme.text} style={{ fontWeight: '800' }}>
           {entry.score.toLocaleString()}
         </Typography>
-        <Typography variant="caption" color={theme.text.tertiary}>pts</Typography>
+        <Typography variant="caption" color={theme.textTertiary}>pts</Typography>
       </View>
     </Animated.View>
   );
@@ -162,21 +162,21 @@ export default function InstituteLeaderboardScreen() {
       <View style={{
         paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm,
         flexDirection: 'row', alignItems: 'center', gap: spacing.md,
-        borderBottomWidth: 1, borderBottomColor: theme.border.default,
+        borderBottomWidth: 1, borderBottomColor: theme.border,
       }}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color={theme.text.secondary} />
+          <Ionicons name="arrow-back" size={22} color={theme.textSecondary} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Typography variant="h3" color={theme.text.primary}>Leaderboard</Typography>
+          <Typography variant="h3" color={theme.text}>Leaderboard</Typography>
           {instituteName && (
-            <Typography variant="caption" color={theme.text.tertiary} numberOfLines={1}>{instituteName}</Typography>
+            <Typography variant="caption" color={theme.textTertiary} numberOfLines={1}>{instituteName}</Typography>
           )}
         </View>
         {/* Type toggle */}
         <View style={{
           flexDirection: 'row', gap: 4, padding: 4, borderRadius: radius.lg,
-          backgroundColor: theme.surface.secondary, borderWidth: 1, borderColor: theme.border.default,
+          backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border,
         }}>
           {(['weekly', 'global'] as const).map(t => (
             <TouchableOpacity key={t} onPress={() => setType(t)}
@@ -184,7 +184,7 @@ export default function InstituteLeaderboardScreen() {
                 paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: radius.md,
                 backgroundColor: type === t ? '#6366f1' : 'transparent',
               }}>
-              <Typography variant="caption" color={type === t ? 'white' : theme.text.tertiary}
+              <Typography variant="caption" color={type === t ? 'white' : theme.textTertiary}
                 style={{ fontWeight: '600' }}>
                 {t === 'weekly' ? '🔥 Week' : '🌍 All'}
               </Typography>
@@ -209,7 +209,7 @@ export default function InstituteLeaderboardScreen() {
               style={{ width: 80, height: 80, borderRadius: 24, alignItems: 'center', justifyContent: 'center' }}>
               <Ionicons name="trophy-outline" size={36} color="#6366f1" />
             </LinearGradient>
-            <Typography variant="body" color={theme.text.secondary} style={{ textAlign: 'center' }}>
+            <Typography variant="body" color={theme.textSecondary} style={{ textAlign: 'center' }}>
               No rankings yet. Complete tests to appear here!
             </Typography>
           </View>
@@ -234,8 +234,8 @@ export default function InstituteLeaderboardScreen() {
             {/* Full list */}
             <View style={{
               marginHorizontal: spacing.lg, borderRadius: radius.xl, overflow: 'hidden',
-              borderWidth: 1, borderColor: theme.border.default,
-              backgroundColor: theme.surface.secondary, marginBottom: spacing.xl,
+              borderWidth: 1, borderColor: theme.border,
+              backgroundColor: theme.card, marginBottom: spacing.xl,
             }}>
               {entries.map(entry => (
                 <LeaderRow
@@ -254,7 +254,7 @@ export default function InstituteLeaderboardScreen() {
                 borderWidth: 1, borderColor: 'rgba(99,102,241,0.3)',
               }}>
                 <View style={{ padding: spacing.sm }}>
-                  <Typography variant="caption" color={theme.text.tertiary} style={{ textAlign: 'center', marginBottom: spacing.xs }}>
+                  <Typography variant="caption" color={theme.textTertiary} style={{ textAlign: 'center', marginBottom: spacing.xs }}>
                     Your ranking
                   </Typography>
                   <LeaderRow entry={data.userRank} isMe />

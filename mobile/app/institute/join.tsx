@@ -14,11 +14,11 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { useTheme } from '../src/theme';
-import { spacing, radius } from '../src/theme/tokens';
-import { ScreenWrapper } from '../src/components/layout/ScreenWrapper';
-import { Typography } from '../src/components/ui/Typography';
-import { apiPost } from '../src/services/api-contracts';
+import { useTheme } from '../../src/theme';
+import { spacing, radius } from '../../src/theme/tokens';
+import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
+import { Typography } from '../../src/components/ui/Typography';
+import { apiPost } from '../../src/services/api-contracts';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -62,7 +62,7 @@ export default function JoinInstituteScreen() {
 
       // Give user 1.5 s to see the success banner, then navigate
       setTimeout(() => {
-        router.replace('/institute');
+        router.replace('/institute' as never);
       }, 1500);
     } catch (e: unknown) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -87,12 +87,12 @@ export default function JoinInstituteScreen() {
             onPress={() => router.back()}
             style={{
               width: 40, height: 40, borderRadius: radius.lg,
-              backgroundColor: theme.colors.surface,
+              backgroundColor: theme.card,
               alignItems: 'center', justifyContent: 'center',
               marginBottom: spacing.xl,
             }}
           >
-            <Ionicons name="arrow-back" size={20} color={theme.colors.textSecondary} />
+            <Ionicons name="arrow-back" size={20} color={theme.textSecondary} />
           </TouchableOpacity>
 
           {/* Hero icon */}
@@ -110,7 +110,7 @@ export default function JoinInstituteScreen() {
             <Typography variant="h1" style={{ textAlign: 'center', marginBottom: spacing.xs }}>
               Join Your Institute
             </Typography>
-            <Typography variant="body" color={theme.colors.textSecondary} style={{ textAlign: 'center', lineHeight: 22 }}>
+            <Typography variant="body" color={theme.textSecondary} style={{ textAlign: 'center', lineHeight: 22 }}>
               Enter the join code provided by your{'\n'}educator or institute administrator
             </Typography>
           </Animated.View>
@@ -122,14 +122,14 @@ export default function JoinInstituteScreen() {
               value={code}
               onChangeText={t => { setCode(t.toUpperCase()); setError(null); }}
               placeholder="e.g. QPI-2024"
-              placeholderTextColor={theme.colors.textDisabled}
+              placeholderTextColor={theme.textPlaceholder}
               autoCapitalize="characters"
               autoCorrect={false}
               maxLength={12}
               onSubmitEditing={() => void handleJoin()}
               returnKeyType="join"
               style={{
-                backgroundColor: theme.colors.surface,
+                backgroundColor: theme.card,
                 borderRadius: radius.xl,
                 padding: spacing.lg,
                 fontSize: 22,
@@ -138,7 +138,7 @@ export default function JoinInstituteScreen() {
                 textAlign: 'center',
                 letterSpacing: 4,
                 borderWidth: 2,
-                borderColor: error ? '#ef4444' : code.length > 0 ? '#6366f1' : theme.colors.border,
+                borderColor: error ? '#ef4444' : code.length > 0 ? '#6366f1' : theme.border,
                 marginBottom: spacing.sm,
               }}
             />
@@ -171,7 +171,7 @@ export default function JoinInstituteScreen() {
                   <Typography variant="label" color="#4ade80">
                     Joined {success.instituteName}!
                   </Typography>
-                  <Typography variant="caption" color={theme.colors.textSecondary}>
+                  <Typography variant="caption" color={theme.textSecondary}>
                     Redirecting you now…
                   </Typography>
                 </View>
@@ -198,7 +198,7 @@ export default function JoinInstituteScreen() {
                 ) : (
                   <>
                     <Ionicons name="enter-outline" size={20} color="white" />
-                    <Typography variant="button" color="white">Join Institute</Typography>
+                    <Typography variant="label" color="white">Join Institute</Typography>
                   </>
                 )}
               </LinearGradient>
@@ -212,12 +212,12 @@ export default function JoinInstituteScreen() {
           }}>
             <View style={{
               flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
-              backgroundColor: theme.colors.surface,
+              backgroundColor: theme.card,
               borderRadius: radius.xl, padding: spacing.md,
-              borderWidth: 1, borderColor: theme.colors.border,
+              borderWidth: 1, borderColor: theme.border,
             }}>
               <Ionicons name="shield-checkmark-outline" size={16} color="#6366f1" />
-              <Typography variant="caption" color={theme.colors.textSecondary}>
+              <Typography variant="caption" color={theme.textSecondary}>
                 Your progress syncs automatically with your institute
               </Typography>
             </View>

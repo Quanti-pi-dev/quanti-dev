@@ -26,6 +26,8 @@ export interface UserProfile {
 export interface UserPreferences {
   userId: string;
   theme: 'light' | 'dark' | 'system';
+  /** Premium theme key set after purchasing a theme from the shop (e.g. 'midnight', 'ocean'). */
+  activeTheme: string | null;
   notificationsEnabled: boolean;
   studyRemindersEnabled: boolean;
   reminderTime: string | null; // HH:mm format

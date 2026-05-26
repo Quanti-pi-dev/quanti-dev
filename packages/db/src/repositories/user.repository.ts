@@ -182,7 +182,7 @@ class UserRepository {
   // ─── Get preferences ──────────────────────────────────
   async getPreferences(firebaseUid: string): Promise<UserPreferences | null> {
     const result = await this.pool.query(
-      `SELECT up.user_id, up.theme, up.notifications_enabled,
+      `SELECT up.user_id, up.theme, up.active_theme, up.notifications_enabled,
               up.study_reminders_enabled, up.reminder_time,
               up.onboarding_completed, up.selected_exams, up.selected_subjects,
               up.exam_date, up.preferred_study_time, up.daily_card_target
@@ -198,6 +198,7 @@ class UserRepository {
     return {
       userId: row.user_id,
       theme: row.theme,
+      activeTheme: row.active_theme ?? null,
       notificationsEnabled: row.notifications_enabled,
       studyRemindersEnabled: row.study_reminders_enabled,
       reminderTime: row.reminder_time?.toString() ?? null,
@@ -222,6 +223,10 @@ class UserRepository {
     if (input.theme !== undefined) {
       setClauses.push(`theme = $${paramIndex++}`);
       values.push(input.theme);
+    }
+    if (input.activeTheme !== undefined) {
+      setClauses.push(`active_theme = $${paramIndex++}`);
+      values.push(input.activeTheme);
     }
     if (input.notificationsEnabled !== undefined) {
       setClauses.push(`notifications_enabled = $${paramIndex++}`);

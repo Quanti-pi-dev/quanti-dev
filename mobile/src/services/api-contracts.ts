@@ -776,3 +776,53 @@ export async function fetchInstituteTestResult(
     `/institute/${instituteId}/tests/${testId}/result`,
   );
 }
+
+// ─── Institute Mock Tests (Student-facing) ────────────────────────────────────
+// These are examiner-authored mock tests that mirror official exam blueprints
+// (e.g. NEET, JEE). Distinct from educator custom tests: they have locked
+// section rules, per-section marks, and no question shuffle.
+
+export interface InstituteMockTestSection {
+  subjectId: string;
+  subjectName?: string;
+  questionCount: number;
+  marksPerCorrect: number;
+  marksPerIncorrect: number;
+}
+
+export interface InstituteMockTest {
+  id: string;
+  instituteId: string;
+  createdBy: string;
+  examTemplateId: string;
+  examTemplateName?: string;
+  title: string;
+  sections: InstituteMockTestSection[];
+  totalQuestions: number;
+  totalMarks: number;
+  durationMinutes: number;
+  scheduledAt: string | null;
+  closesAt: string | null;
+  status: 'draft' | 'scheduled' | 'live' | 'closed';
+  settings: {
+    sectionSwitching: boolean;
+    calculatorAllowed: boolean;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function fetchInstituteMockTests(
+  instituteId: string,
+  opts?: { limit?: number; offset?: number },
+): Promise<InstituteMockTest[]> {
+  const { data } = await api.get<{
+    success: boolean;
+    data: InstituteMockTest[];
+    pagination: { total: number; limit: number; offset: number };
+  }>(
+    `/institute/${instituteId}/mock-tests`,
+    { params: { limit: opts?.limit ?? 20, offset: opts?.offset ?? 0 } },
+  );
+  return data?.data ?? [];
+}

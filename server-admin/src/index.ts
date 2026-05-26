@@ -26,6 +26,7 @@ import { adminTournamentRoutes } from './routes/tournament.routes.js';
 import { adminInstituteRoutes } from './routes/admin-institute.routes.js';
 import { adminNotificationRoutes } from './routes/admin-notifications.routes.js';
 import { adminChallengeRoutes }    from './routes/admin-challenges.routes.js';
+import { adminGamificationRoutes } from './routes/admin-gamification.routes.js';
 
 // ─── Fastify Instance ─────────────────────────────────────────
 
@@ -112,6 +113,7 @@ async function registerRoutes() {
   await server.register(adminInstituteRoutes,    { prefix: '/api/admin' });
   await server.register(adminNotificationRoutes, { prefix: '/api/admin' });
   await server.register(adminChallengeRoutes,    { prefix: '/api/admin' });
+  await server.register(adminGamificationRoutes, { prefix: '/api/admin' });
 }
 
 // ─── Startup ──────────────────────────────────────────────────

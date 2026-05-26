@@ -57,6 +57,13 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-brand-600); }
 
+/* Hide scrollbar track while keeping scroll functionality */
+.scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hidden::-webkit-scrollbar { display: none; }
+
 /* ── Focus ring ──────────────────────────────────────── */
 
 :focus-visible {

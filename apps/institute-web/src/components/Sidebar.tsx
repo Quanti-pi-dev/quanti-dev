@@ -133,7 +133,7 @@ export function Sidebar() {
       </div>
 
       {/* ── Nav ───────────────────────────────────────────────── */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-2">
+      <nav className="scrollbar-hidden flex-1 overflow-y-auto overflow-x-hidden py-4 px-2">
         {!collapsed && (
           <p
             className="text-xs font-semibold tracking-widest uppercase px-3 mb-3"

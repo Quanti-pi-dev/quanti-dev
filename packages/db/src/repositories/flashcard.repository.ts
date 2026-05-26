@@ -112,11 +112,9 @@ class FlashcardRepository {
       .find({ deckId: new ObjectId(deckId) })
       .sort({ order: 1 })
       .toArray();
-    return docs.map((doc) => ({
-      ...this.toFlashcard(doc),
-      order: (doc['order'] as number) ?? 0,
-    }));
+    return docs.map((doc) => this.toFlashcard(doc));
   }
+
 
   // ─── Write Operations ─────────────────────────────────────
 
@@ -243,6 +241,7 @@ class FlashcardRepository {
       explanation: (doc['explanation'] as string) ?? null,
       imageUrl: (doc['imageUrl'] as string) ?? null,
       source: (doc['source'] as FlashcardSource) ?? 'original',
+      order: (doc['order'] as number) ?? undefined,
       sourceYear: (doc['sourceYear'] as number) ?? undefined,
       sourcePaper: (doc['sourcePaper'] as string) ?? undefined,
       tags: (doc['tags'] as string[]) ?? [],

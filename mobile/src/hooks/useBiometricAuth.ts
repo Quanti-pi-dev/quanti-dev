@@ -15,7 +15,6 @@ export function useBiometricAuth() {
     (async () => {
       try {
         // Dynamic import — expo-local-authentication may not be installed
-        // @ts-expect-error — optional dependency, handled by try/catch
         const LocalAuth = await import('expo-local-authentication');
         const hasHardware = await LocalAuth.hasHardwareAsync();
         const isEnrolled = await LocalAuth.isEnrolledAsync();
@@ -36,7 +35,6 @@ export function useBiometricAuth() {
 
   const authenticate = useCallback(async (): Promise<boolean> => {
     try {
-      // @ts-expect-error — optional dependency, handled by try/catch
       const LocalAuth = await import('expo-local-authentication');
       const result = await LocalAuth.authenticateAsync({
         promptMessage: 'Sign in to Quanti-pi',

@@ -61,7 +61,7 @@ export default function TestResultScreen() {
   // screen reflects any status change (e.g. test now "closed").
   const goHome = () => {
     void queryClient.invalidateQueries({ queryKey: ['institute-tests', instituteId] });
-    router.replace('/institute');
+    router.replace('/institute' as never);
   };
 
   if (loading) return (
@@ -77,11 +77,11 @@ export default function TestResultScreen() {
   if (!data) return (
     <ScreenWrapper>
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md }}>
-        <Ionicons name="alert-circle-outline" size={40} color={theme.text.tertiary} />
-        <Typography variant="body" color={theme.text.secondary}>Result not found</Typography>
+        <Ionicons name="alert-circle-outline" size={40} color={theme.textTertiary} />
+        <Typography variant="body" color={theme.textSecondary}>Result not found</Typography>
         <TouchableOpacity onPress={goHome}
           style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: '#6366f1', borderRadius: radius.xl }}>
-          <Typography variant="button" color="white">Back to Institute</Typography>
+          <Typography variant="label" color="white">Back to Institute</Typography>
         </TouchableOpacity>
       </View>
     </ScreenWrapper>
@@ -96,16 +96,16 @@ export default function TestResultScreen() {
             style={{ width: 90, height: 90, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}>
             <Ionicons name="time-outline" size={44} color="#f59e0b" />
           </LinearGradient>
-          <Typography variant="h2" color={theme.text.primary} style={{ textAlign: 'center' }}>
+          <Typography variant="h2" color={theme.text} style={{ textAlign: 'center' }}>
             Submitted!
           </Typography>
-          <Typography variant="body" color={theme.text.secondary} style={{ textAlign: 'center', lineHeight: 22 }}>
+          <Typography variant="body" color={theme.textSecondary} style={{ textAlign: 'center', lineHeight: 22 }}>
             {data.message ?? 'Results will be available when released by your educator.'}
           </Typography>
           <TouchableOpacity onPress={goHome} style={{ borderRadius: radius.xl, overflow: 'hidden' }}>
             <LinearGradient colors={['#6366f1', '#8b5cf6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
               style={{ paddingHorizontal: spacing.xl, paddingVertical: spacing.md }}>
-              <Typography variant="button" color="white">Back to Institute</Typography>
+              <Typography variant="label" color="white">Back to Institute</Typography>
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -126,10 +126,10 @@ export default function TestResultScreen() {
 
         {/* Header */}
         <Animated.View entering={FadeInDown.springify()}>
-          <Typography variant="h2" color={theme.text.primary} style={{ marginBottom: spacing.xs }}>
+          <Typography variant="h2" color={theme.text} style={{ marginBottom: spacing.xs }}>
             {test.title}
           </Typography>
-          <Typography variant="body" color={theme.text.secondary}>Test Results</Typography>
+          <Typography variant="body" color={theme.textSecondary}>Test Results</Typography>
         </Animated.View>
 
         {/* Score circle */}
@@ -176,11 +176,11 @@ export default function TestResultScreen() {
           ].map(s => (
             <View key={s.label} style={{
               flex: 1, padding: spacing.md, borderRadius: radius.xl,
-              backgroundColor: theme.surface.secondary,
-              borderWidth: 1, borderColor: theme.border.default, alignItems: 'center', gap: 4,
+              backgroundColor: theme.card,
+              borderWidth: 1, borderColor: theme.border, alignItems: 'center', gap: 4,
             }}>
               <Typography variant="h2" color={s.color}>{s.value}</Typography>
-              <Typography variant="caption" color={theme.text.tertiary}>{s.label}</Typography>
+              <Typography variant="caption" color={theme.textTertiary}>{s.label}</Typography>
             </View>
           ))}
         </Animated.View>
@@ -192,16 +192,16 @@ export default function TestResultScreen() {
             style={{
               flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
               padding: spacing.lg, borderRadius: radius.xl,
-              backgroundColor: theme.surface.secondary,
-              borderWidth: 1, borderColor: theme.border.default,
+              backgroundColor: theme.card,
+              borderWidth: 1, borderColor: theme.border,
               marginBottom: spacing.md,
             }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
               <Ionicons name="list-outline" size={18} color="#a5b4fc" />
-              <Typography variant="label" color={theme.text.primary}>Review Answers</Typography>
+              <Typography variant="label" color={theme.text}>Review Answers</Typography>
             </View>
-            <Ionicons name={showReview ? 'chevron-up' : 'chevron-down'} size={18} color={theme.text.tertiary} />
+            <Ionicons name={showReview ? 'chevron-up' : 'chevron-down'} size={18} color={theme.textTertiary} />
           </TouchableOpacity>
 
           {showReview && (
@@ -221,7 +221,7 @@ export default function TestResultScreen() {
                     }}>
                       <Ionicons name={ans.isCorrect ? 'checkmark' : 'close'} size={14} color="white" />
                     </View>
-                    <Typography variant="caption" color={theme.text.tertiary}>Q{idx + 1} · {ans.marks} marks</Typography>
+                    <Typography variant="caption" color={theme.textTertiary}>Q{idx + 1} · {ans.marks} marks</Typography>
                   </View>
                   {!ans.isCorrect && ans.correctAnswerId && (
                     <Typography variant="caption" color="#4ade80" style={{ marginBottom: 4 }}>
@@ -229,7 +229,7 @@ export default function TestResultScreen() {
                     </Typography>
                   )}
                   {ans.explanation && (
-                    <Typography variant="caption" color={theme.text.secondary}
+                    <Typography variant="caption" color={theme.textSecondary}
                       style={{ marginTop: 4, fontStyle: 'italic' }}>
                       💡 {ans.explanation}
                     </Typography>
@@ -246,7 +246,7 @@ export default function TestResultScreen() {
           <LinearGradient colors={['#6366f1', '#8b5cf6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
             style={{ paddingVertical: spacing.md, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: spacing.sm }}>
             <Ionicons name="home" size={16} color="white" />
-            <Typography variant="button" color="white">Back to Institute</Typography>
+            <Typography variant="label" color="white">Back to Institute</Typography>
           </LinearGradient>
         </TouchableOpacity>
       </ScrollView>

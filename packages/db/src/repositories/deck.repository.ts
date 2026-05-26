@@ -288,10 +288,7 @@ class DeckRepository {
       this.col.countDocuments(query),
     ]);
     return {
-      data: docs.map((doc) => ({
-        ...this.toDeck(doc),
-        isPublished: (doc['isPublished'] as boolean) ?? false,
-      })),
+      data: docs.map((doc) => this.toDeck(doc)),
       total,
       page,
       pageSize,
@@ -382,6 +379,7 @@ class DeckRepository {
       cardCount: (doc['cardCount'] as number) ?? 0,
       imageUrl: (doc['imageUrl'] as string) ?? null,
       createdBy: doc['createdBy'] as string,
+      isPublished: (doc['isPublished'] as boolean) ?? false,
       examId: doc['examId'] ? (doc['examId'] as ObjectId).toHexString() : undefined,
       subjectId: doc['subjectId'] ? (doc['subjectId'] as ObjectId).toHexString() : undefined,
       topicId: doc['topicId'] ? (doc['topicId'] as ObjectId).toHexString() : undefined,
@@ -392,6 +390,7 @@ class DeckRepository {
       updatedAt: (doc['updatedAt'] as Date).toISOString(),
     };
   }
+
 }
 
 // ─── Singleton Export ───────────────────────────────────────
