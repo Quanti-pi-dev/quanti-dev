@@ -258,7 +258,7 @@ export async function adminSubscriptionRoutes(fastify: FastifyInstance): Promise
            FROM subscriptions s 
            JOIN users u ON u.firebase_uid = s.user_id
            JOIN plans p ON p.id = s.plan_id 
-           WHERE u.id = ANY($1::uuid[]) AND s.status IN ('active', 'trialing', 'past_due')
+           WHERE u.id = ANY($1) AND s.status IN ('active', 'trialing', 'past_due')
            ORDER BY s.user_id, s.created_at DESC`,
           [userIds]
         );
@@ -328,7 +328,8 @@ export async function adminSubscriptionRoutes(fastify: FastifyInstance): Promise
 
     // Get subscriptions for this specific user
     const subsByUser = await pool.query(
-      `SELECT s.id, s.status, s.start_date, s.end_date, s.cancel_at_period_end, s.created_at,
+      `SELECT s.id, s.status, s.current_period_start AS start_date, s.current_period_end AS end_date,
+              s.cancel_at_period_end, s.created_at,
               p.display_name AS plan_name, p.tier AS plan_tier, p.billing_cycle
        FROM subscriptions s
        JOIN plans p ON p.id = s.plan_id
