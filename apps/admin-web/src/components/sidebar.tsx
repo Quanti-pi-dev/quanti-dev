@@ -94,7 +94,7 @@ export function Sidebar() {
   return (
     <aside
       className={clsx(
-        'flex flex-col shrink-0 bg-zinc-900 border-r border-zinc-800 min-h-screen transition-[width] duration-300 ease-in-out',
+        'flex flex-col shrink-0 bg-zinc-900 border-r border-zinc-800 h-screen transition-[width] duration-300 ease-in-out',
         collapsed ? 'w-16' : 'w-60',
       )}
     >
