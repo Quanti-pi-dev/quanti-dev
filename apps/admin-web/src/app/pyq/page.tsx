@@ -14,6 +14,7 @@ import { PageShell, Spinner, ErrorBanner } from '@/components/page-shell';
 import { ConfirmModal } from '@/components/confirm-modal';
 import { useToast } from '@/components/toast';
 import { Upload, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Latex } from '@/components/latex';
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -280,7 +281,9 @@ export default function PYQPage() {
                     {card.sourceYear && <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-950/50 text-yellow-400 border border-yellow-800/50">{card.sourceYear}</span>}
                     {card.sourcePaper && <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">{card.sourcePaper}</span>}
                   </div>
-                  <p className="text-sm text-white font-medium leading-relaxed">{card.question}</p>
+                  <div className="text-sm text-white font-medium leading-relaxed">
+                    <Latex text={card.question} />
+                  </div>
                 </div>
                 <button
                   onClick={() => { setDeleteTarget(card.id); setDeleteError(''); }}
@@ -303,12 +306,14 @@ export default function PYQPage() {
                     }`}
                   >
                     <span className="font-bold shrink-0">{opt.id}.</span>
-                    <span className="truncate">{opt.text}</span>
+                    <span className="truncate"><Latex text={opt.text} /></span>
                   </div>
                 ))}
               </div>
               {card.explanation && (
-                <p className="mt-2 text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-3 line-clamp-2">{card.explanation}</p>
+                <div className="mt-2 text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-3 line-clamp-2">
+                  <Latex text={card.explanation} />
+                </div>
               )}
             </div>
           ))}

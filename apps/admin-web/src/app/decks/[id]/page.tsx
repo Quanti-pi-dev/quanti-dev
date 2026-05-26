@@ -20,6 +20,7 @@ import { PageShell, Badge, Spinner, ErrorBanner } from '@/components/page-shell'
 import { ConfirmModal } from '@/components/confirm-modal';
 import { useToast } from '@/components/toast';
 import { ArrowLeft, Plus, Pencil, Trash2, Upload, X, ChevronRight } from 'lucide-react';
+import { Latex } from '@/components/latex';
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -133,59 +134,112 @@ function CardModal({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-8"
     >
-      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-2xl p-6 shadow-2xl mx-4">
-        <div className="flex items-center justify-between mb-5">
+      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-5xl p-6 shadow-2xl mx-4">
+        <div className="flex items-center justify-between mb-5 border-b border-zinc-800 pb-3">
           <h2 className="text-base font-semibold text-white">{isEdit ? 'Edit Flashcard' : 'New Flashcard'}</h2>
           <button onClick={onClose} className="text-zinc-500 hover:text-white transition"><X size={16} /></button>
         </div>
         {error && <ErrorBanner message={error} />}
-        <form onSubmit={handleSubmit} className="space-y-5 mt-2">
-          <div>
-            <label className={LABEL}>Question *</label>
-            <textarea value={question} onChange={e => setQuestion(e.target.value)} rows={3} placeholder="Enter question text…" className={INPUT} />
-          </div>
 
-          <div>
-            <label className={LABEL}>Answer Options *</label>
-            <div className="space-y-2">
-              {options.map((opt, idx) => (
-                <div key={opt.id} className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-zinc-400 w-5 shrink-0">{opt.id}</span>
-                  <input
-                    value={opt.text}
-                    onChange={e => setOptionText(idx, e.target.value)}
-                    placeholder={`Option ${opt.id}`}
-                    className={INPUT}
-                  />
-                  <input
-                    type="radio"
-                    name="correct"
-                    value={opt.id}
-                    checked={correctAnswerId === opt.id}
-                    onChange={() => setCorrect(opt.id)}
-                    className="accent-violet-500 shrink-0 w-4 h-4 cursor-pointer"
-                    title="Mark as correct"
-                  />
-                </div>
-              ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+          {/* Left Column: Editor Inputs */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className={LABEL}>Question *</label>
+              <textarea value={question} onChange={e => setQuestion(e.target.value)} rows={3} placeholder="Enter question text…" className={INPUT} />
             </div>
-            <p className="text-xs text-zinc-600 mt-1.5">Select the radio button next to the correct answer.</p>
-          </div>
 
-          <div>
-            <label className={LABEL}>Explanation (optional)</label>
-            <textarea value={explanation} onChange={e => setExplanation(e.target.value)} rows={2} placeholder="Why is this the correct answer?" className={INPUT} />
-          </div>
+            <div>
+              <label className={LABEL}>Answer Options *</label>
+              <div className="space-y-2">
+                {options.map((opt, idx) => (
+                  <div key={opt.id} className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-zinc-400 w-5 shrink-0">{opt.id}</span>
+                    <input
+                      value={opt.text}
+                      onChange={e => setOptionText(idx, e.target.value)}
+                      placeholder={`Option ${opt.id}`}
+                      className={INPUT}
+                    />
+                    <input
+                      type="radio"
+                      name="correct"
+                      value={opt.id}
+                      checked={correctAnswerId === opt.id}
+                      onChange={() => setCorrect(opt.id)}
+                      className="accent-violet-500 shrink-0 w-4 h-4 cursor-pointer"
+                      title="Mark as correct"
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-zinc-600 mt-1">Select the radio button next to the correct answer.</p>
+            </div>
 
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 text-sm hover:text-white transition">
-              Cancel
-            </button>
-            <button type="submit" disabled={saving} className="flex-1 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition disabled:opacity-50">
-              {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Card'}
-            </button>
+            <div>
+              <label className={LABEL}>Explanation (optional)</label>
+              <textarea value={explanation} onChange={e => setExplanation(e.target.value)} rows={2} placeholder="Why is this the correct answer?" className={INPUT} />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button type="button" onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 text-sm hover:text-white transition">
+                Cancel
+              </button>
+              <button type="submit" disabled={saving} className="flex-1 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition disabled:opacity-50">
+                {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Card'}
+              </button>
+            </div>
+          </form>
+
+          {/* Right Column: Live Card Preview */}
+          <div className="flex flex-col border-t md:border-t-0 md:border-l border-zinc-800 pt-6 md:pt-0 md:pl-6">
+            <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-3">Live Card Preview</span>
+            <div className="flex-1 flex flex-col justify-center">
+              <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-5 shadow-lg min-h-[220px] flex flex-col justify-between">
+                <div>
+                  {/* Question */}
+                  {question.trim() ? (
+                    <div className="text-sm text-white font-medium leading-relaxed">
+                      <Latex text={question} />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-zinc-600 italic">No question text entered yet…</p>
+                  )}
+
+                  {/* Options */}
+                  <div className="grid grid-cols-2 gap-1.5 mt-4">
+                    {options.map(opt => (
+                      <div
+                        key={opt.id}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-colors duration-200 ${
+                          opt.id === correctAnswerId
+                            ? 'bg-emerald-950/60 border border-emerald-800/60 text-emerald-300'
+                            : 'bg-zinc-900 border border-zinc-800/50 text-zinc-500'
+                        }`}
+                      >
+                        <span className="font-bold shrink-0">{opt.id}.</span>
+                        <span className="truncate">
+                          {opt.text.trim() ? (
+                            <Latex text={opt.text} />
+                          ) : (
+                            <span className="text-zinc-700 italic">Empty…</span>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Explanation */}
+                {explanation.trim() && (
+                  <div className="mt-3 text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-3">
+                    <Latex text={explanation} />
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );
@@ -470,7 +524,9 @@ export default function DeckFlashcardsPage() {
           {cards.map(card => (
             <div key={card.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
               <div className="flex items-start justify-between gap-4">
-                <p className="text-sm text-white font-medium leading-relaxed flex-1">{card.question}</p>
+                <div className="text-sm text-white font-medium leading-relaxed flex-1">
+                  <Latex text={card.question} />
+                </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {card.source && (
                     <Badge
@@ -495,13 +551,15 @@ export default function DeckFlashcardsPage() {
                     }`}
                   >
                     <span className="font-bold shrink-0">{opt.id}.</span>
-                    <span>{opt.text}</span>
+                    <span className="truncate"><Latex text={opt.text} /></span>
                   </div>
                 ))}
               </div>
 
               {card.explanation && (
-                <p className="mt-2 text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-3">{card.explanation}</p>
+                <div className="mt-2 text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-3">
+                  <Latex text={card.explanation} />
+                </div>
               )}
             </div>
           ))}

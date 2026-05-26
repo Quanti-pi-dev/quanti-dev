@@ -17,6 +17,7 @@ import {
   ArrowLeft, Search, Check, X, Save, Plus, Trash2,
   AlertCircle, BookOpen,
 } from 'lucide-react';
+import { Latex } from '@/components/latex';
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -81,7 +82,9 @@ function QuestionCard({
         >
           {q.marks}m
         </span>
-        <p className={`text-sm text-white flex-1 text-left ${expanded ? '' : 'line-clamp-2'}`}>{q.text}</p>
+        <div className={`text-sm text-white flex-1 text-left ${expanded ? '' : 'line-clamp-2'}`}>
+          <Latex text={q.text} />
+        </div>
         <div className="flex gap-1 shrink-0">
           {onToggle && (
             <span
@@ -120,14 +123,14 @@ function QuestionCard({
               }}
             >
               <span className="font-bold text-xs w-4 shrink-0">{String.fromCharCode(65 + i)}</span>
-              {opt.text}
+              <span className="flex-1 text-left"><Latex text={opt.text} /></span>
               {opt.id === q.correctAnswerId && <Check className="w-3.5 h-3.5 ml-auto shrink-0" />}
             </div>
           ))}
           {q.explanation && (
-            <p className="text-xs mt-2 px-2" style={{ color: 'var(--color-surface-400)' }}>
-              💡 {q.explanation}
-            </p>
+            <div className="text-xs mt-2 px-2 text-left" style={{ color: 'var(--color-surface-400)' }}>
+              <span>💡 </span><Latex text={q.explanation} />
+            </div>
           )}
         </div>
       )}

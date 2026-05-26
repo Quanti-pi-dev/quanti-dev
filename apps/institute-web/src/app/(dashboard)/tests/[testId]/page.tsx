@@ -9,6 +9,7 @@ import {
   ArrowLeft, BarChart3, Send, Trash2, Clock, Users,
   CheckCircle2, Edit3, Save, X, Plus, ListOrdered, Medal,
 } from 'lucide-react';
+import { Latex } from '@/components/latex';
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -391,7 +392,9 @@ function QuestionCard({ question: q, index }: { question: TestQuestion; index: n
             {index + 1}
           </span>
           <div className="flex-1 min-w-0">
-            <p className={`text-white text-sm ${expanded ? '' : 'line-clamp-2'}`}>{q.text}</p>
+            <div className={`text-white text-sm ${expanded ? '' : 'line-clamp-2'}`}>
+              <Latex text={q.text} />
+            </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-xs px-2 py-0.5 rounded"
@@ -416,9 +419,9 @@ function QuestionCard({ question: q, index }: { question: TestQuestion; index: n
                   style={{ color: opt.id === q.correctAnswerId ? '#4ade80' : 'var(--color-surface-400)' }}>
                   {String.fromCharCode(65 + oi)}
                 </span>
-                <p className="text-sm flex-1" style={{ color: opt.id === q.correctAnswerId ? '#4ade80' : '#e2e2f0' }}>
-                  {opt.text}
-                </p>
+                <div className="text-sm flex-1" style={{ color: opt.id === q.correctAnswerId ? '#4ade80' : '#e2e2f0' }}>
+                  <Latex text={opt.text} />
+                </div>
                 {opt.id === q.correctAnswerId && (
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                 )}
@@ -428,7 +431,7 @@ function QuestionCard({ question: q, index }: { question: TestQuestion; index: n
           {q.explanation && (
             <div className="ml-9 mt-3 px-3 py-2 rounded-lg text-xs"
               style={{ background: 'rgba(99,102,241,0.08)', color: 'var(--color-surface-300)', border: '1px solid rgba(99,102,241,0.15)' }}>
-              💡 {q.explanation}
+              <span>💡 </span><Latex text={q.explanation} />
             </div>
           )}
         </div>
