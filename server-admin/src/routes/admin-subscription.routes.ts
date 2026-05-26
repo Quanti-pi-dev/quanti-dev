@@ -247,12 +247,36 @@ export async function adminSubscriptionRoutes(fastify: FastifyInstance): Promise
 
     let users;
     if (q && q.trim().length > 0) {
-      users = await userRepository.searchByEmail(q, limit);
+      const searchRes = await userRepository.searchByEmail(q, limit);
+      
+      // Fetch active plan tiers for the searched users
+      const tierMap = new Map<string, number>();
+      if (searchRes.length > 0) {
+        const userIds = searchRes.map((u) => u.id);
+        const tierResult = await pool.query(
+          `SELECT DISTINCT ON (s.user_id) u.id as uuid, p.tier 
+           FROM subscriptions s 
+           JOIN users u ON u.firebase_uid = s.user_id
+           JOIN plans p ON p.id = s.plan_id 
+           WHERE u.id = ANY($1) AND s.status IN ('active', 'trialing', 'past_due')
+           ORDER BY s.user_id, s.created_at DESC`,
+          [userIds]
+        );
+        for (const row of tierResult.rows) {
+          tierMap.set(row.uuid, row.tier);
+        }
+      }
+      users = searchRes.map((u) => ({ ...u, planTier: tierMap.get(u.id) ?? 0 }));
     } else {
-      // No query — return most recent users
+      // No query — return most recent users with their active plan tier
       const result = await pool.query(
-        `SELECT id, display_name, avatar_url, email, role, enrollment_id, created_at, plan_tier
-         FROM users ORDER BY created_at DESC LIMIT $1`,
+        `SELECT u.id, u.display_name, u.avatar_url, u.email, u.role, u.enrollment_id, u.created_at,
+                (SELECT p.tier 
+                 FROM subscriptions s 
+                 JOIN plans p ON p.id = s.plan_id 
+                 WHERE s.user_id = u.firebase_uid AND s.status IN ('active', 'trialing', 'past_due') 
+                 ORDER BY s.created_at DESC LIMIT 1) AS plan_tier
+         FROM users u ORDER BY u.created_at DESC LIMIT $1`,
         [limit],
       );
       users = result.rows.map((row: Record<string, unknown>) => ({
@@ -283,8 +307,10 @@ export async function adminSubscriptionRoutes(fastify: FastifyInstance): Promise
       });
     }
 
+    const firebaseUid = await userRepository.getFirebaseUid(id);
+
     // Fetch active subscription, payment history, and planTier in parallel
-    const [subResult, payResult, tierResult] = await Promise.all([
+    const [_subResult, payResult, tierResult] = await Promise.all([
       subscriptionRepository.listAll({ limit: 5, offset: 0 }).catch(() => ({ subscriptions: [] })),
       pool.query(
         `SELECT p.id, p.amount_paise, p.status, p.created_at, p.razorpay_payment_id
@@ -292,10 +318,10 @@ export async function adminSubscriptionRoutes(fastify: FastifyInstance): Promise
          WHERE p.user_id = $1
          ORDER BY p.created_at DESC
          LIMIT 10`,
-        [id],
+        [firebaseUid],
       ),
       pool.query(
-        `SELECT plan_tier, firebase_uid FROM users WHERE id = $1`,
+        `SELECT firebase_uid FROM users WHERE id = $1`,
         [id],
       ),
     ]);
@@ -309,7 +335,7 @@ export async function adminSubscriptionRoutes(fastify: FastifyInstance): Promise
        WHERE s.user_id = $1
        ORDER BY s.created_at DESC
        LIMIT 10`,
-      [id],
+      [firebaseUid],
     );
 
     const payments = payResult.rows.map((r: Record<string, unknown>) => ({
