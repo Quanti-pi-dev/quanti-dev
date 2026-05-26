@@ -421,7 +421,7 @@ function Spinner({ size = 'default' }: { size?: 'sm' | 'default' }) {
 // ─── Page ─────────────────────────────────────────────────────
 
 export default function TopicsPage() {
-  const { examId, subjectId } = useParams<{ examId: string; subjectId: string }>();
+  const { id: examId, subjectId } = useParams<{ id: string; subjectId: string }>();
   const router = useRouter();
   const { toast } = useToast();
 
