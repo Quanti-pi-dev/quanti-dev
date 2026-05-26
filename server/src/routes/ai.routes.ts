@@ -4,7 +4,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { requireAuth } from '../middleware/rbac.js';
 import { recommendationService } from '../services/ai.service.js';
-import { geminiGenerate } from '../lib/gemini.js';
+import { geminiGenerate } from '@kd/db';
 import { generateTargetedFeedback } from '../services/targeted-feedback.service.js';
 import { getMongoDb } from '../lib/database.js';
 import { ObjectId } from 'mongodb';

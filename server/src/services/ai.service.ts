@@ -12,7 +12,7 @@
 
 import { ObjectId } from 'mongodb';
 import { getMongoDb, getPostgresPool, getRedisClient } from '../lib/database.js';
-import { geminiGenerateJSON } from '../lib/gemini.js';
+import { geminiGenerateJSON } from '@kd/db';
 import { createServiceLogger } from '../lib/logger.js';
 
 const log = createServiceLogger('AIService');

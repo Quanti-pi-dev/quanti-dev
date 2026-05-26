@@ -8,7 +8,7 @@
 //   - Gemini is unavailable
 //   - The wrong option has no misconception mapping
 
-import { geminiGenerate } from '../lib/gemini.js';
+import { geminiGenerate } from '@kd/db';
 import { createServiceLogger } from '../lib/logger.js';
 import type { Flashcard, TargetedFeedback } from '@kd/shared';
 
