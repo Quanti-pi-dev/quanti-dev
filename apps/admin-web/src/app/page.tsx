@@ -9,9 +9,10 @@ import { useEffect, useState } from 'react';
 import { adminApi } from '@/lib/api';
 import { PageShell, ErrorBanner } from '@/components/page-shell';
 import {
-  Users, BookOpen, CreditCard, BarChart3, Layers, Building2,
+  Users, BookOpen, BarChart3, Layers, Building2,
   Tag, ReceiptText, Bell, Settings, TrendingUp, Coins,
   FileQuestion, ClipboardList, Medal, Trophy, Swords, Brain,
+  CreditCard,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -19,16 +20,21 @@ import Link from 'next/link';
 
 interface Stats {
   totalUsers: number;
-  activeSubscriptions: number;
-  totalRevenuePaise: number;
-  activeExams: number;
+  activeUsersToday: number;
+  totalSessions: number;
+  totalCardsAnswered: number;
+  avgAccuracyPct: number;
+  totalCoinsEarned: number;
+  totalCoinsSpent: number;
+  totalCoinsInCirculation: number;
+  shopItemCount: number;
+  purchasedPackCount: number;
+  purchasedThemeCount: number;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────
 
-function paiseToRupee(v: number) {
-  return `₹${(v / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
-}
+
 
 // ─── Shimmer skeleton for a single stat value ─────────────────
 
@@ -107,7 +113,7 @@ export default function DashboardPage() {
   const [error, setError]   = useState('');
 
   useEffect(() => {
-    adminApi.get<{ data: Stats }>('/api/admin/analytics/overview')
+    adminApi.get<{ data: Stats }>('/api/admin/analytics')
       .then(r => setStats(r.data.data))
       .catch(() => setError('Failed to load platform stats.'))
       .finally(() => setLoading(false));
@@ -127,22 +133,22 @@ export default function DashboardPage() {
           accent="violet"
         />
         <StatCard
-          label="Active Subscriptions"
-          value={stats ? stats.activeSubscriptions.toLocaleString('en-IN') : ''}
-          icon={CreditCard}
+          label="Active Today"
+          value={stats ? stats.activeUsersToday.toLocaleString('en-IN') : ''}
+          icon={TrendingUp}
           loading={loading}
           accent="emerald"
         />
         <StatCard
-          label="Total Revenue"
-          value={stats ? paiseToRupee(stats.totalRevenuePaise) : ''}
+          label="Study Sessions"
+          value={stats ? stats.totalSessions.toLocaleString('en-IN') : ''}
           icon={BarChart3}
           loading={loading}
           accent="amber"
         />
         <StatCard
-          label="Active Exams"
-          value={stats ? stats.activeExams.toLocaleString('en-IN') : ''}
+          label="Avg Accuracy"
+          value={stats ? `${stats.avgAccuracyPct}%` : ''}
           icon={BookOpen}
           loading={loading}
           accent="sky"
