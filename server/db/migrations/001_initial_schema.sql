@@ -20,7 +20,6 @@ END;
 $$;
 
 -- ─── Users ───────────────────────────────────────────────────────────────────
-
 CREATE TABLE IF NOT EXISTS users (
   id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   firebase_uid     TEXT        NOT NULL UNIQUE,
@@ -28,11 +27,12 @@ CREATE TABLE IF NOT EXISTS users (
   display_name     TEXT        NOT NULL,
   avatar_url       TEXT,
   role             TEXT        NOT NULL DEFAULT 'student'
-                               CHECK (role IN ('student', 'admin')),
+                               CHECK (role IN ('student', 'admin', 'educator', 'examiner', 'institute_admin')),
   enrollment_id    TEXT        UNIQUE,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
 
 CREATE TABLE IF NOT EXISTS user_preferences (
   user_id                UUID        PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
