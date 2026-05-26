@@ -258,7 +258,7 @@ export async function adminSubscriptionRoutes(fastify: FastifyInstance): Promise
            FROM subscriptions s 
            JOIN users u ON u.firebase_uid = s.user_id
            JOIN plans p ON p.id = s.plan_id 
-           WHERE u.id = ANY($1) AND s.status IN ('active', 'trialing', 'past_due')
+           WHERE u.id = ANY($1::uuid[]) AND s.status IN ('active', 'trialing', 'past_due')
            ORDER BY s.user_id, s.created_at DESC`,
           [userIds]
         );
