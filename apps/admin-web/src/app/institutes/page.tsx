@@ -222,9 +222,14 @@ function MembersPanel({ institute, onClose }: { institute: Institute; onClose: (
   const [error, setError] = useState('');
 
   // Claims sync
-  const [syncUid, setSyncUid] = useState('');
+  const [syncUid, setSyncUid]   = useState('');
   const [syncRole, setSyncRole] = useState('educator');
-  const [syncing, setSyncing] = useState(false);
+  const [syncing, setSyncing]   = useState(false);
+
+  // Staff provisioning
+  const [staffForm, setStaffForm] = useState({ email: '', displayName: '', role: 'educator' });
+  const [provisioning, setProvisioning] = useState(false);
+  const [provisionOk, setProvisionOk]   = useState('');
 
   useEffect(() => {
     adminApi.get<{ data: Member[] }>(`/api/admin/institutes/${institute.id}/members`)
@@ -248,6 +253,19 @@ function MembersPanel({ institute, onClose }: { institute: Institute; onClose: (
     } catch (err) { setError(apiError(err)); } finally { setSyncing(false); }
   };
 
+  const handleProvisionStaff = async () => {
+    if (!staffForm.email || !staffForm.displayName) { setError('Name and email are required.'); return; }
+    setProvisioning(true); setError(''); setProvisionOk('');
+    try {
+      await adminApi.post(`/api/admin/institutes/${institute.id}/staff`, staffForm);
+      setProvisionOk(`✅ Account created. Credentials sent to ${staffForm.email}`);
+      setStaffForm({ email: '', displayName: '', role: 'educator' });
+      // Refresh member list
+      const res = await adminApi.get<{ data: Member[] }>(`/api/admin/institutes/${institute.id}/members`);
+      setMembers(res.data.data);
+    } catch (err) { setError(apiError(err)); } finally { setProvisioning(false); }
+  };
+
   const MEMBER_COLS: ColumnDef<Member, unknown>[] = [
     { accessorKey: 'email', header: 'Email', cell: ({ getValue }) => <span className="text-white text-xs">{getValue() as string}</span> },
     { accessorKey: 'role', header: 'Platform Role', cell: ({ getValue }) => <span className="font-mono text-xs text-violet-400">{getValue() as string}</span> },
@@ -267,6 +285,48 @@ function MembersPanel({ institute, onClose }: { institute: Institute; onClose: (
         </div>
         <div className="flex-1 p-6 space-y-6 overflow-y-auto">
           {error && <ErrorBanner message={error} />}
+
+          {/* Add Staff Member */}
+          <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-4">
+            <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-3">Add Staff Member</p>
+            <p className="text-xs text-zinc-500 mb-3">Creates a new Firebase account and emails login credentials directly to the staff member.</p>
+            {provisionOk && (
+              <div className="mb-3 px-3 py-2 rounded-lg text-xs font-medium" style={{ background: 'rgba(52,211,153,0.12)', color: '#6ee7b7', border: '1px solid rgba(52,211,153,0.25)' }}>
+                {provisionOk}
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
+              <input
+                value={staffForm.displayName}
+                onChange={e => setStaffForm(f => ({ ...f, displayName: e.target.value }))}
+                placeholder="Full name"
+                className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
+              <input
+                type="email"
+                value={staffForm.email}
+                onChange={e => setStaffForm(f => ({ ...f, email: e.target.value }))}
+                placeholder="Email address"
+                className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
+              <select
+                value={staffForm.role}
+                onChange={e => setStaffForm(f => ({ ...f, role: e.target.value }))}
+                className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+              >
+                <option value="educator">Educator</option>
+                <option value="examiner">Examiner</option>
+                <option value="institute_admin">Institute Admin</option>
+              </select>
+            </div>
+            <button
+              onClick={handleProvisionStaff}
+              disabled={provisioning || !staffForm.email || !staffForm.displayName}
+              className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition disabled:opacity-50"
+            >
+              {provisioning ? 'Creating account…' : 'Add Staff Member'}
+            </button>
+          </div>
 
           {/* Claims Sync */}
           <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-4">

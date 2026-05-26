@@ -26,6 +26,13 @@ const ListQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
+const ProvisionStaffSchema = z.object({
+  email:       z.string().email(),
+  displayName: z.string().min(2).max(120),
+  role:        z.enum(['educator', 'examiner', 'institute_admin']),
+  portalUrl:   z.string().url().default('https://institute.quantipi.in'),
+});
+
 export async function adminInstituteRoutes(fastify: FastifyInstance): Promise<void> {
 
   // ── GET /admin/institutes — List all institutes ───────────────
@@ -133,6 +140,68 @@ export async function adminInstituteRoutes(fastify: FastifyInstance): Promise<vo
         pagination: { total: result.total, limit: query.limit, offset: query.offset },
         timestamp: new Date().toISOString(),
       });
+    },
+  );
+
+  // ── POST /admin/institutes/:id/staff — Provision a staff account ─
+  // Creates a Firebase account, sets institute claims, adds to institute_members,
+  // and emails the tutor their temporary credentials.
+  fastify.post<{ Params: { id: string }; Body: unknown }>(
+    '/institutes/:id/staff',
+    async (request: FastifyRequest<{ Params: { id: string }; Body: unknown }>, reply: FastifyReply) => {
+      const body = ProvisionStaffSchema.parse(request.body);
+
+      // Verify institute exists
+      const institute = await instituteRepository.findById(request.params.id);
+      if (!institute) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Institute not found' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (!institute.isActive) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'INSTITUTE_INACTIVE', message: 'Cannot add staff to an inactive institute' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      try {
+        const result = await authService.provisionStaffAccount({
+          email: body.email,
+          displayName: body.displayName,
+          role: body.role,
+          instituteId: institute.id,
+          instituteName: institute.name,
+          portalUrl: body.portalUrl,
+        });
+
+        return reply.status(201).send({
+          success: true,
+          data: {
+            firebaseUid: result.firebaseUid,
+            userId: result.userId,
+            email: body.email,
+            displayName: body.displayName,
+            role: body.role,
+            // tempPassword intentionally NOT returned in API response — sent via email only
+          },
+          timestamp: new Date().toISOString(),
+        });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Provisioning failed';
+        // Firebase throws a specific message when email already exists
+        if (msg.includes('email-already-exists') || msg.includes('already exists')) {
+          return reply.status(409).send({
+            success: false,
+            error: { code: 'EMAIL_ALREADY_EXISTS', message: 'An account with this email already exists' },
+            timestamp: new Date().toISOString(),
+          });
+        }
+        throw err;
+      }
     },
   );
 

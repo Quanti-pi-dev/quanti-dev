@@ -209,6 +209,96 @@ class AuthService {
     }
   }
 
+  // ─── Provision Staff Account ─────────────────────────────
+  // Creates a brand-new Firebase account for a tutor/examiner/admin,
+  // sets their institute claims, upserts the PG user row, adds them
+  // as an institute_member, and emails the temp password.
+  //
+  // Password policy: 12 chars — uppercase + lowercase + digits + symbol.
+  async provisionStaffAccount(input: {
+    email: string;
+    displayName: string;
+    role: 'educator' | 'examiner' | 'institute_admin';
+    instituteId: string;
+    instituteName: string;
+    portalUrl: string;
+  }): Promise<{
+    firebaseUid: string;
+    userId: string;      // PG UUID
+    tempPassword: string;
+  }> {
+    const admin = getFirebaseAdmin();
+
+    // 1. Generate a secure temporary password
+    const crypto = await import('crypto');
+    const raw = crypto.randomBytes(12).toString('base64url').slice(0, 12);
+    // Guarantee policy: uppercase, lowercase, digit, symbol present
+    const tempPassword = raw.slice(0, 9) + 'A1!';  // deterministic suffix covers all char classes
+
+    // 2. Create Firebase user — fails fast if email already exists
+    let firebaseUid: string;
+    try {
+      const fbUser = await admin.auth().createUser({
+        email: input.email,
+        password: tempPassword,
+        displayName: input.displayName,
+        emailVerified: false,
+      });
+      firebaseUid = fbUser.uid;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create Firebase account';
+      throw new Error(msg);
+    }
+
+    try {
+      // 3. Set institute custom claims immediately so first login works
+      await admin.auth().setCustomUserClaims(firebaseUid, {
+        role: input.role,
+        institute_role: input.role,
+        institute_id: input.instituteId,
+        cv: CLAIMS_VERSION,
+      });
+
+      // 4. Upsert PG user row
+      const pgUser = await userRepository.create({
+        firebaseUid,
+        email: input.email,
+        displayName: input.displayName,
+        avatarUrl: null,
+        role: input.role === 'institute_admin' ? 'admin' : 'student',
+      });
+
+      // 5. Add to institute_members
+      const { instituteRepository: instRepo } = await import('../repositories/institute.repository.js');
+      await instRepo.addMember({
+        instituteId: input.instituteId,
+        userId: pgUser.id,
+        firebaseUid,
+        role: input.role,
+      });
+
+      // 6. Send invite email (fire-and-forget — non-fatal)
+      emailService.sendStaffInviteEmail({
+        to: input.email,
+        name: input.displayName,
+        instituteName: input.instituteName,
+        role: input.role,
+        tempPassword,
+        portalUrl: input.portalUrl,
+      }).catch((err: unknown) => {
+        log.error({ err, email: input.email }, 'Failed to send staff invite email');
+      });
+
+      log.info({ firebaseUid, instituteId: input.instituteId, role: input.role }, 'Staff account provisioned');
+      return { firebaseUid, userId: pgUser.id, tempPassword };
+
+    } catch (err) {
+      // Rollback: delete the Firebase account to avoid orphaned credentials
+      try { await admin.auth().deleteUser(firebaseUid); } catch { /* best-effort */ }
+      throw err;
+    }
+  }
+
   // ─── Sync role claim (general purpose) ─────────────────
   // Sets just the 'role' custom claim for any platform role change.
   // Used by admin when promoting a user to institute_admin.

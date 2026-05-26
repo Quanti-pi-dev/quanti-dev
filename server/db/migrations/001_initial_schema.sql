@@ -5,8 +5,6 @@
 -- Idempotent: uses IF NOT EXISTS / DO NOTHING throughout.
 -- ─────────────────────────────────────────────────────────────────────────────
 
-BEGIN;
-
 -- ─── Extensions ──────────────────────────────────────────────────────────────
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -489,5 +487,3 @@ INSERT INTO platform_config (key, value, category, description) VALUES
   ('ai_model_explanation',   '"gemini-2.0-flash"',   'ai', 'Model used for step-by-step answer explanations'),
   ('ai_model_quiz_gen',      '"gemini-2.0-flash"',   'ai', 'Model used for adaptive quiz and MCQ generation')
 ON CONFLICT (key) DO NOTHING;
-
-COMMIT;
