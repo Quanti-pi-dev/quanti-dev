@@ -139,6 +139,8 @@ const TOOLTIP_STYLE = {
   color: '#fff',
   fontSize: 12,
 };
+const TOOLTIP_LABEL_STYLE = { color: '#a1a1aa' };
+const TOOLTIP_ITEM_STYLE  = { color: '#fff' };
 
 const TICK = { fill: '#71717a', fontSize: 11 };
 const PIE_COLORS = ['#7c3aed', '#059669', '#ca8a04', '#dc2626', '#6366f1'];
@@ -303,7 +305,7 @@ export default function AnalyticsPage() {
                       <BarChart data={revSplitData} layout="vertical" margin={{ top: 0, right: 24, left: 0, bottom: 0 }}>
                         <XAxis type="number" tick={TICK} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
                         <YAxis type="category" dataKey="source" tick={{ ...TICK, fontSize: 12 }} axisLine={false} tickLine={false} width={100} />
-                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [`₹${v.toLocaleString('en-IN')}`, 'Revenue']} />
+                        <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} formatter={(v: number) => [`₹${v.toLocaleString('en-IN')}`, 'Revenue']} />
                         <Bar dataKey="revenue" radius={[0, 6, 6, 0]}>
                           <Cell fill="#7c3aed" />
                           <Cell fill="#ca8a04" />
@@ -327,7 +329,7 @@ export default function AnalyticsPage() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
                         <XAxis dataKey="day" tick={TICK} axisLine={false} tickLine={false} interval={4} />
                         <YAxis tick={TICK} axisLine={false} tickLine={false} tickFormatter={v => `₹${v}`} />
-                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [`₹${v.toLocaleString('en-IN')}`, 'Revenue']} />
+                        <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} formatter={(v: number) => [`₹${v.toLocaleString('en-IN')}`, 'Revenue']} />
                         <Area type="monotone" dataKey="revenue" stroke="#7c3aed" fill="url(#rev-grad)" strokeWidth={2} dot={false} />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -343,24 +345,43 @@ export default function AnalyticsPage() {
               <SectionTitle label="Subscription Analytics" />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <ChartBox title="Status Distribution">
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                       <Pie
                         data={subPieData}
                         dataKey="value"
                         nameKey="name"
                         cx="50%"
                         cy="50%"
-                        outerRadius={75}
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                        labelLine={false}
+                        outerRadius={80}
+                        label={({ name, percent, x, y, midAngle }) => {
+                          // Position label outside the slice with a small offset
+                          const RADIAN = Math.PI / 180;
+                          const radius = 95;
+                          const cx2 = x - Math.cos(-midAngle * RADIAN) * (80 - radius + radius);
+                          const cy2 = y - Math.sin(-midAngle * RADIAN) * (80 - radius + radius);
+                          return (
+                            <text
+                              x={x}
+                              y={y}
+                              fill="#e4e4e7"
+                              textAnchor={x > 200 ? 'start' : 'end'}
+                              dominantBaseline="central"
+                              fontSize={11}
+                              fontWeight={500}
+                            >
+                              {`${name} ${(percent * 100).toFixed(0)}%`}
+                            </text>
+                          );
+                        }}
+                        labelLine={{ stroke: '#52525b', strokeWidth: 1 }}
                       >
                         {subPieData.map((_, idx) => (
                           <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
                         ))}
                       </Pie>
                       <Legend wrapperStyle={{ color: '#a1a1aa', fontSize: 12 }} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} />
                     </PieChart>
                   </ResponsiveContainer>
                 </ChartBox>
@@ -400,7 +421,7 @@ export default function AnalyticsPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
                       <XAxis dataKey="day" tick={TICK} axisLine={false} tickLine={false} />
                       <YAxis tick={TICK} axisLine={false} tickLine={false} tickFormatter={v => `₹${v}`} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [`₹${v.toLocaleString('en-IN')}`, 'Revenue']} />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} formatter={(v: number) => [`₹${v.toLocaleString('en-IN')}`, 'Revenue']} />
                       <Bar dataKey="revenue" fill="#ca8a04" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -433,7 +454,7 @@ export default function AnalyticsPage() {
                     <BarChart data={coinEconData} layout="vertical" margin={{ top: 0, right: 24, left: 0, bottom: 0 }}>
                       <XAxis type="number" tick={TICK} axisLine={false} tickLine={false} />
                       <YAxis type="category" dataKey="label" tick={{ ...TICK, fontSize: 12 }} axisLine={false} tickLine={false} width={90} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [v.toLocaleString(), 'Coins']} />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} formatter={(v: number) => [v.toLocaleString(), 'Coins']} />
                       <Bar dataKey="value" fill="#ca8a04" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
