@@ -5,6 +5,7 @@
 import { getRedisClient } from '../clients/database.js';
 import { getFirebaseAdmin } from '../lib/firebase-admin.js';
 import { userRepository } from '../repositories/user.repository.js';
+import { instituteRepository } from '../repositories/institute.repository.js';
 import { z } from 'zod';
 import { createServiceLogger } from '../lib/logger.js';
 import type { UserProfile } from '@kd/shared';
@@ -259,18 +260,17 @@ class AuthService {
         cv: CLAIMS_VERSION,
       });
 
-      // 4. Upsert PG user row
+      // 4. Upsert PG user row — store the actual staff role directly
       const pgUser = await userRepository.create({
         firebaseUid,
         email: input.email,
         displayName: input.displayName,
         avatarUrl: null,
-        role: input.role === 'institute_admin' ? 'admin' : 'student',
+        role: input.role,   // 'educator' | 'examiner' | 'institute_admin'
       });
 
       // 5. Add to institute_members
-      const { instituteRepository: instRepo } = await import('../repositories/institute.repository.js');
-      await instRepo.addMember({
+      await instituteRepository.addMember({
         instituteId: input.instituteId,
         userId: pgUser.id,
         firebaseUid,
