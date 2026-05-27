@@ -4,7 +4,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { requireRole } from '../middleware/rbac.js';
-import { planRepository } from '@kd/db';
+import { planRepository, authService } from '@kd/db';
 import { subscriptionRepository } from '@kd/db';
 import { paymentRepository } from '@kd/db';
 import { couponRepository } from '@kd/db';
@@ -92,7 +92,7 @@ const userSearchSchema = z.object({
 });
 
 const updateUserRoleSchema = z.object({
-  role: z.enum(['user', 'admin', 'moderator']),
+  role: z.enum(['student', 'admin', 'educator', 'examiner', 'institute_admin']),
 });
 
 // ─── Route plugin ─────────────────────────────────────────────
@@ -378,13 +378,17 @@ export async function adminSubscriptionRoutes(fastify: FastifyInstance): Promise
     const { role } = updateUserRoleSchema.parse(request.body);
     const pool = getPostgresPool();
     const result = await pool.query(
-      `UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2 RETURNING id, role`,
+      `UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2 RETURNING id, role, firebase_uid`,
       [role, id],
     );
     if (result.rows.length === 0) {
       return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' }, timestamp: new Date().toISOString() });
     }
-    return reply.send({ success: true, data: result.rows[0], timestamp: new Date().toISOString() });
+    const updatedUser = result.rows[0];
+    if (updatedUser.firebase_uid) {
+      await authService.syncRoleClaim(updatedUser.firebase_uid, role);
+    }
+    return reply.send({ success: true, data: { id: updatedUser.id, role: updatedUser.role }, timestamp: new Date().toISOString() });
   });
 
   // ─── Coupons CRUD ───────────────────────────────────────

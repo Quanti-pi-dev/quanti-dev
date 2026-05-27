@@ -104,14 +104,22 @@ function RoleEditor({ userId, currentRole, onChanged }: { userId: string; curren
   const [saving, setSaving] = useState(false);
   const [open, setOpen]     = useState(false);
 
-  const ROLES = ['user', 'moderator', 'admin'] as const;
+  const ROLES = ['student', 'admin', 'educator', 'examiner', 'institute_admin'] as const;
+
+  const ROLE_LABELS: Record<string, string> = {
+    student: 'Student',
+    admin: 'Platform Admin',
+    educator: 'Educator',
+    examiner: 'Examiner',
+    institute_admin: 'Institute Admin',
+  };
 
   const handleChange = async (role: string) => {
     if (role === currentRole) { setOpen(false); return; }
     setSaving(true); setOpen(false);
     try {
       await adminApi.patch(`/api/admin/users/${userId}/role`, { role });
-      toast.success(`Role changed to "${role}"`);
+      toast.success(`Role changed to "${ROLE_LABELS[role] ?? role}"`);
       onChanged();
     } catch {
       toast.error('Failed to update role.');
@@ -126,11 +134,11 @@ function RoleEditor({ userId, currentRole, onChanged }: { userId: string; curren
         className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm text-zinc-300 transition-colors disabled:opacity-50"
       >
         {saving ? <InlineSpinner /> : <ShieldCheck size={13} className="text-violet-400" />}
-        {currentRole}
+        {ROLE_LABELS[currentRole] ?? currentRole}
         <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute top-full mt-1 right-0 z-20 bg-zinc-800 border border-zinc-700 rounded-xl shadow-xl overflow-hidden min-w-[120px]">
+        <div className="absolute top-full mt-1 right-0 z-20 bg-zinc-800 border border-zinc-700 rounded-xl shadow-xl overflow-hidden min-w-[150px]">
           {ROLES.map(r => (
             <button
               key={r}
@@ -139,7 +147,7 @@ function RoleEditor({ userId, currentRole, onChanged }: { userId: string; curren
                 r === currentRole ? 'text-violet-400 bg-violet-950/40' : 'text-zinc-300 hover:bg-zinc-700'
               }`}
             >
-              {r}
+              {ROLE_LABELS[r] ?? r}
             </button>
           ))}
         </div>
