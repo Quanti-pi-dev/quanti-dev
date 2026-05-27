@@ -5,36 +5,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { clsx } from 'clsx';
+import Image from 'next/image';
 import {
   BookOpen, Users, ClipboardList, FileText,
   Trophy, Key, LogOut, ChevronRight, GraduationCap, Settings,
   PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
-
-// ─── Brand mark (inline SVG — no file dependency) ────────────
-// Use a module-scoped gradient ID so it survives SSR + client hydration
-// without colliding with other SVGs on the page.
-const GRAD_ID = 'qp-sidebar-grad';
-
-function BrandMark({ size = 30 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id={GRAD_ID} x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#6366f1" />
-          <stop offset="1" stopColor="#8b5cf6" />
-        </linearGradient>
-      </defs>
-      <rect width="32" height="32" rx="8" fill={`url(#${GRAD_ID})`} />
-      {/* π — top bar */}
-      <line x1="7" y1="11" x2="25" y2="11" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
-      {/* π — left leg */}
-      <line x1="11.5" y1="11" x2="11.5" y2="23" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
-      {/* π — right leg (curved) */}
-      <path d="M20.5 11 L20.5 20 Q20.5 23 17.5 23" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-    </svg>
-  );
-}
 
 // ─── Nav items ────────────────────────────────────────────────
 
@@ -104,7 +80,14 @@ export function Sidebar() {
             collapsed ? 'cursor-pointer hover:scale-110 hover:brightness-125 active:scale-95' : 'cursor-default',
           )}
         >
-          <BrandMark size={30} />
+          <Image
+            src="/logo.jpg"
+            alt="QuantiPi"
+            width={30}
+            height={30}
+            className="rounded-lg shadow-sm shadow-violet-900/60 block"
+            priority
+          />
         </button>
 
         {/* Wordmark + role label — hidden when collapsed */}
