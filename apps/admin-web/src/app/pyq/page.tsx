@@ -1,160 +1,316 @@
 'use client';
 
 // ─── PYQ (Previous Year Questions) Page ──────────────────────
-// Browse, bulk-import, and delete PYQ flashcards.
-// Routes wired:
-//   GET    /api/admin/pyq          (paginated browse with filters)
-//   GET    /api/admin/pyq/meta     (year + paper filter options)
-//   POST   /api/admin/pyq/bulk     (bulk import with deck auto-create)
-//   DELETE /api/admin/pyq/:cardId
+// GET    /api/admin/pyq          (paginated browse with filters)
+// GET    /api/admin/pyq/meta     (year + paper filter options)
+// POST   /api/admin/pyq/bulk     (bulk import with deck auto-create)
+// DELETE /api/admin/pyq/:cardId
+//
+// BulkImportModal uses cascading dropdowns:
+//   Step 1 → Pick Exam   (GET /api/admin/exams)
+//   Step 2 → Pick Subject (GET /api/admin/exams/:id/subjects)
+//   Step 3 → Pick Topic  (GET /api/admin/exams/:examId/subjects/:subjectId/topics)
+//   Step 4 → Metadata + JSON cards
 
 import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api';
 import { PageShell, Spinner, ErrorBanner } from '@/components/page-shell';
 import { ConfirmModal } from '@/components/confirm-modal';
 import { useToast } from '@/components/toast';
-import { Upload, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Latex } from '@/components/latex';
+import { Upload, Trash2, X, ChevronLeft, ChevronRight, Check, Search, BookOpen } from 'lucide-react';
 
-// ─── Types ────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────
 
 interface PYQCard {
-  id: string;
-  deckId: string;
-  question: string;
+  id: string; deckId: string; question: string;
   options: Array<{ id: string; text: string }>;
-  correctAnswerId: string;
-  explanation: string | null;
-  sourceYear: number | null;
-  sourcePaper: string | null;
-  tags: string[];
-  createdAt: string;
+  correctAnswerId: string; explanation: string | null;
+  sourceYear: number | null; sourcePaper: string | null;
+  tags: string[]; createdAt: string;
 }
-
-interface PYQMeta {
-  years: number[];
-  papers: string[];
-  total: number;
-}
-
-interface Pagination {
-  page: number;
-  pageSize: number;
-  totalItems: number;
-  totalPages: number;
-}
+interface PYQMeta { years: number[]; papers: string[]; total: number; }
+interface Pagination { page: number; pageSize: number; totalItems: number; totalPages: number; }
+interface ExamOption { id: string; title: string; category: string; }
+interface SubjectOption { subjectId: string; subject: { id: string; name: string } | null; }
+interface TopicOption { id: string; slug: string; displayName: string; }
 
 const INPUT = 'bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500';
 const LABEL = 'block text-xs font-medium text-zinc-400 mb-1.5';
-
 const SUBJECT_LEVELS = ['easy', 'medium', 'hard', 'expert', 'mixed', 'pyq'] as const;
 
-// ─── Bulk Import Modal ────────────────────────────────────────
+function apiError(err: unknown) {
+  return (err as { response?: { data?: { error?: { message?: string } } }; message?: string })
+    ?.response?.data?.error?.message ?? (err as { message?: string })?.message ?? 'Unknown error';
+}
+
+// ─── Searchable Exam List ─────────────────────────────────────
+
+function ExamPicker({ exams, loading, selected, onSelect }: {
+  exams: ExamOption[]; loading: boolean;
+  selected: ExamOption | null; onSelect: (e: ExamOption) => void;
+}) {
+  const [q, setQ] = useState('');
+  const filtered = exams.filter(e =>
+    e.title.toLowerCase().includes(q.toLowerCase()) ||
+    e.category.toLowerCase().includes(q.toLowerCase()),
+  );
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search exams…"
+          className={`${INPUT} w-full pl-8`} autoFocus />
+      </div>
+      {loading ? <p className="text-xs text-zinc-500 py-4 text-center">Loading…</p>
+        : filtered.length === 0 ? <p className="text-xs text-zinc-500 py-4 text-center">No exams found</p>
+        : (
+          <div className="space-y-1 max-h-52 overflow-y-auto pr-1">
+            {filtered.map(ex => (
+              <button key={ex.id} onClick={() => onSelect(ex)}
+                className={`w-full text-left px-3 py-2.5 rounded-xl border text-sm transition-all ${
+                  selected?.id === ex.id
+                    ? 'border-violet-500 bg-violet-600/10 text-white'
+                    : 'border-zinc-700 bg-zinc-800/50 text-zinc-300 hover:border-zinc-600 hover:text-white'
+                }`}>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{ex.title}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-zinc-500 bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded-full">{ex.category}</span>
+                    {selected?.id === ex.id && <Check size={13} className="text-violet-400" />}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+    </div>
+  );
+}
+
+// ─── Bulk Import Modal (4-step) ───────────────────────────────
 
 function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
-  const [form, setForm] = useState({
-    examId:     '',
-    subjectId:  '',
-    topicSlug:  '',
-    level:      'pyq' as typeof SUBJECT_LEVELS[number],
-    sourceYear: new Date().getFullYear(),
-    sourcePaper: '',
-    examLabel:   '',
-  });
-  const [raw, setRaw]       = useState('');
+  // cascading state
+  const [exams, setExams] = useState<ExamOption[]>([]);
+  const [examsLoading, setExamsLoading] = useState(false);
+  const [selectedExam, setSelectedExam] = useState<ExamOption | null>(null);
+
+  const [subjects, setSubjects] = useState<SubjectOption[]>([]);
+  const [subjectsLoading, setSubjectsLoading] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState<SubjectOption | null>(null);
+
+  const [topics, setTopics] = useState<TopicOption[]>([]);
+  const [topicsLoading, setTopicsLoading] = useState(false);
+  const [selectedTopic, setSelectedTopic] = useState<TopicOption | null>(null);
+
+  // metadata + cards
+  const [level, setLevel] = useState<typeof SUBJECT_LEVELS[number]>('pyq');
+  const [sourceYear, setSourceYear] = useState(new Date().getFullYear());
+  const [sourcePaper, setSourcePaper] = useState('');
+  const [examLabel, setExamLabel] = useState('');
+  const [raw, setRaw] = useState('');
   const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState('');
+  const [error, setError] = useState('');
   const [result, setResult] = useState<{ created: number; requested: number; deckId: string } | null>(null);
 
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm(p => ({ ...p, [k]: k === 'sourceYear' ? Number(e.target.value) : e.target.value }));
+  // load exams
+  useEffect(() => {
+    setExamsLoading(true);
+    adminApi.get<{ data: ExamOption[] }>('/api/admin/exams?pageSize=200')
+      .then(r => setExams(r.data.data))
+      .catch(() => {})
+      .finally(() => setExamsLoading(false));
+  }, []);
+
+  // load subjects when exam changes
+  useEffect(() => {
+    if (!selectedExam) { setSubjects([]); setSelectedSubject(null); return; }
+    setSubjectsLoading(true);
+    adminApi.get<{ data: SubjectOption[] }>(`/api/admin/exams/${selectedExam.id}/subjects`)
+      .then(r => setSubjects(r.data.data))
+      .catch(() => setSubjects([]))
+      .finally(() => setSubjectsLoading(false));
+    setSelectedSubject(null); setSelectedTopic(null); setTopics([]);
+  }, [selectedExam]);
+
+  // load topics when subject changes
+  useEffect(() => {
+    if (!selectedExam || !selectedSubject) { setTopics([]); setSelectedTopic(null); return; }
+    setTopicsLoading(true);
+    adminApi.get<{ data: { topics: TopicOption[] } }>(
+      `/api/admin/exams/${selectedExam.id}/subjects/${selectedSubject.subjectId}/topics`,
+    ).then(r => setTopics(r.data.data.topics))
+      .catch(() => setTopics([]))
+      .finally(() => setTopicsLoading(false));
+    setSelectedTopic(null);
+  }, [selectedExam, selectedSubject]);
+
+  const handleImport = async () => {
+    if (!selectedExam || !selectedSubject || !selectedTopic) {
+      setError('Please select Exam, Subject and Topic.'); return;
+    }
+    setSaving(true); setError(''); setResult(null);
+    try {
+      const cards = JSON.parse(raw);
+      if (!Array.isArray(cards)) throw new Error('Input must be a JSON array.');
+      const payload = {
+        examId: selectedExam.id,
+        subjectId: selectedSubject.subjectId,
+        topicSlug: selectedTopic.slug,
+        level, sourceYear, sourcePaper, examLabel, cards,
+      };
+      const res = await adminApi.post<{ data: { created: number; requested: number; deckId: string } }>(
+        '/api/admin/pyq/bulk', payload,
+      );
+      setResult(res.data.data);
+    } catch (err) { setError(apiError(err)); } finally { setSaving(false); }
+  };
 
   const PLACEHOLDER = JSON.stringify([{
     question: 'Which article guarantees right to equality?',
     options: [
-      { id: 'A', text: 'Article 12' },
-      { id: 'B', text: 'Article 14' },
-      { id: 'C', text: 'Article 19' },
-      { id: 'D', text: 'Article 21' },
+      { id: 'A', text: 'Article 12' }, { id: 'B', text: 'Article 14' },
+      { id: 'C', text: 'Article 19' }, { id: 'D', text: 'Article 21' },
     ],
     correctAnswerId: 'B',
     explanation: 'Article 14 guarantees equality before law.',
   }], null, 2);
 
-  const handleImport = async () => {
-    if (!form.examId || !form.subjectId || !form.topicSlug) { setError('Exam ID, Subject ID and Topic Slug are required.'); return; }
-    setSaving(true); setError(''); setResult(null);
-    try {
-      const cards = JSON.parse(raw);
-      if (!Array.isArray(cards)) throw new Error('Input must be a JSON array.');
-      const payload = { ...form, cards };
-      const res = await adminApi.post<{ data: { created: number; requested: number; deckId: string } }>('/api/admin/pyq/bulk', payload);
-      setResult(res.data.data);
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: { message?: string } } }; message?: string })?.response?.data?.error?.message
-        ?? (err as { message?: string })?.message ?? 'Import failed.';
-      setError(msg);
-    } finally { setSaving(false); }
-  };
+  const ready = !!selectedExam && !!selectedSubject && !!selectedTopic && raw.trim().length > 0;
 
   return (
-    <div
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-6"
-    >
-      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-2xl p-6 shadow-2xl mx-4">
+    <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-6 px-4">
+      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-2xl p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-white">Bulk Import PYQ Cards</h2>
-          <button onClick={onClose}><X size={16} className="text-zinc-500 hover:text-white" /></button>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-white transition"><X size={16} /></button>
         </div>
+
         {error && <ErrorBanner message={error} />}
+
         {result ? (
           <div className="space-y-4">
             <div className="bg-emerald-950/50 border border-emerald-800 text-emerald-400 text-sm rounded-xl px-4 py-3">
-              ✓ Imported {result.created} of {result.requested} cards into deck <span className="font-mono text-xs">{result.deckId.slice(0, 12)}…</span>
+              ✓ Imported {result.created} of {result.requested} cards into deck{' '}
+              <span className="font-mono text-xs">{result.deckId.slice(0, 12)}…</span>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => { onImported(); onClose(); }} className="flex-1 px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-medium transition">Done</button>
-              <button onClick={() => setResult(null)} className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 text-sm hover:text-white transition">Import More</button>
+              <button onClick={() => { onImported(); onClose(); }}
+                className="flex-1 px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-medium transition">Done</button>
+              <button onClick={() => setResult(null)}
+                className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 text-sm hover:text-white transition">Import More</button>
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
-            {/* Target fields */}
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className={LABEL}>Exam ID *</label><input value={form.examId} onChange={set('examId')} placeholder="MongoDB ObjectId" className={`${INPUT} w-full`} /></div>
-              <div><label className={LABEL}>Subject ID *</label><input value={form.subjectId} onChange={set('subjectId')} placeholder="MongoDB ObjectId" className={`${INPUT} w-full`} /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className={LABEL}>Topic Slug *</label><input value={form.topicSlug} onChange={set('topicSlug')} placeholder="e.g. polity-basics" className={`${INPUT} w-full`} /></div>
-              <div>
-                <label className={LABEL}>Level</label>
-                <select value={form.level} onChange={set('level')} className={`${INPUT} w-full`}>
-                  {SUBJECT_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div><label className={LABEL}>Source Year *</label><input type="number" min={1990} max={2099} value={form.sourceYear} onChange={set('sourceYear')} className={`${INPUT} w-full`} /></div>
-              <div><label className={LABEL}>Source Paper</label><input value={form.sourcePaper} onChange={set('sourcePaper')} placeholder="e.g. Paper I" className={`${INPUT} w-full`} /></div>
-              <div><label className={LABEL}>Exam Label</label><input value={form.examLabel} onChange={set('examLabel')} placeholder="e.g. UPSC CSE" className={`${INPUT} w-full`} /></div>
-            </div>
+          <div className="space-y-5">
 
-            {/* Cards JSON */}
+            {/* ── Row 1: Exam picker ── */}
             <div>
-              <label className={LABEL}>Cards JSON (array, max 500 per call)</label>
-              <textarea
-                value={raw}
-                onChange={e => setRaw(e.target.value)}
-                placeholder={PLACEHOLDER}
-                rows={10}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-white font-mono placeholder:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-violet-500"
-              />
+              <label className={LABEL}>
+                <BookOpen size={11} className="inline mr-1 mb-0.5" />Exam *
+              </label>
+              <ExamPicker exams={exams} loading={examsLoading} selected={selectedExam} onSelect={setSelectedExam} />
             </div>
 
-            <div className="flex gap-3">
-              <button type="button" onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 text-sm hover:text-white transition">Cancel</button>
-              <button disabled={saving || !raw.trim()} onClick={handleImport} className="flex-1 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition disabled:opacity-50">
+            {/* ── Row 2: Subject + Topic (shown after exam selected) ── */}
+            {selectedExam && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={LABEL}>Subject *</label>
+                  {subjectsLoading ? <p className="text-xs text-zinc-500 py-2">Loading…</p> : (
+                    <select value={selectedSubject?.subjectId ?? ''}
+                      onChange={e => {
+                        const s = subjects.find(s => s.subjectId === e.target.value) ?? null;
+                        setSelectedSubject(s);
+                      }}
+                      className={`${INPUT} w-full`}>
+                      <option value="">— Select subject —</option>
+                      {subjects.map(s => (
+                        <option key={s.subjectId} value={s.subjectId}>
+                          {s.subject?.name ?? s.subjectId}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div>
+                  <label className={LABEL}>Topic *</label>
+                  {topicsLoading ? <p className="text-xs text-zinc-500 py-2">Loading…</p> : (
+                    <select value={selectedTopic?.slug ?? ''}
+                      onChange={e => {
+                        const t = topics.find(t => t.slug === e.target.value) ?? null;
+                        setSelectedTopic(t);
+                      }}
+                      disabled={!selectedSubject}
+                      className={`${INPUT} w-full disabled:opacity-40`}>
+                      <option value="">— Select topic —</option>
+                      {topics.map(t => (
+                        <option key={t.slug} value={t.slug}>{t.displayName}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── Row 3: Level + Year + Paper + Label ── */}
+            {selectedTopic && (
+              <>
+                <div className="grid grid-cols-4 gap-3">
+                  <div>
+                    <label className={LABEL}>Level</label>
+                    <select value={level} onChange={e => setLevel(e.target.value as typeof SUBJECT_LEVELS[number])}
+                      className={`${INPUT} w-full`}>
+                      {SUBJECT_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={LABEL}>Year *</label>
+                    <input type="number" min={1990} max={2099} value={sourceYear}
+                      onChange={e => setSourceYear(Number(e.target.value))}
+                      className={`${INPUT} w-full`} />
+                  </div>
+                  <div>
+                    <label className={LABEL}>Paper</label>
+                    <input value={sourcePaper} onChange={e => setSourcePaper(e.target.value)}
+                      placeholder="e.g. Paper I" className={`${INPUT} w-full`} />
+                  </div>
+                  <div>
+                    <label className={LABEL}>Exam Label</label>
+                    <input value={examLabel} onChange={e => setExamLabel(e.target.value)}
+                      placeholder="e.g. UPSC CSE" className={`${INPUT} w-full`} />
+                  </div>
+                </div>
+
+                {/* Selected context pill */}
+                <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                  <span className="bg-violet-600/15 border border-violet-500/30 text-violet-400 px-2.5 py-1 rounded-full">{selectedExam?.title}</span>
+                  <span className="text-zinc-600">›</span>
+                  <span className="bg-zinc-800 border border-zinc-700 text-zinc-400 px-2.5 py-1 rounded-full">{selectedSubject?.subject?.name}</span>
+                  <span className="text-zinc-600">›</span>
+                  <span className="bg-zinc-800 border border-zinc-700 text-zinc-400 px-2.5 py-1 rounded-full">{selectedTopic.displayName}</span>
+                </div>
+
+                {/* Cards JSON */}
+                <div>
+                  <label className={LABEL}>
+                    Cards JSON — array of questions (max 500 per call).
+                    <span className="text-zinc-600 font-normal ml-1">Supports LaTeX in question/options via $…$</span>
+                  </label>
+                  <textarea value={raw} onChange={e => setRaw(e.target.value)}
+                    placeholder={PLACEHOLDER} rows={10}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-white font-mono placeholder:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+              </>
+            )}
+
+            <div className="flex gap-3 pt-1">
+              <button onClick={onClose}
+                className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 text-sm hover:text-white transition">Cancel</button>
+              <button disabled={saving || !ready} onClick={handleImport}
+                className="flex-1 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition disabled:opacity-40">
                 {saving ? 'Importing…' : 'Import'}
               </button>
             </div>
@@ -168,18 +324,19 @@ function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImpor
 // ─── Page ─────────────────────────────────────────────────────
 
 export default function PYQPage() {
-  const [cards, setCards]       = useState<PYQCard[]>([]);
-  const [meta, setMeta]         = useState<PYQMeta | null>(null);
+  const [cards, setCards]           = useState<PYQCard[]>([]);
+  const [meta, setMeta]             = useState<PYQMeta | null>(null);
   const [pagination, setPagination] = useState<Pagination | null>(null);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState('');
-  const [showBulk, setShowBulk] = useState(false);
-  const [deleting, setDeleting] = useState<string | null>(null);
-
-  // Filters
-  const [year, setYear]   = useState('');
-  const [paper, setPaper] = useState('');
-  const [page, setPage]   = useState(1);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState('');
+  const [showBulk, setShowBulk]     = useState(false);
+  const [deleting, setDeleting]     = useState<string | null>(null);
+  const [year, setYear]             = useState('');
+  const [paper, setPaper]           = useState('');
+  const [page, setPage]             = useState(1);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleteError, setDeleteError]   = useState('');
+  const { toast } = useToast();
   const PAGE_SIZE = 20;
 
   const fetchMeta = useCallback(async () => {
@@ -192,10 +349,12 @@ export default function PYQPage() {
   const fetchCards = useCallback(async (pg = 1) => {
     setLoading(true); setError('');
     const params = new URLSearchParams({ page: String(pg), pageSize: String(PAGE_SIZE) });
-    if (year)  params.set('year', year);
+    if (year) params.set('year', year);
     if (paper) params.set('paper', paper);
     try {
-      const res = await adminApi.get<{ data: { cards: PYQCard[]; pagination: Pagination } }>(`/api/admin/pyq?${params}`);
+      const res = await adminApi.get<{ data: { cards: PYQCard[]; pagination: Pagination } }>(
+        `/api/admin/pyq?${params}`,
+      );
       setCards(res.data.data.cards);
       setPagination(res.data.data.pagination);
     } catch { setError('Failed to load PYQ cards.'); } finally { setLoading(false); }
@@ -203,10 +362,6 @@ export default function PYQPage() {
 
   useEffect(() => { fetchMeta(); }, [fetchMeta]);
   useEffect(() => { setPage(1); fetchCards(1); }, [fetchCards]);
-
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [deleteError, setDeleteError]   = useState('');
-  const { toast } = useToast();
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -216,33 +371,34 @@ export default function PYQPage() {
       setDeleteTarget(null);
       toast.success('PYQ card deleted');
       await fetchCards(page);
-    }
-    catch (err: unknown) {
-      setDeleteError((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? 'Failed to delete card.');
+    } catch (err: unknown) {
+      setDeleteError(apiError(err));
     } finally { setDeleting(null); }
   };
-
-  const handlePageChange = (newPage: number) => { setPage(newPage); fetchCards(newPage); };
 
   return (
     <PageShell
       title="PYQ Cards"
       subtitle={meta ? `${meta.total.toLocaleString()} total PYQ questions` : 'Previous Year Questions'}
       actions={
-        <button onClick={() => setShowBulk(true)} className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition">
+        <button onClick={() => setShowBulk(true)}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition">
           <Upload size={14} /> Bulk Import
         </button>
       }
     >
-      {showBulk && <BulkImportModal onClose={() => setShowBulk(false)} onImported={() => { fetchMeta(); fetchCards(1); }} />}
+      {showBulk && (
+        <BulkImportModal
+          onClose={() => setShowBulk(false)}
+          onImported={() => { fetchMeta(); fetchCards(1); }}
+        />
+      )}
       {deleteTarget && (
         <ConfirmModal
           title="Delete PYQ Card"
           description="Are you sure you want to permanently delete this PYQ card?"
-          confirmLabel="Delete Card"
-          destructive
-          loading={deleting === deleteTarget}
-          error={deleteError}
+          confirmLabel="Delete Card" destructive
+          loading={deleting === deleteTarget} error={deleteError}
           onConfirm={handleDelete}
           onCancel={() => { setDeleteTarget(null); setDeleteError(''); }}
         />
@@ -259,7 +415,8 @@ export default function PYQPage() {
           {meta?.papers.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
         {(year || paper) && (
-          <button onClick={() => { setYear(''); setPaper(''); }} className="px-3 py-2 rounded-lg text-xs text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 transition">
+          <button onClick={() => { setYear(''); setPaper(''); }}
+            className="px-3 py-2 rounded-lg text-xs text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 transition">
             Clear filters
           </button>
         )}
@@ -269,7 +426,7 @@ export default function PYQPage() {
 
       {loading ? <Spinner /> : cards.length === 0 ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-12 text-center text-zinc-600 text-sm">
-          No PYQ cards found for these filters. Try "Bulk Import" to add some.
+          No PYQ cards found. Try &ldquo;Bulk Import&rdquo; to add some.
         </div>
       ) : (
         <div className="space-y-3">
@@ -278,33 +435,31 @@ export default function PYQPage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
-                    {card.sourceYear && <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-950/50 text-yellow-400 border border-yellow-800/50">{card.sourceYear}</span>}
-                    {card.sourcePaper && <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">{card.sourcePaper}</span>}
+                    {card.sourceYear && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-950/50 text-yellow-400 border border-yellow-800/50">{card.sourceYear}</span>
+                    )}
+                    {card.sourcePaper && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">{card.sourcePaper}</span>
+                    )}
                   </div>
                   <div className="text-sm text-white font-medium leading-relaxed">
                     <Latex text={card.question} />
                   </div>
                 </div>
-                <button
-                  onClick={() => { setDeleteTarget(card.id); setDeleteError(''); }}
+                <button onClick={() => { setDeleteTarget(card.id); setDeleteError(''); }}
                   disabled={deleting === card.id}
-                  className="p-2 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50 shrink-0"
-                >
+                  className="p-2 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-zinc-800 transition disabled:opacity-50 shrink-0">
                   <Trash2 size={13} />
                 </button>
               </div>
-
-              {/* Options */}
               <div className="grid grid-cols-2 gap-1.5 mt-3">
                 {card.options.map(opt => (
-                  <div
-                    key={opt.id}
+                  <div key={opt.id}
                     className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs ${
                       opt.id === card.correctAnswerId
                         ? 'bg-emerald-950/60 border border-emerald-800/60 text-emerald-300'
                         : 'bg-zinc-800/60 text-zinc-400'
-                    }`}
-                  >
+                    }`}>
                     <span className="font-bold shrink-0">{opt.id}.</span>
                     <span className="truncate"><Latex text={opt.text} /></span>
                   </div>
@@ -318,23 +473,18 @@ export default function PYQPage() {
             </div>
           ))}
 
-          {/* Pagination */}
           {pagination && pagination.totalPages > 1 && (
             <div className="flex items-center justify-between pt-4">
-              <p className="text-xs text-zinc-500">{pagination.totalItems.toLocaleString()} cards · Page {pagination.page} of {pagination.totalPages}</p>
+              <p className="text-xs text-zinc-500">
+                {pagination.totalItems.toLocaleString()} cards · Page {pagination.page} of {pagination.totalPages}
+              </p>
               <div className="flex gap-2">
-                <button
-                  disabled={page <= 1}
-                  onClick={() => handlePageChange(page - 1)}
-                  className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition disabled:opacity-30"
-                >
+                <button disabled={page <= 1} onClick={() => { setPage(p => p - 1); fetchCards(page - 1); }}
+                  className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition disabled:opacity-30">
                   <ChevronLeft size={14} />
                 </button>
-                <button
-                  disabled={page >= pagination.totalPages}
-                  onClick={() => handlePageChange(page + 1)}
-                  className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition disabled:opacity-30"
-                >
+                <button disabled={page >= pagination.totalPages} onClick={() => { setPage(p => p + 1); fetchCards(page + 1); }}
+                  className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition disabled:opacity-30">
                   <ChevronRight size={14} />
                 </button>
               </div>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { api } from '@/lib/api';
-import { Key, Plus, Copy, Trash2, RefreshCw, Check } from 'lucide-react';
+import { Key, Plus, Copy, Trash2, RefreshCw, Check, AlertCircle, Clock } from 'lucide-react';
 
 interface JoinCode {
   id: string;
@@ -18,27 +18,39 @@ interface JoinCode {
 }
 
 const ROLE_OPTIONS = [
-  { value: 'student',  label: 'Student' },
-  { value: 'educator', label: 'Educator' },
-  { value: 'examiner', label: 'Examiner' },
+  { value: 'student',        label: 'Student' },
+  { value: 'educator',       label: 'Educator' },
+  { value: 'examiner',       label: 'Examiner' },
   { value: 'institute_admin', label: 'Admin' },
+] as const;
+
+const EXPIRY_OPTIONS = [
+  { value: '',   label: 'Never expires' },
+  { value: '7',  label: '7 days' },
+  { value: '14', label: '14 days' },
+  { value: '30', label: '30 days' },
+  { value: '90', label: '90 days' },
 ] as const;
 
 export default function JoinCodesPage() {
   const { instituteId } = useAuth();
-  const [codes, setCodes]         = useState<JoinCode[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [generating, setGenerating] = useState(false);
-  const [copied, setCopied]       = useState<string | null>(null);
-  const [newRole, setNewRole]     = useState<'student' | 'educator' | 'examiner' | 'institute_admin'>('student');
-  const [maxUses, setMaxUses]     = useState<string>('');
+  const [codes, setCodes]               = useState<JoinCode[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [generating, setGenerating]     = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const [copied, setCopied]             = useState<string | null>(null);
+  const [newRole, setNewRole]           = useState<'student' | 'educator' | 'examiner' | 'institute_admin'>('student');
+  const [maxUses, setMaxUses]           = useState<string>('');
+  const [expiresInDays, setExpiresInDays] = useState<string>('');
 
   const fetchCodes = async () => {
     if (!instituteId) return;
     setLoading(true);
     try {
       const res = await api.get(`/api/inst/v1/institutes/${instituteId}/join-codes`);
-      setCodes(res.data.data);
+      setCodes(res.data.data ?? []);
+    } catch {
+      setCodes([]);
     } finally {
       setLoading(false);
     }
@@ -47,13 +59,27 @@ export default function JoinCodesPage() {
   useEffect(() => { void fetchCodes(); }, [instituteId]);
 
   const handleGenerate = async () => {
+    if (!instituteId) {
+      setGenerateError('Institute context not loaded yet — please wait a moment and try again.');
+      return;
+    }
     setGenerating(true);
+    setGenerateError(null);
     try {
       await api.post(`/api/inst/v1/institutes/${instituteId}/join-codes`, {
         role: newRole,
-        maxUses: maxUses ? parseInt(maxUses) : null,
+        maxUses:       maxUses ? parseInt(maxUses, 10) : null,
+        expiresInDays: expiresInDays ? parseInt(expiresInDays, 10) : undefined,
       });
+      // Reset form
+      setMaxUses('');
+      setExpiresInDays('');
       await fetchCodes();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message
+        ?? 'Failed to generate code. Please try again.';
+      setGenerateError(msg);
     } finally {
       setGenerating(false);
     }
@@ -61,8 +87,12 @@ export default function JoinCodesPage() {
 
   const handleRevoke = async (codeId: string) => {
     if (!confirm('Revoke this code? It will no longer work for new joins.')) return;
-    await api.delete(`/api/inst/v1/institutes/${instituteId}/join-codes/${codeId}`);
-    await fetchCodes();
+    try {
+      await api.delete(`/api/inst/v1/institutes/${instituteId}/join-codes/${codeId}`);
+      await fetchCodes();
+    } catch {
+      /* silently ignore – UI re-fetches */
+    }
   };
 
   const copyCode = (code: string) => {
@@ -77,7 +107,8 @@ export default function JoinCodesPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Join Codes</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--color-surface-300)' }}>
-            Generate codes to onboard students and staff
+            Shared codes that let multiple users join your institute with a chosen role.
+            Each code can be used up to its max-uses limit — they are not per-student unique.
           </p>
         </div>
       </div>
@@ -86,6 +117,7 @@ export default function JoinCodesPage() {
       <div className="glass p-6 mb-6">
         <h2 className="text-white font-semibold mb-4">Generate New Code</h2>
         <div className="flex flex-wrap items-end gap-4">
+          {/* Role */}
           <div>
             <label className="block text-xs font-medium mb-2" style={{ color: 'var(--color-surface-300)' }}>Role</label>
             <select value={newRole} onChange={e => setNewRole(e.target.value as typeof newRole)}
@@ -94,20 +126,47 @@ export default function JoinCodesPage() {
               {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
           </div>
+
+          {/* Max uses */}
           <div>
-            <label className="block text-xs font-medium mb-2" style={{ color: 'var(--color-surface-300)' }}>Max Uses (blank = unlimited)</label>
+            <label className="block text-xs font-medium mb-2" style={{ color: 'var(--color-surface-300)' }}>
+              Max Uses <span className="opacity-60">(blank = unlimited)</span>
+            </label>
             <input type="number" min="1" value={maxUses} onChange={e => setMaxUses(e.target.value)}
               placeholder="e.g. 30"
-              className="w-40 px-4 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none"
+              className="w-36 px-4 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none"
               style={{ background: 'var(--color-surface-800)', border: '1px solid var(--color-surface-600)' }} />
           </div>
-          <button onClick={handleGenerate} disabled={generating}
+
+          {/* Expiry */}
+          <div>
+            <label className="block text-xs font-medium mb-2" style={{ color: 'var(--color-surface-300)' }}>
+              <Clock className="inline w-3 h-3 mr-1 opacity-60" />Expiry
+            </label>
+            <select value={expiresInDays} onChange={e => setExpiresInDays(e.target.value)}
+              className="px-4 py-2.5 rounded-xl text-sm text-white outline-none"
+              style={{ background: 'var(--color-surface-800)', border: '1px solid var(--color-surface-600)' }}>
+              {EXPIRY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+
+          {/* Generate button */}
+          <button onClick={handleGenerate} disabled={generating || !instituteId}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60"
             style={{ background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' }}>
             {generating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             Generate
           </button>
         </div>
+
+        {/* Inline error */}
+        {generateError && (
+          <div className="mt-4 flex items-start gap-2 px-4 py-3 rounded-xl text-sm"
+            style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}>
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>{generateError}</span>
+          </div>
+        )}
       </div>
 
       {/* Codes list */}
@@ -151,12 +210,22 @@ export default function JoinCodesPage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--color-surface-400)' }}>
-                  <span>{jc.usedCount}{jc.maxUses ? `/${jc.maxUses}` : ''} uses</span>
+                  <span>
+                    {jc.usedCount}{jc.maxUses ? `/${jc.maxUses}` : ''} use{jc.usedCount !== 1 ? 's' : ''}
+                    {jc.maxUses && jc.usedCount >= jc.maxUses && (
+                      <span className="ml-1.5 text-amber-400 font-medium">· Full</span>
+                    )}
+                  </span>
                   {jc.department && <span>Dept: {jc.department}</span>}
-                  {jc.expiresAt && <span>Expires: {new Date(jc.expiresAt).toLocaleDateString()}</span>}
+                  {jc.expiresAt && (
+                    <span className={new Date(jc.expiresAt) < new Date() ? 'text-red-400' : ''}>
+                      Expires: {new Date(jc.expiresAt).toLocaleDateString()}
+                    </span>
+                  )}
                   <span>Created: {new Date(jc.createdAt).toLocaleDateString()}</span>
                 </div>
               </div>
+
               {/* Actions */}
               {jc.isActive && (
                 <div className="flex items-center gap-2 shrink-0">

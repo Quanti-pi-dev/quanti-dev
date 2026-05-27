@@ -12,17 +12,20 @@ import {
 } from 'lucide-react';
 
 // ─── Brand mark (inline SVG — no file dependency) ────────────
+// Use a module-scoped gradient ID so it survives SSR + client hydration
+// without colliding with other SVGs on the page.
+const GRAD_ID = 'qp-sidebar-grad';
 
 function BrandMark({ size = 30 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="qp-i-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+        <linearGradient id={GRAD_ID} x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
           <stop stopColor="#6366f1" />
           <stop offset="1" stopColor="#8b5cf6" />
         </linearGradient>
       </defs>
-      <rect width="32" height="32" rx="8" fill="url(#qp-i-grad)" />
+      <rect width="32" height="32" rx="8" fill={`url(#${GRAD_ID})`} />
       {/* π — top bar */}
       <line x1="7" y1="11" x2="25" y2="11" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
       {/* π — left leg */}
@@ -142,7 +145,8 @@ export function Sidebar() {
           </p>
         )}
         {visible.map(({ href, label, icon: Icon }) => {
-          const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
+          // '/' must match exactly; all other routes use prefix match
+          const active = href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/');
           return (
             <Link
               key={href}

@@ -173,4 +173,108 @@ export async function adminMockTestRoutes(fastify: FastifyInstance): Promise<voi
 
     return reply.send({ success: true, data: { id }, timestamp: new Date().toISOString() });
   });
+
+  // ─── Custom Questions ────────────────────────────────────────
+  // Custom questions are admin-authored MCQs stored directly inside the mock
+  // test document as `customQuestions[]`. They are merged with deck-sampled
+  // cards when a student starts the test.
+
+  const customQuestionSchema = z.object({
+    /** Question text. Supports LaTeX via $…$ and $$…$$ delimiters. */
+    question: z.string().min(1).max(2000),
+    options: z.array(z.object({
+      id:   z.string().min(1).max(50),
+      text: z.string().min(1).max(1000),
+    })).min(2).max(6),
+    correctAnswerId: z.string().min(1).max(50),
+    /** Optional explanation shown after answer. Supports LaTeX. */
+    explanation: z.string().max(2000).optional().default(''),
+  });
+
+  // GET /admin/mock-tests/:id/questions — list custom questions
+  fastify.get('/mock-tests/:id/questions', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    if (!ObjectId.isValid(id)) {
+      return reply.status(400).send({ success: false, error: { code: 'INVALID_ID', message: 'Invalid mock test ID' }, timestamp: new Date().toISOString() });
+    }
+    const mongo = getMongoDb();
+    const doc = await mongo.collection('mock_tests').findOne(
+      { _id: new ObjectId(id) },
+      { projection: { customQuestions: 1 } },
+    );
+    if (!doc) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Mock test not found' }, timestamp: new Date().toISOString() });
+    }
+    return reply.send({ success: true, data: doc.customQuestions ?? [], timestamp: new Date().toISOString() });
+  });
+
+  // POST /admin/mock-tests/:id/questions — add a custom question
+  fastify.post('/mock-tests/:id/questions', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    if (!ObjectId.isValid(id)) {
+      return reply.status(400).send({ success: false, error: { code: 'INVALID_ID', message: 'Invalid mock test ID' }, timestamp: new Date().toISOString() });
+    }
+    const input = customQuestionSchema.parse(request.body);
+    const questionId = new ObjectId().toString();
+    const mongo = getMongoDb();
+    const result = await mongo.collection('mock_tests').updateOne(
+      { _id: new ObjectId(id) },
+      {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        $push: { customQuestions: { ...input, _id: questionId } } as any,
+        $set:  { updatedAt: new Date() },
+      },
+    );
+    if (result.matchedCount === 0) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Mock test not found' }, timestamp: new Date().toISOString() });
+    }
+    return reply.status(201).send({ success: true, data: { id: questionId }, timestamp: new Date().toISOString() });
+  });
+
+  // PUT /admin/mock-tests/:id/questions/:qid — update a custom question
+  fastify.put('/mock-tests/:id/questions/:qid', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id, qid } = request.params as { id: string; qid: string };
+    if (!ObjectId.isValid(id)) {
+      return reply.status(400).send({ success: false, error: { code: 'INVALID_ID', message: 'Invalid mock test ID' }, timestamp: new Date().toISOString() });
+    }
+    const input = customQuestionSchema.parse(request.body);
+    const mongo = getMongoDb();
+    const result = await mongo.collection('mock_tests').updateOne(
+      { _id: new ObjectId(id), 'customQuestions._id': qid },
+      {
+        $set: {
+          'customQuestions.$.question':       input.question,
+          'customQuestions.$.options':        input.options,
+          'customQuestions.$.correctAnswerId': input.correctAnswerId,
+          'customQuestions.$.explanation':    input.explanation,
+          updatedAt: new Date(),
+        },
+      },
+    );
+    if (result.matchedCount === 0) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Question not found' }, timestamp: new Date().toISOString() });
+    }
+    return reply.send({ success: true, data: { id: qid }, timestamp: new Date().toISOString() });
+  });
+
+  // DELETE /admin/mock-tests/:id/questions/:qid — remove a custom question
+  fastify.delete('/mock-tests/:id/questions/:qid', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id, qid } = request.params as { id: string; qid: string };
+    if (!ObjectId.isValid(id)) {
+      return reply.status(400).send({ success: false, error: { code: 'INVALID_ID', message: 'Invalid mock test ID' }, timestamp: new Date().toISOString() });
+    }
+    const mongo = getMongoDb();
+    const result = await mongo.collection('mock_tests').updateOne(
+      { _id: new ObjectId(id) },
+      {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        $pull: { customQuestions: { _id: qid } } as any,
+        $set:  { updatedAt: new Date() },
+      },
+    );
+    if (result.matchedCount === 0) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Mock test not found' }, timestamp: new Date().toISOString() });
+    }
+    return reply.send({ success: true, data: { id: qid }, timestamp: new Date().toISOString() });
+  });
 }
