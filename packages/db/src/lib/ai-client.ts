@@ -1,11 +1,12 @@
 // ─── Unified AI Client ──────────────────────────────────────
 // Multi-provider wrapper that dispatches to Google Gemini, OpenAI,
-// or Anthropic based on the selected model prefix.
+// Anthropic, or NVIDIA NIM based on the selected model prefix.
 //
 // Provider detection rules:
-//   - Model starts with 'gpt', 'o1', 'o3', 'o4' → OpenAI
-//   - Model starts with 'claude'                 → Anthropic
-//   - Everything else (gemini-*, custom)          → Google Gemini (default)
+//   - Model starts with 'gpt', 'o1', 'o3', 'o4'    → OpenAI
+//   - Model starts with 'claude'                    → Anthropic
+//   - Model contains '/' (org/model like nvidia hub) → NVIDIA NIM
+//   - Everything else (gemini-*, custom)             → Google Gemini (default)
 //
 // API key resolution order (per provider):
 //   1. platform_config DB key  (e.g. `ai_api_key_openai`)
@@ -26,7 +27,13 @@ const log = createServiceLogger('AIClient');
 
 // ─── Provider Detection ─────────────────────────────────────
 
-export type AIProvider = 'openai' | 'anthropic' | 'google';
+export type AIProvider = 'openai' | 'anthropic' | 'google' | 'nvidia';
+
+/** Known NVIDIA NIM model prefixes on build.nvidia.com */
+const NVIDIA_PREFIXES = [
+  'deepseek', 'mistral', 'meta/', 'nvidia/', 'moonshot', 'qwen',
+  'microsoft/', 'google/', 'nv-', 'nemotron', 'llama',
+];
 
 export function detectProvider(model: string): AIProvider {
   const m = model.toLowerCase();
@@ -35,6 +42,11 @@ export function detectProvider(model: string): AIProvider {
   }
   if (m.startsWith('claude')) {
     return 'anthropic';
+  }
+  // NVIDIA NIM: org/model format (e.g. "nvidia/llama-3.1-nemotron-70b")
+  // or known NIM-hosted model prefixes
+  if (m.includes('/') || NVIDIA_PREFIXES.some(p => m.startsWith(p))) {
+    return 'nvidia';
   }
   return 'google';
 }
@@ -45,6 +57,7 @@ const API_KEY_CONFIG: Record<AIProvider, { dbKey: string; envVar: string; label:
   openai:    { dbKey: 'ai_api_key_openai',    envVar: 'OPENAI_API_KEY',    label: 'OpenAI' },
   anthropic: { dbKey: 'ai_api_key_anthropic',  envVar: 'ANTHROPIC_API_KEY', label: 'Anthropic' },
   google:    { dbKey: 'ai_api_key_google',     envVar: 'GEMINI_API_KEY',    label: 'Google AI' },
+  nvidia:    { dbKey: 'ai_api_key_nvidia',     envVar: 'NVIDIA_API_KEY',    label: 'NVIDIA NIM' },
 };
 
 async function resolveApiKey(provider: AIProvider): Promise<string> {
@@ -112,6 +125,22 @@ async function getAnthropicClient(): Promise<Anthropic> {
     _anthropicClients.set(apiKey, new Anthropic({ apiKey }));
   }
   return _anthropicClients.get(apiKey)!;
+}
+
+/**
+ * NVIDIA NIM uses an OpenAI-compatible API at integrate.api.nvidia.com.
+ * We reuse the OpenAI SDK with a custom baseURL.
+ */
+async function getNvidiaClient(): Promise<OpenAI> {
+  const cacheKey = '__nvidia__';
+  const apiKey = await resolveApiKey('nvidia');
+  if (!_openaiClients.has(cacheKey + apiKey)) {
+    _openaiClients.set(cacheKey + apiKey, new OpenAI({
+      apiKey,
+      baseURL: 'https://integrate.api.nvidia.com/v1',
+    }));
+  }
+  return _openaiClients.get(cacheKey + apiKey)!;
 }
 
 // ─── Generation Parameters ──────────────────────────────────
@@ -182,6 +211,27 @@ async function generateWithAnthropic(params: AIGenerateParams & { model: string 
   return textBlock.text;
 }
 
+async function generateWithNvidia(params: AIGenerateParams & { model: string }): Promise<string> {
+  const client = await getNvidiaClient();
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+
+  if (params.systemPrompt) {
+    messages.push({ role: 'system', content: params.systemPrompt });
+  }
+  messages.push({ role: 'user', content: params.userPrompt });
+
+  const result = await client.chat.completions.create({
+    model: params.model,
+    messages,
+    max_tokens: params.maxOutputTokens ?? 512,
+    temperature: params.temperature ?? 0.4,
+  });
+
+  const text = result.choices[0]?.message?.content;
+  if (!text) throw new Error('NVIDIA NIM returned an empty response');
+  return text;
+}
+
 // ─── Public API ─────────────────────────────────────────────
 
 /**
@@ -204,6 +254,8 @@ export async function aiGenerate(params: AIGenerateParams): Promise<string> {
       return generateWithOpenAI(fullParams);
     case 'anthropic':
       return generateWithAnthropic(fullParams);
+    case 'nvidia':
+      return generateWithNvidia(fullParams);
     case 'google':
     default:
       return generateWithGemini(fullParams);
