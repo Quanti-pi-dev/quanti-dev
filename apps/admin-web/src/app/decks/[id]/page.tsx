@@ -357,6 +357,9 @@ function AIGenerateModal({ deckId, deck, onClose, onGenerated }: {
           instructions: instructions.trim() || undefined,
           deckId, // auto-insert into this deck
         },
+        {
+          timeout: 120_000, // 2 minutes timeout for slow AI generation
+        }
       );
       setResult(res.data.data);
     } catch (err: unknown) {

@@ -116,6 +116,9 @@ export default function NewTestPage() {
           difficulty: aiDifficulty,
           instructions: aiInstructions.trim() || undefined,
         },
+        {
+          timeout: 120_000, // 2 minutes timeout for slow AI generation
+        }
       );
       // Merge generated questions into the form
       const generated: QuestionDraft[] = (res.data.data.questions ?? []).map(q => ({
