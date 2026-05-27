@@ -249,6 +249,7 @@ export class RecommendationService {
         });
 
         const aiResult = await geminiGenerateJSON<{ summary: string; recommendations: string[] }>({
+          featureConfigKey: 'ai_model_tutor',
           systemPrompt: INSIGHT_SYSTEM_PROMPT,
           userPrompt: prompt,
           maxOutputTokens: 512,

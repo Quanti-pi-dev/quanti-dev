@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Trash2, Save, Eye, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Eye, ChevronDown, Sparkles, Loader2, X } from 'lucide-react';
 import Link from 'next/link';
 import { Latex } from '@/components/latex';
 
@@ -53,6 +53,15 @@ export default function NewTestPage() {
   const [saving, setSaving]       = useState(false);
   const [error, setError]         = useState<string | null>(null);
 
+  // ── AI generation state ────────────────────────────────────
+  const [showAIModal, setShowAI]  = useState(false);
+  const [aiTopic, setAiTopic]     = useState('');
+  const [aiCount, setAiCount]     = useState(5);
+  const [aiDifficulty, setAiDiff] = useState<'easy'|'medium'|'hard'|'mixed'>('mixed');
+  const [aiInstructions, setAiInstr] = useState('');
+  const [aiGenerating, setAiGen]  = useState(false);
+  const [aiError, setAiError]     = useState<string | null>(null);
+
   // ── Subject / Topic state ──────────────────────────────────────
   const [subjects, setSubjects]       = useState<SubjectOption[]>([]);
   const [subjectsLoading, setSubjLoad] = useState(false);
@@ -90,6 +99,46 @@ export default function NewTestPage() {
     }));
 
   const removeQ = (idx: number) => setQuestions(qs => qs.filter((_, i) => i !== idx));
+
+  // ── AI Generate handler ────────────────────────────────────
+  const handleAIGenerate = async () => {
+    if (!selectedSubjectId) { setAiError('Please select a subject first'); return; }
+    if (!aiTopic.trim()) { setAiError('Enter a topic for question generation'); return; }
+    setAiGen(true); setAiError(null);
+    try {
+      const subjectName = selectedSubject?.name ?? 'General';
+      const res = await api.post<{ data: { questions: { id: string; text: string; options: { id: string; text: string }[]; correctAnswerId: string; explanation: string; marks: number }[] } }>(
+        `/api/inst/v1/institutes/${instituteId}/ai/generate-questions`,
+        {
+          topic: aiTopic.trim(),
+          subject: subjectName,
+          count: aiCount,
+          difficulty: aiDifficulty,
+          instructions: aiInstructions.trim() || undefined,
+        },
+      );
+      // Merge generated questions into the form
+      const generated: QuestionDraft[] = (res.data.data.questions ?? []).map(q => ({
+        id: q.id ?? crypto.randomUUID(),
+        text: q.text ?? '',
+        options: q.options ?? [],
+        correctAnswerId: q.correctAnswerId ?? '',
+        explanation: q.explanation ?? '',
+        marks: q.marks ?? 4,
+        topicSlug: null,
+        source: 'custom' as const,
+      }));
+      setQuestions(qs => {
+        // Remove empty placeholder questions
+        const existing = qs.filter(q => q.text.trim());
+        return [...existing, ...generated];
+      });
+      setShowAI(false);
+      setAiTopic('');
+    } catch (e: unknown) {
+      setAiError((e as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? 'AI generation failed. Check AI Settings.');
+    } finally { setAiGen(false); }
+  };
 
   // ── Save ───────────────────────────────────────────────────────
 
@@ -405,11 +454,95 @@ export default function NewTestPage() {
           </div>
         ))}
 
-        <button onClick={() => setQuestions(qs => [...qs, makeQuestion()])}
-          className="w-full py-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all hover:scale-[1.01]"
-          style={{ background: 'rgba(99,102,241,0.08)', border: '2px dashed rgba(99,102,241,0.3)', color: '#a5b4fc' }}>
-          <Plus className="w-4 h-4" /> Add Question
-        </button>
+        <div className="flex gap-3">
+          <button onClick={() => setQuestions(qs => [...qs, makeQuestion()])}
+            className="flex-1 py-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all hover:scale-[1.01]"
+            style={{ background: 'rgba(99,102,241,0.08)', border: '2px dashed rgba(99,102,241,0.3)', color: '#a5b4fc' }}>
+            <Plus className="w-4 h-4" /> Add Question
+          </button>
+          <button onClick={() => setShowAI(true)}
+            className="flex-1 py-4 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all hover:scale-[1.01]"
+            style={{ background: 'rgba(245,158,11,0.08)', border: '2px dashed rgba(245,158,11,0.3)', color: '#fbbf24' }}>
+            <Sparkles className="w-4 h-4" /> Generate with AI
+          </button>
+        </div>
+
+        {/* AI Generation Modal */}
+        {showAIModal && (
+          <div onClick={e => { if (e.target === e.currentTarget) setShowAI(false); }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md p-6 shadow-2xl mx-4">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+                    style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)' }}>
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                  </div>
+                  <h2 className="text-base font-semibold text-white">AI Generate Questions</h2>
+                </div>
+                <button onClick={() => setShowAI(false)}><X className="w-4 h-4 text-zinc-500 hover:text-white" /></button>
+              </div>
+
+              {aiError && (
+                <div className="mb-4 p-3 rounded-xl text-xs"
+                  style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#fca5a5' }}>
+                  {aiError}
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-surface-300)' }}>Topic *</label>
+                  <input value={aiTopic} onChange={e => setAiTopic(e.target.value)}
+                    placeholder="e.g. Laws of Motion, Organic Chemistry"
+                    className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-gray-600 outline-none"
+                    style={inputStyle} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-surface-300)' }}>Count</label>
+                    <input type="number" min={1} max={20} value={aiCount} onChange={e => setAiCount(+e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none"
+                      style={inputStyle} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-surface-300)' }}>Difficulty</label>
+                    <select value={aiDifficulty} onChange={e => setAiDiff(e.target.value as typeof aiDifficulty)}
+                      className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none appearance-none"
+                      style={inputStyle}>
+                      <option value="mixed">Mixed</option>
+                      <option value="easy">Easy</option>
+                      <option value="medium">Medium</option>
+                      <option value="hard">Hard</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-surface-300)' }}>Instructions (optional)</label>
+                  <input value={aiInstructions} onChange={e => setAiInstr(e.target.value)}
+                    placeholder="Focus on numerical problems…"
+                    className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-gray-600 outline-none"
+                    style={inputStyle} />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button onClick={() => setShowAI(false)}
+                    className="flex-1 px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                    style={{ background: 'var(--color-surface-800)', color: 'var(--color-surface-300)', border: '1px solid var(--color-surface-600)' }}>
+                    Cancel
+                  </button>
+                  <button onClick={handleAIGenerate} disabled={aiGenerating}
+                    className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60 inline-flex items-center justify-center gap-2"
+                    style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)' }}>
+                    {aiGenerating ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</> : <><Sparkles className="w-4 h-4" /> Generate</>}
+                  </button>
+                </div>
+                <p className="text-[10px] text-center" style={{ color: 'var(--color-surface-500)' }}>
+                  Uses the model configured in Admin → AI Settings → Quiz Generator
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

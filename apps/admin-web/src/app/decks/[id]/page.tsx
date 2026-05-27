@@ -19,7 +19,7 @@ import { adminApi } from '@/lib/api';
 import { PageShell, Badge, Spinner, ErrorBanner } from '@/components/page-shell';
 import { ConfirmModal } from '@/components/confirm-modal';
 import { useToast } from '@/components/toast';
-import { ArrowLeft, Plus, Pencil, Trash2, Upload, X, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, Upload, X, ChevronRight, Sparkles, Loader2 } from 'lucide-react';
 import { Latex } from '@/components/latex';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -324,6 +324,130 @@ function BulkImportModal({ deckId, onClose, onImported }: { deckId: string; onCl
   );
 }
 
+// ─── AI Generate Modal ────────────────────────────────────────
+
+function AIGenerateModal({ deckId, deck, onClose, onGenerated }: {
+  deckId: string;
+  deck: DeckMeta | null;
+  onClose: () => void;
+  onGenerated: () => void;
+}) {
+  const [topic, setTopic]       = useState(deck?.topicSlug ?? '');
+  const [subject, setSubject]   = useState('');
+  const [level, setLevel]       = useState<string>(deck?.level ?? 'Developing');
+  const [count, setCount]       = useState(5);
+  const [examCtx, setExamCtx]   = useState('');
+  const [instructions, setInstr]= useState('');
+  const [generating, setGen]    = useState(false);
+  const [error, setError]       = useState('');
+  const [result, setResult]     = useState<{ generatedCount: number; insertedCount: number } | null>(null);
+
+  const handleGenerate = async () => {
+    if (!topic.trim() || !subject.trim()) { setError('Topic and Subject are required.'); return; }
+    setGen(true); setError(''); setResult(null);
+    try {
+      const res = await adminApi.post<{ data: { generatedCount: number; insertedCount: number } }>(
+        '/api/admin/ai/generate-flashcards',
+        {
+          topic: topic.trim(),
+          subject: subject.trim(),
+          level,
+          count,
+          examContext: examCtx.trim() || undefined,
+          instructions: instructions.trim() || undefined,
+          deckId, // auto-insert into this deck
+        },
+      );
+      setResult(res.data.data);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
+      setError(msg ?? 'AI generation failed. Check AI Settings to ensure a model and API key are configured.');
+    } finally { setGen(false); }
+  };
+
+  return (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+    >
+      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-lg p-6 shadow-2xl mx-4">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-amber-950/50 border border-amber-800/60 flex items-center justify-center">
+              <Sparkles size={14} className="text-amber-400" />
+            </div>
+            <h2 className="text-base font-semibold text-white">AI Generate Flashcards</h2>
+          </div>
+          <button onClick={onClose} className="text-zinc-500 hover:text-white transition"><X size={16} /></button>
+        </div>
+
+        {error && <ErrorBanner message={error} />}
+        {result && (
+          <div className="bg-emerald-950/50 border border-emerald-800 text-emerald-400 text-sm rounded-xl px-4 py-3 mb-4">
+            ✓ Generated {result.generatedCount} cards → {result.insertedCount} inserted into deck
+          </div>
+        )}
+
+        {!result ? (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={LABEL}>Topic *</label>
+                <input value={topic} onChange={e => setTopic(e.target.value)} placeholder="e.g. Kinematics" className={INPUT} />
+              </div>
+              <div>
+                <label className={LABEL}>Subject *</label>
+                <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="e.g. Physics" className={INPUT} />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className={LABEL}>Difficulty</label>
+                <select value={level} onChange={e => setLevel(e.target.value)} className={INPUT}>
+                  <option value="Emerging">Emerging</option>
+                  <option value="Developing">Developing</option>
+                  <option value="Proficient">Proficient</option>
+                  <option value="Master">Master</option>
+                </select>
+              </div>
+              <div>
+                <label className={LABEL}>Count (1–20)</label>
+                <input type="number" min={1} max={20} value={count} onChange={e => setCount(+e.target.value)} className={INPUT} />
+              </div>
+              <div>
+                <label className={LABEL}>Exam Context</label>
+                <input value={examCtx} onChange={e => setExamCtx(e.target.value)} placeholder="e.g. JEE Mains" className={INPUT} />
+              </div>
+            </div>
+            <div>
+              <label className={LABEL}>Additional Instructions (optional)</label>
+              <input value={instructions} onChange={e => setInstr(e.target.value)} placeholder="Focus on numerical problems…" className={INPUT} />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button type="button" onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 text-sm hover:text-white transition">Cancel</button>
+              <button
+                onClick={handleGenerate}
+                disabled={generating}
+                className="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 text-white text-sm font-medium transition disabled:opacity-50 inline-flex items-center justify-center gap-2"
+              >
+                {generating ? <><Loader2 size={14} className="animate-spin" /> Generating…</> : <><Sparkles size={14} /> Generate</>}
+              </button>
+            </div>
+            <p className="text-[10px] text-zinc-600 text-center">
+              Uses the model configured in AI Settings → Flashcard Generation
+            </p>
+          </div>
+        ) : (
+          <div className="flex gap-3">
+            <button onClick={() => { setResult(null); }} className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 text-sm hover:text-white transition">Generate More</button>
+            <button onClick={() => { onGenerated(); onClose(); }} className="flex-1 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition">Done</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Hierarchy Breadcrumb ─────────────────────────────────────
 
 function HierarchyBreadcrumb({
@@ -416,7 +540,7 @@ export default function DeckFlashcardsPage() {
   const [deck, setDeck]       = useState<DeckMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
-  const [modal, setModal]     = useState<false | 'new' | 'bulk' | Flashcard>(false);
+  const [modal, setModal]     = useState<false | 'new' | 'bulk' | 'ai-gen' | Flashcard>(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
   const fetchCards = useCallback(async () => {
@@ -468,6 +592,9 @@ export default function DeckFlashcardsPage() {
           <button onClick={() => router.push(backHref)} className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition">
             <ArrowLeft size={14} /> {backLabel}
           </button>
+          <button onClick={() => setModal('ai-gen')} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-600/20 to-orange-500/20 border border-amber-700/50 hover:border-amber-600 text-amber-300 text-sm rounded-lg transition">
+            <Sparkles size={13} /> AI Generate
+          </button>
           <button onClick={() => setModal('bulk')} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm rounded-lg transition">
             <Upload size={13} /> Bulk Import
           </button>
@@ -488,6 +615,9 @@ export default function DeckFlashcardsPage() {
       )}
       {modal === 'bulk' && (
         <BulkImportModal deckId={deckId} onClose={() => setModal(false)} onImported={fetchCards} />
+      )}
+      {modal === 'ai-gen' && (
+        <AIGenerateModal deckId={deckId} deck={deck} onClose={() => setModal(false)} onGenerated={fetchCards} />
       )}
 
       {deleteTarget && (

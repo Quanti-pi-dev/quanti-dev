@@ -99,6 +99,7 @@ export async function aiRoutes(fastify: FastifyInstance): Promise<void> {
 
     try {
       const explanation = await geminiGenerate({
+        featureConfigKey: 'ai_model_explanation',
         systemPrompt: EXPLAIN_SYSTEM_PROMPT,
         userPrompt,
         maxOutputTokens: 280,

@@ -56,6 +56,7 @@ export async function generateTargetedFeedback(
     });
 
     const response = await geminiGenerate({
+      featureConfigKey: 'ai_model_tutor',
       systemPrompt: TARGETED_SYSTEM_PROMPT,
       userPrompt: prompt,
       maxOutputTokens: 400,

@@ -27,6 +27,8 @@ export { getFirebaseAdmin } from './lib/firebase-admin.js';
 export { generateAvatarPresignedUrl, generateAdminPresignedUrl } from './lib/storage.js';
 export type { PresignedUploadResult } from './lib/storage.js';
 export { geminiGenerate, geminiGenerateJSON, resolveGeminiModel } from './lib/gemini.js';
+export { aiGenerate, aiGenerateJSON, resolveModel, detectProvider } from './lib/ai-client.js';
+export type { AIGenerateParams, AIProvider } from './lib/ai-client.js';
 
 // ─── Repositories ────────────────────────────────────────────
 export { userRepository } from './repositories/user.repository.js';
@@ -95,6 +97,10 @@ export {
   updateCorrectRate,
 } from './services/irt.js';
 export { generateTargetedFeedback } from './services/targeted-feedback.service.js';
+export { generateFlashcards } from './services/flashcard-gen.service.js';
+export type { FlashcardGenerationRequest, FlashcardGenerationResult, GeneratedFlashcard } from './services/flashcard-gen.service.js';
+export { generateQuizQuestions } from './services/quiz-gen.service.js';
+export type { QuizGenerationRequest, QuizGenerationResult, GeneratedQuizQuestion } from './services/quiz-gen.service.js';
 export { updateCardMemory, buildLearningProfile, backfillCardMemory } from './services/learning-intelligence.service.js';
 export {
   getTopicConcepts, getPrerequisites, getStudyOrder, prerequisiteReadiness,
