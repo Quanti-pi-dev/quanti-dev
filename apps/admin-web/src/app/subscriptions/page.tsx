@@ -25,7 +25,7 @@ interface SubscriptionRow {
   userEmail: string;
   planName: string;
   planTier: number;
-  status: 'active' | 'expired' | 'cancelled' | 'pending' | 'past_due' | 'paused';
+  status: 'active' | 'expired' | 'canceled' | 'pending' | 'past_due' | 'paused' | 'trialing';
   startedAt: string;
   expiresAt: string | null;
   amountPaise: number;
@@ -45,17 +45,18 @@ type SubStatus = SubscriptionRow['status'];
 const STATUS_VARIANT: Record<SubStatus, 'green' | 'red' | 'yellow' | 'zinc' | 'violet'> = {
   active:    'green',
   expired:   'red',
-  cancelled: 'zinc',
+  canceled:  'zinc',
   pending:   'yellow',
   past_due:  'yellow',
   paused:    'violet',
+  trialing:  'green',
 };
 
 function paise(v: number) {
   return `₹${(v / 100).toLocaleString('en-IN', { minimumFractionDigits: 0 })}`;
 }
 
-const STATUSES: Array<SubStatus | 'all'> = ['all', 'active', 'expired', 'cancelled', 'pending', 'past_due', 'paused'];
+const STATUSES: Array<SubStatus | 'all'> = ['all', 'active', 'expired', 'canceled', 'pending', 'past_due', 'paused', 'trialing'];
 const INPUT = 'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500';
 const LABEL = 'block text-xs font-medium text-zinc-400 mb-1.5';
 
@@ -78,8 +79,12 @@ function DetailPanel({
   const [patching, setPatching] = useState(false);
 
   useEffect(() => {
-    adminApi.get<{ data: SubscriptionRow }>(`/api/admin/subscriptions/${subId}`)
-      .then(r => { setSub(r.data.data); setNewStatus(r.data.data.status); })
+    adminApi.get<{ data: { subscription: SubscriptionRow; events: any[] } }>(`/api/admin/subscriptions/${subId}`)
+      .then(r => {
+        const subData = r.data.data.subscription;
+        setSub(subData);
+        setNewStatus(subData.status);
+      })
       .catch(() => setError('Failed to load subscription.'))
       .finally(() => setLoading(false));
   }, [subId]);
@@ -364,8 +369,8 @@ export default function SubscriptionsPage() {
   const fetchSubs = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const res = await adminApi.get<{ data: SubscriptionRow[] }>('/api/admin/subscriptions');
-      setRows(res.data.data);
+      const res = await adminApi.get<{ data: { subscriptions: SubscriptionRow[]; total: number } }>('/api/admin/subscriptions');
+      setRows(res.data.data.subscriptions);
     } catch { setError('Failed to load subscriptions.'); }
     finally { setLoading(false); }
   }, []);
@@ -468,7 +473,7 @@ export default function SubscriptionsPage() {
                 : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
             }`}
           >
-            {s.replace('_', ' ')}
+            {s === 'canceled' ? 'cancelled' : s.replace('_', ' ')}
           </button>
         ))}
       </div>

@@ -4,7 +4,10 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { customTestRepository, instituteMockTestRepository, instituteService } from '@kd/db';
+import {
+  customTestRepository, instituteMockTestRepository, instituteService,
+  updateCardMemory, updateKnowledgeModel,
+} from '@kd/db';
 
 // ─── Schemas ──────────────────────────────────────────────────────
 
@@ -171,7 +174,43 @@ export async function instituteTestRoutes(fastify: FastifyInstance): Promise<voi
       // Update institute leaderboard with test score
       await instituteService.addTestScore(instituteId, testId, request.user.id, submission.score);
 
+      // ── Fire-and-forget: propagate per-question metrics to learning model ──
+      // This never blocks or fails the response — allSettled catches errors silently.
+      const studentId = request.user.id;
+      const perCardMs = body.timeTakenSeconds > 0
+        ? Math.round((body.timeTakenSeconds * 1000) / Math.max(1, body.answers.length))
+        : 0;
+
+      void (async () => {
+        // Re-fetch the full test so we have correctAnswerId and subjectId
+        const fullTest = await customTestRepository.findById(testId);
+        if (!fullTest) return;
+
+        const questionMap = new Map(fullTest.questions.map(q => [q.id, q]));
+
+        await Promise.allSettled(
+          body.answers.map(async (answer) => {
+            if (!answer.selectedOptionId) return; // skip unattempted
+            const q = questionMap.get(answer.questionId);
+            if (!q) return;
+
+            const subjectId = fullTest.subjectId;
+            const topicSlug = q.topicSlug;
+            if (!topicSlug || !subjectId || subjectId === '000000000000000000000000') return;
+
+            const correct = answer.selectedOptionId === q.correctAnswerId;
+            const tags = [topicSlug];
+
+            await Promise.allSettled([
+              updateCardMemory(studentId, answer.questionId, correct, perCardMs, topicSlug, subjectId),
+              updateKnowledgeModel(studentId, answer.questionId, tags, correct),
+            ]);
+          }),
+        );
+      })();
+
       return reply.send({ success: true, data: submission, timestamp: new Date().toISOString() });
+
     },
   );
 

@@ -1,12 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Trash2, Save, Eye } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Eye, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { Latex } from '@/components/latex';
+
+// ── Types ──────────────────────────────────────────────────────────
+
+interface SubjectOption {
+  id: string;
+  name: string;
+  accent: string | null;
+  topics: { slug: string; displayName: string }[];
+}
 
 interface QuestionDraft {
   id: string;
@@ -15,19 +24,25 @@ interface QuestionDraft {
   correctAnswerId: string;
   explanation: string;
   marks: number;
+  topicSlug: string | null;
   source: 'custom';
 }
+
+// ── Helpers ────────────────────────────────────────────────────────
 
 function makeOption(text = '') { return { id: crypto.randomUUID(), text }; }
 function makeQuestion(): QuestionDraft {
   const opts = [makeOption(), makeOption(), makeOption(), makeOption()];
-  return { id: crypto.randomUUID(), text: '', options: opts, correctAnswerId: opts[0]!.id, explanation: '', marks: 4, source: 'custom' };
+  return { id: crypto.randomUUID(), text: '', options: opts, correctAnswerId: opts[0]!.id, explanation: '', marks: 4, topicSlug: null, source: 'custom' };
 }
+
+// ── Component ──────────────────────────────────────────────────────
 
 export default function NewTestPage() {
   const { instituteId } = useAuth();
   const router = useRouter();
 
+  // ── Form state ─────────────────────────────────────────────────
   const [title, setTitle]         = useState('');
   const [description, setDesc]    = useState('');
   const [duration, setDuration]   = useState(60);
@@ -38,7 +53,23 @@ export default function NewTestPage() {
   const [saving, setSaving]       = useState(false);
   const [error, setError]         = useState<string | null>(null);
 
-  // ── Question helpers ──────────────────────────────────────────
+  // ── Subject / Topic state ──────────────────────────────────────
+  const [subjects, setSubjects]       = useState<SubjectOption[]>([]);
+  const [subjectsLoading, setSubjLoad] = useState(false);
+  const [selectedSubjectId, setSubjectId] = useState<string>('');
+
+  const selectedSubject = subjects.find(s => s.id === selectedSubjectId) ?? null;
+
+  useEffect(() => {
+    if (!instituteId) return;
+    setSubjLoad(true);
+    api.get<{ data: SubjectOption[] }>(`/api/inst/v1/institutes/${instituteId}/content/subjects`)
+      .then(res => setSubjects(res.data.data))
+      .catch(() => {/* non-fatal */})
+      .finally(() => setSubjLoad(false));
+  }, [instituteId]);
+
+  // ── Question helpers ───────────────────────────────────────────
 
   const updateQ = (idx: number, patch: Partial<QuestionDraft>) =>
     setQuestions(qs => qs.map((q, i) => i === idx ? { ...q, ...patch } : q));
@@ -60,16 +91,17 @@ export default function NewTestPage() {
 
   const removeQ = (idx: number) => setQuestions(qs => qs.filter((_, i) => i !== idx));
 
-  // ── Save ──────────────────────────────────────────────────────
+  // ── Save ───────────────────────────────────────────────────────
 
   const save = async (publish = false) => {
     if (!title.trim()) { setError('Title is required'); return; }
+    if (!selectedSubjectId) { setError('Please select a subject for this test'); return; }
     setSaving(true); setError(null);
     try {
       const res = await api.post(`/api/inst/v1/institutes/${instituteId}/tests`, {
         title: title.trim(),
         description: description.trim(),
-        subjectId: '000000000000000000000000', // placeholder — will be subject picker in v2
+        subjectId: selectedSubjectId,
         durationMinutes: duration,
         settings: { negativeMarking: negMarking, negativeMarkValue: negValue, showResults },
         questions: questions.filter(q => q.text.trim()),
@@ -87,6 +119,11 @@ export default function NewTestPage() {
     }
   };
 
+  // ── Common input styles ─────────────────────────────────────────
+
+  const inputStyle = { background: 'var(--color-surface-800)', border: '1px solid var(--color-surface-600)' } as const;
+  const labelCls = 'block text-xs font-medium mb-2' as const;
+
   return (
     <div className="animate-fade-in max-w-3xl">
       {/* Header */}
@@ -99,6 +136,7 @@ export default function NewTestPage() {
           <h1 className="text-2xl font-bold text-white">Create Test</h1>
           <p className="text-sm" style={{ color: 'var(--color-surface-300)' }}>
             {questions.filter(q => q.text.trim()).length} question{questions.filter(q => q.text.trim()).length !== 1 ? 's' : ''}
+            {selectedSubject && <span className="ml-2 text-indigo-400">· {selectedSubject.name}</span>}
           </p>
         </div>
         <div className="flex gap-2 ml-auto">
@@ -127,43 +165,72 @@ export default function NewTestPage() {
         <h2 className="text-white font-semibold">Test Details</h2>
 
         <div>
-          <label className="block text-xs font-medium mb-2" style={{ color: 'var(--color-surface-300)' }}>Title *</label>
+          <label className={`${labelCls}`} style={{ color: 'var(--color-surface-300)' }}>Title *</label>
           <input id="test-title" value={title} onChange={e => setTitle(e.target.value)}
             placeholder="e.g. Chapter 5 — Laws of Motion"
             className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-gray-600 outline-none"
-            style={{ background: 'var(--color-surface-800)', border: '1px solid var(--color-surface-600)' }} />
+            style={inputStyle} />
         </div>
 
         <div>
-          <label className="block text-xs font-medium mb-2" style={{ color: 'var(--color-surface-300)' }}>Description</label>
+          <label className={`${labelCls}`} style={{ color: 'var(--color-surface-300)' }}>Description</label>
           <textarea value={description} onChange={e => setDesc(e.target.value)} rows={2}
             placeholder="Optional instructions for students…"
             className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-gray-600 outline-none resize-none"
-            style={{ background: 'var(--color-surface-800)', border: '1px solid var(--color-surface-600)' }} />
+            style={inputStyle} />
+        </div>
+
+        {/* Subject Picker */}
+        <div>
+          <label className={`${labelCls}`} style={{ color: 'var(--color-surface-300)' }}>
+            Subject *
+            <span className="ml-1.5 font-normal text-xs" style={{ color: 'var(--color-surface-500)' }}>
+              (determines which metrics are tracked for your students)
+            </span>
+          </label>
+          <div className="relative">
+            <select
+              value={selectedSubjectId}
+              onChange={e => {
+                setSubjectId(e.target.value);
+                // Reset all question topicSlugs when subject changes
+                setQuestions(qs => qs.map(q => ({ ...q, topicSlug: null })));
+              }}
+              className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none appearance-none"
+              style={inputStyle}
+            >
+              <option value="">{subjectsLoading ? 'Loading subjects…' : '— Select a subject —'}</option>
+              {subjects.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4"
+              style={{ color: 'var(--color-surface-400)' }} />
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="block text-xs font-medium mb-2" style={{ color: 'var(--color-surface-300)' }}>Duration (minutes)</label>
+            <label className={`${labelCls}`} style={{ color: 'var(--color-surface-300)' }}>Duration (minutes)</label>
             <input type="number" min="5" max="480" value={duration} onChange={e => setDuration(+e.target.value)}
               className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none"
-              style={{ background: 'var(--color-surface-800)', border: '1px solid var(--color-surface-600)' }} />
+              style={inputStyle} />
           </div>
           <div>
-            <label className="block text-xs font-medium mb-2" style={{ color: 'var(--color-surface-300)' }}>Show Results</label>
+            <label className={`${labelCls}`} style={{ color: 'var(--color-surface-300)' }}>Show Results</label>
             <select value={showResults} onChange={e => setShow(e.target.value as typeof showResults)}
               className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none"
-              style={{ background: 'var(--color-surface-800)', border: '1px solid var(--color-surface-600)' }}>
+              style={inputStyle}>
               <option value="immediate">Immediately</option>
               <option value="after_close">After Close</option>
               <option value="manual">Manual</option>
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium mb-2" style={{ color: 'var(--color-surface-300)' }}>Negative Marking</label>
+            <label className={`${labelCls}`} style={{ color: 'var(--color-surface-300)' }}>Negative Marking</label>
             <div className="flex items-center gap-3 h-11">
               <button onClick={() => setNegMark(!negMarking)}
-                className={`w-10 h-6 rounded-full transition-all duration-200 relative ${negMarking ? '' : ''}`}
+                className="w-10 h-6 rounded-full transition-all duration-200 relative"
                 style={{ background: negMarking ? '#6366f1' : 'var(--color-surface-700)' }}>
                 <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all duration-200 ${negMarking ? 'left-5' : 'left-1'}`} />
               </button>
@@ -171,7 +238,7 @@ export default function NewTestPage() {
                 <input type="number" min="0" step="0.25" value={negValue}
                   onChange={e => setNegValue(+e.target.value)}
                   className="w-16 px-2 py-1 rounded-lg text-sm text-white outline-none"
-                  style={{ background: 'var(--color-surface-800)', border: '1px solid var(--color-surface-600)' }} />
+                  style={inputStyle} />
               )}
             </div>
           </div>
@@ -187,11 +254,30 @@ export default function NewTestPage() {
                 Question {qIdx + 1}
               </span>
               <div className="flex items-center gap-3">
+                {/* Topic Picker — only shown when a subject is selected and has topics */}
+                {selectedSubject && selectedSubject.topics.length > 0 && (
+                  <div className="relative">
+                    <select
+                      value={q.topicSlug ?? ''}
+                      onChange={e => updateQ(qIdx, { topicSlug: e.target.value || null })}
+                      className="pl-3 pr-7 py-1 rounded-lg text-xs text-white outline-none appearance-none"
+                      style={{ ...inputStyle, minWidth: 140 }}
+                      title="Tag this question to a topic for metric tracking"
+                    >
+                      <option value="">— No topic —</option>
+                      {selectedSubject.topics.map(t => (
+                        <option key={t.slug} value={t.slug}>{t.displayName}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3"
+                      style={{ color: 'var(--color-surface-400)' }} />
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <label className="text-xs" style={{ color: 'var(--color-surface-400)' }}>Marks</label>
                   <input type="number" min="1" value={q.marks} onChange={e => updateQ(qIdx, { marks: +e.target.value })}
                     className="w-14 px-2 py-1 rounded-lg text-sm text-white text-center outline-none"
-                    style={{ background: 'var(--color-surface-800)', border: '1px solid var(--color-surface-600)' }} />
+                    style={inputStyle} />
                 </div>
                 {questions.length > 1 && (
                   <button onClick={() => removeQ(qIdx)} className="p-1.5 rounded-lg hover:text-red-400 transition-colors"
@@ -210,7 +296,7 @@ export default function NewTestPage() {
                   <textarea value={q.text} onChange={e => updateQ(qIdx, { text: e.target.value })}
                     placeholder="Enter your question…"
                     rows={3} className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-gray-600 outline-none resize-none"
-                    style={{ background: 'var(--color-surface-800)', border: '1px solid var(--color-surface-600)' }} />
+                    style={inputStyle} />
                 </div>
 
                 <div className="space-y-2">
@@ -269,6 +355,14 @@ export default function NewTestPage() {
                         </div>
                       ) : (
                         <p className="text-sm text-zinc-600 italic">No question text entered yet…</p>
+                      )}
+
+                      {/* Topic tag pill */}
+                      {q.topicSlug && (
+                        <span className="inline-block mt-2 text-[10px] px-2 py-0.5 rounded-full"
+                          style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#a5b4fc' }}>
+                          {selectedSubject?.topics.find(t => t.slug === q.topicSlug)?.displayName ?? q.topicSlug}
+                        </span>
                       )}
 
                       {/* Options */}

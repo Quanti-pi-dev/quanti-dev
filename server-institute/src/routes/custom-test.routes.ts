@@ -5,7 +5,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { customTestRepository } from '@kd/db';
+import { customTestRepository, subjectRepository, topicRepository } from '@kd/db';
 import { requireInstituteRole } from '../middleware/auth.js';
 
 // ─── Schemas ──────────────────────────────────────────────────────
@@ -79,6 +79,32 @@ function notFound(reply: FastifyReply) {
 // ─── Route Registration ───────────────────────────────────────────
 
 export async function customTestRoutes(fastify: FastifyInstance): Promise<void> {
+
+  // ── GET /institutes/:instituteId/content/subjects — List all subjects with their topics ─
+  // Used by the test creator UI to populate subject dropdown + per-question topic selectors.
+  fastify.get<{ Params: { instituteId: string } }>(
+    '/institutes/:instituteId/content/subjects',
+    { preHandler: [requireInstituteRole('institute_admin', 'educator', 'examiner')] },
+    async (_request, reply) => {
+      const subjects = await subjectRepository.findAll();
+
+      // Fetch topics in parallel for each subject
+      const withTopics = await Promise.all(
+        subjects.map(async (s) => {
+          const topics = await topicRepository.findBySubjectId(s.id);
+          return {
+            id: s.id,
+            name: s.name,
+            accent: s.accent ?? null,
+            topics: topics.map(t => ({ slug: t.slug, displayName: t.displayName })),
+          };
+        }),
+      );
+
+      return reply.send({ success: true, data: withTopics, timestamp: new Date().toISOString() });
+    },
+  );
+
 
   // ── GET /institutes/:instituteId/tests — List tests ───────────
   fastify.get<{ Params: { instituteId: string }; Querystring: unknown }>(
