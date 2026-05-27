@@ -103,7 +103,7 @@ const PROVIDERS: ProviderDef[] = [
       'deepseek-ai/deepseek-r1',
       'meta/llama-3.3-70b-instruct',
       'mistralai/mistral-large-2-instruct',
-      'moonshot/kimi-k2.6',
+      'moonshotai/kimi-k2.6',
       'qwen/qwen2.5-72b-instruct',
     ],
   },
