@@ -91,7 +91,7 @@ export default function DashboardPage() {
       const scheduledTests = tests.filter(t => t.status === 'scheduled').length;
 
       const leaderboard: LeaderboardEntry[] =
-        leaderRes.status === 'fulfilled' ? (leaderRes.value.data.data ?? []) : [];
+        leaderRes.status === 'fulfilled' ? (leaderRes.value.data.data?.entries ?? []) : [];
 
       const allCodes: JoinCode[] =
         codesRes.status === 'fulfilled' ? (codesRes.value.data.data ?? []) : [];
