@@ -154,8 +154,8 @@ export default function PaymentsPage() {
   const fetchPayments = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const res = await adminApi.get<{ data: Payment[] }>('/api/admin/payments');
-      setPayments(res.data.data);
+      const res = await adminApi.get<{ data: { payments: Payment[]; total: number } }>('/api/admin/payments');
+      setPayments(res.data.data.payments);
     } catch { setError('Failed to load payments.'); }
     finally { setLoading(false); }
   }, []);

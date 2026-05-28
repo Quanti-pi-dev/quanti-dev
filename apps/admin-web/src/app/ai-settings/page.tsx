@@ -7,12 +7,13 @@
 //   GET  /api/admin/config/category/ai   — load all AI config entries
 //   PUT  /api/admin/config/:key          — upsert a config key
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { adminApi } from '@/lib/api';
 import { PageShell, Spinner, ErrorBanner } from '@/components/page-shell';
 import {
   Key, Eye, EyeOff, Save, CheckCircle2, AlertCircle,
   Zap, Bot, Sparkles, BookOpen, ClipboardList,
+  ChevronDown, ExternalLink,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -32,11 +33,11 @@ interface ProviderDef {
   apiKeyConfigKey: string;
   placeholder: string;
   hint: string;
-  tokenUrl: string;         // Direct link to get API key
-  tokenUrlLabel: string;    // Display text for the link
-  accent: string;           // Tailwind color stem
-  badgeCls: string;         // badge classes
-  iconBg: string;           // icon wrapper classes
+  tokenUrl: string;
+  tokenUrlLabel: string;
+  accent: string;
+  badgeCls: string;
+  iconBg: string;
   models: string[];
 }
 
@@ -177,32 +178,21 @@ const ACCENT_ICON: Record<string, string> = {
   emerald: 'text-emerald-400 bg-emerald-950/50 border-emerald-800/60',
 };
 
-const ACCENT_SELECTED: Record<string, string> = {
-  emerald: 'bg-emerald-600/20 border-emerald-500/60 text-emerald-300',
-  orange:  'bg-orange-600/20 border-orange-500/60 text-orange-300',
-  sky:     'bg-sky-600/20 border-sky-500/60 text-sky-300',
-  green:   'bg-green-600/20 border-green-500/60 text-green-300',
-  violet:  'bg-violet-600/20 border-violet-500/60 text-violet-300',
-  amber:   'bg-amber-600/20 border-amber-500/60 text-amber-300',
-};
+// ─── Provider Row ─────────────────────────────────────────────
+// Compact row with inline API key input.
 
-// ─── Provider Card ────────────────────────────────────────────
-// Each provider card has: API key input + all available models.
-// The feature cards below link back to show which provider is powering them.
-
-function ProviderCard({
+function ProviderRow({
   provider,
   apiKeyValue,
   onSaveKey,
   saving,
-  // Which features are currently pointing to this provider
-  activeFeatures,
+  featureCount,
 }: {
   provider: ProviderDef;
   apiKeyValue: string;
   onSaveKey: (key: string, val: string) => Promise<void>;
   saving: boolean;
-  activeFeatures: string[];
+  featureCount: number;
 }) {
   const [draft, setDraft] = useState(apiKeyValue);
   const [show, setShow] = useState(false);
@@ -220,9 +210,9 @@ function ProviderCard({
   };
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 transition-all hover:border-zinc-700">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 transition-all hover:border-zinc-700 group">
+      {/* Top row: label + status */}
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2.5">
           <div className={`w-8 h-8 rounded-xl border flex items-center justify-center ${provider.iconBg}`}>
             <Key size={14} />
@@ -230,34 +220,31 @@ function ProviderCard({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-semibold text-white">{provider.label}</h3>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${provider.badgeCls}`}>
-                {provider.id.toUpperCase()}
-              </span>
+              {isSet ? (
+                <span className="flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 px-1.5 py-0.5 rounded-full font-medium">
+                  <CheckCircle2 size={9} /> Connected
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-[10px] text-zinc-600 bg-zinc-800 border border-zinc-700 px-1.5 py-0.5 rounded-full font-medium">
+                  <AlertCircle size={9} /> Not set
+                </span>
+              )}
             </div>
-            <p className="text-[11px] text-zinc-500">
-              {provider.hint}{' '}
+            <p className="text-[11px] text-zinc-500 mt-0.5">
+              {provider.models.length} models
+              {featureCount > 0 && <span className="text-zinc-600"> · Powering {featureCount} feature{featureCount > 1 ? 's' : ''}</span>}
+              {' · '}
               <a href={provider.tokenUrl} target="_blank" rel="noopener noreferrer"
-                className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">
-                {provider.tokenUrlLabel} ↗
+                className="text-violet-400 hover:text-violet-300 inline-flex items-center gap-0.5 transition-colors">
+                Get key <ExternalLink size={9} />
               </a>
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {isSet ? (
-            <span className="flex items-center gap-1 text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 px-2 py-1 rounded-lg">
-              <CheckCircle2 size={11} /> Connected
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 text-xs text-zinc-600">
-              <AlertCircle size={11} /> Not set
-            </span>
-          )}
-        </div>
       </div>
 
       {/* API Key Input */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2">
         <div className="relative flex-1">
           <input
             id={`api-key-${provider.id}`}
@@ -286,53 +273,18 @@ function ProviderCard({
                      bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
         >
           {saved ? <CheckCircle2 size={13} /> : <Save size={13} />}
-          {saving ? 'Saving…' : saved ? 'Saved!' : 'Save'}
+          {saving ? '…' : saved ? 'Saved!' : 'Save'}
         </button>
       </div>
-
-      {/* Available models */}
-      {provider.models.length > 0 && (
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600 mb-2">
-            Available Models
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {provider.models.map(model => (
-              <span
-                key={model}
-                className="px-2.5 py-1 rounded-lg text-xs font-mono border bg-zinc-800/60 border-zinc-700 text-zinc-500"
-              >
-                {model}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Features using this provider */}
-      {activeFeatures.length > 0 && (
-        <div className="mt-4 pt-3 border-t border-zinc-800">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600 mb-1.5">
-            Used by
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {activeFeatures.map(name => (
-              <span key={name} className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${provider.badgeCls}`}>
-                {name}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-// ─── Feature Model Card ───────────────────────────────────────
-// Each feature card: shows the feature, lets you pick a model
-// from any provider, and indicates which API key it will use.
+// ─── Feature Assignment Card ──────────────────────────────────
+// Clean card with a grouped <select> dropdown instead of
+// repeating every model from every provider.
 
-function FeatureModelCard({
+function FeatureAssignmentCard({
   feature,
   currentModel,
   onSave,
@@ -343,12 +295,20 @@ function FeatureModelCard({
   currentModel: string;
   onSave: (key: string, val: string) => Promise<void>;
   saving: boolean;
-  apiKeyStatus: Record<string, boolean>; // provider → isSet
+  apiKeyStatus: Record<string, boolean>;
 }) {
   const [draft, setDraft] = useState(currentModel);
+  const [customMode, setCustomMode] = useState(false);
   const [saved, setSaved] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setDraft(currentModel); }, [currentModel]);
+
+  // Check if current draft is a known model
+  const isKnownModel = PROVIDERS.some(p => p.models.includes(draft));
+  useEffect(() => {
+    if (draft && !isKnownModel) setCustomMode(true);
+  }, [draft, isKnownModel]);
 
   const isDirty = draft !== currentModel;
   const Icon = feature.icon;
@@ -365,101 +325,101 @@ function FeatureModelCard({
   const hasKey = resolvedProvider ? (apiKeyStatus[resolvedProvider] ?? false) : true;
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 transition-all hover:border-zinc-700">
-      {/* Feature header */}
-      <div className="flex items-start gap-3 mb-4">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 transition-all hover:border-zinc-700">
+      <div className="flex items-center gap-3">
+        {/* Icon */}
         <div className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${ACCENT_ICON[accent]}`}>
           <Icon size={16} />
         </div>
+
+        {/* Label + desc */}
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-white">{feature.label}</h3>
-          <p className="text-xs text-zinc-500 mt-0.5">{feature.description}</p>
-        </div>
-        {/* Current model + provider badge */}
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          {draft && (
-            <span className="text-xs font-mono text-zinc-400 bg-zinc-800 border border-zinc-700 px-2 py-1 rounded-lg">
-              {draft}
-            </span>
-          )}
-          {providerDef && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium inline-flex items-center gap-1 ${providerDef.badgeCls}`}>
-              {hasKey ? <CheckCircle2 size={9} /> : <AlertCircle size={9} />}
-              {providerDef.label} key {hasKey ? '✓' : 'missing'}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Model picker — grouped by provider */}
-      <div className="space-y-2.5">
-        {PROVIDERS.filter(p => p.models.length > 0).map(provider => (
-          <div key={provider.id}>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600 mb-1.5 px-0.5 flex items-center gap-1.5">
-              {provider.label}
-              {apiKeyStatus[provider.id] ? (
-                <CheckCircle2 size={9} className="text-emerald-500" />
-              ) : (
-                <AlertCircle size={9} className="text-zinc-700" />
-              )}
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {provider.models.map(model => {
-                const isActive = draft === model;
-                return (
-                  <button
-                    key={model}
-                    onClick={() => setDraft(model)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-all border ${
-                      isActive
-                        ? (ACCENT_SELECTED[provider.accent] ?? ACCENT_SELECTED['violet'])
-                        : 'bg-zinc-800/60 border-zinc-700 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600'
-                    }`}
-                  >
-                    {model}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-
-        {/* Custom model input + save */}
-        <div className="mt-2 pt-3 border-t border-zinc-800">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600 mb-1.5 px-0.5">
-            Custom Model ID
-          </p>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={draft}
-              onChange={e => setDraft(e.target.value)}
-              placeholder="e.g. llama-3.1-70b-instruct"
-              className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white font-mono
-                         placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500 transition"
-            />
-            <button
-              onClick={handleSave}
-              disabled={!isDirty || saving}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition
-                         bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-            >
-              {saved ? <CheckCircle2 size={13} /> : <Save size={13} />}
-              {saving ? '…' : saved ? 'Saved!' : 'Save'}
-            </button>
-          </div>
+          <p className="text-[11px] text-zinc-500">{feature.description}</p>
         </div>
 
-        {/* Warning if selected provider has no key */}
-        {resolvedProvider && !hasKey && (
-          <div className="flex items-start gap-2 bg-amber-950/30 border border-amber-800/40 rounded-xl px-3 py-2.5 mt-2">
-            <AlertCircle size={13} className="text-amber-400 mt-0.5 shrink-0" />
-            <p className="text-xs text-amber-300/80 leading-relaxed">
-              {providerDef?.label ?? resolvedProvider} API key is not configured. Add it above for this model to work.
-            </p>
-          </div>
+        {/* Provider badge */}
+        {providerDef && (
+          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium inline-flex items-center gap-1 shrink-0 ${providerDef.badgeCls}`}>
+            {hasKey ? <CheckCircle2 size={9} /> : <AlertCircle size={9} />}
+            {providerDef.label}
+          </span>
         )}
       </div>
+
+      {/* Model selector + save */}
+      <div className="mt-3 flex gap-2">
+        {customMode ? (
+          <input
+            ref={inputRef}
+            type="text"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            placeholder="e.g. llama-3.1-70b-instruct"
+            className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white font-mono
+                       placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500 transition"
+          />
+        ) : (
+          <div className="relative flex-1">
+            <select
+              value={draft}
+              onChange={e => {
+                if (e.target.value === '__custom__') {
+                  setCustomMode(true);
+                  setTimeout(() => inputRef.current?.focus(), 50);
+                } else {
+                  setDraft(e.target.value);
+                }
+              }}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 pr-9 text-sm text-white font-mono
+                         appearance-none focus:outline-none focus:ring-2 focus:ring-violet-500 transition cursor-pointer"
+            >
+              <option value="" className="text-zinc-500">Select a model…</option>
+              {PROVIDERS.map(p => (
+                <optgroup key={p.id} label={`${p.label}${apiKeyStatus[p.id] ? ' ✓' : ''}`}>
+                  {p.models.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </optgroup>
+              ))}
+              <optgroup label="Other">
+                <option value="__custom__">Enter custom model ID…</option>
+              </optgroup>
+            </select>
+            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+          </div>
+        )}
+
+        {customMode && (
+          <button
+            onClick={() => { setCustomMode(false); if (!draft) setDraft(currentModel); }}
+            className="px-3 py-2 rounded-lg text-xs font-medium transition
+                       bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 shrink-0"
+          >
+            List
+          </button>
+        )}
+
+        <button
+          onClick={handleSave}
+          disabled={!isDirty || saving}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition
+                     bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+        >
+          {saved ? <CheckCircle2 size={13} /> : <Save size={13} />}
+          {saving ? '…' : saved ? 'Saved!' : 'Save'}
+        </button>
+      </div>
+
+      {/* Warning if selected provider has no key */}
+      {resolvedProvider && !hasKey && (
+        <div className="flex items-start gap-2 bg-amber-950/30 border border-amber-800/40 rounded-xl px-3 py-2.5 mt-3">
+          <AlertCircle size={13} className="text-amber-400 mt-0.5 shrink-0" />
+          <p className="text-xs text-amber-300/80 leading-relaxed">
+            {providerDef?.label ?? resolvedProvider} API key is not configured. Add it above for this model to work.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -524,14 +484,14 @@ export default function AiSettingsPage() {
     apiKeyStatus[p.id] = (configMap[p.apiKeyConfigKey] ?? '').length > 0;
   });
 
-  // Build a lookup: provider → feature labels that use it
-  const providerFeatures: Record<string, string[]> = {};
-  PROVIDERS.forEach(p => { providerFeatures[p.id] = []; });
+  // Count features per provider
+  const providerFeatureCounts: Record<string, number> = {};
+  PROVIDERS.forEach(p => { providerFeatureCounts[p.id] = 0; });
   FEATURES.forEach(f => {
     const model = configMap[f.key] ?? '';
     const prov = detectProvider(model);
-    if (prov && providerFeatures[prov]) {
-      providerFeatures[prov]!.push(f.label);
+    if (prov && providerFeatureCounts[prov] !== undefined) {
+      providerFeatureCounts[prov]!++;
     }
   });
 
@@ -558,15 +518,15 @@ export default function AiSettingsPage() {
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {PROVIDERS.map(provider => (
-                <ProviderCard
+                <ProviderRow
                   key={provider.id}
                   provider={provider}
                   apiKeyValue={configMap[provider.apiKeyConfigKey] ?? ''}
                   onSaveKey={handleSave}
                   saving={savingKey === provider.apiKeyConfigKey}
-                  activeFeatures={providerFeatures[provider.id] ?? []}
+                  featureCount={providerFeatureCounts[provider.id] ?? 0}
                 />
               ))}
             </div>
@@ -581,14 +541,14 @@ export default function AiSettingsPage() {
               <div>
                 <h2 className="text-sm font-semibold text-white">Feature → Model Assignment</h2>
                 <p className="text-xs text-zinc-500">
-                  Each feature shows which provider it will use and whether its API key is connected
+                  Pick which model powers each AI feature. The matching provider&apos;s API key is used automatically.
                 </p>
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {FEATURES.map(feature => (
-                <FeatureModelCard
+                <FeatureAssignmentCard
                   key={feature.key}
                   feature={feature}
                   currentModel={configMap[feature.key] ?? ''}
