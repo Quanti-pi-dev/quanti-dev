@@ -19,6 +19,7 @@ import { requireRole } from '../middleware/rbac.js';
 import { flashcardRepository } from '@kd/db';
 import { deckRepository } from '@kd/db';
 import { getMongoDb } from '@kd/db';
+import { notificationService } from '@kd/db';
 import { ObjectId } from 'mongodb';
 import { SUBJECT_LEVELS } from '@kd/shared';
 
@@ -266,6 +267,16 @@ export async function adminPYQRoutes(fastify: FastifyInstance): Promise<void> {
 
     // Insert in one batch (repository handles order auto-assign)
     const insertedCount = await flashcardRepository.bulkCreate(deck.id, normalised);
+
+    // ── New PYQ content trigger (Blueprint §1.1 — Scarcity + Novelty) ──
+    // Notify users studying this exam: "Fresh {year} PYQs just added — be first!"
+    // Psychology: Scarcity (limited-time first-mover advantage) + Novelty (new content).
+    void notificationService.broadcastPush({
+      title: `📋 Fresh ${sourceYear} ${examLabel ?? examId} PYQs added!`,
+      body: `${insertedCount} new Previous Year Questions just landed. Be among the first to attempt them!`,
+      data: { action: 'new_content', examId, subjectId, screen: 'study' },
+      topic: `exam_${examId}`,
+    }).catch(() => {});
 
     return reply.status(201).send({
       success: true,

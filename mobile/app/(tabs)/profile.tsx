@@ -126,6 +126,28 @@ export default function ProfileScreen() {
           onShopPress={() => router.push('/shop')}
         />
 
+        {/* ── Profile Tier ── */}
+        <Card pressable onPress={() => router.push('/profile-tiers' as never)}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+            <View
+              style={{
+                width: 40, height: 40, borderRadius: radius.md,
+                backgroundColor: 'rgba(245,158,11,0.15)',
+                alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="trophy-outline" size={20} color="#F59E0B" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Typography variant="label">Profile Tier & Unlocks</Typography>
+              <Typography variant="caption" color={theme.textTertiary}>
+                Track your XP and unlock new features
+              </Typography>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
+          </View>
+        </Card>
+
         {/* ── Explore More Exams ── */}
         <Card pressable onPress={() => router.push('/explore-exams' as never)}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>

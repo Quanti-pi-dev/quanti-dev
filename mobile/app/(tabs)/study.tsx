@@ -20,6 +20,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, withSequence, withRepeat } from 'react-native-reanimated';
 import { useTheme } from '../../src/theme';
 import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
@@ -36,12 +37,125 @@ import { useRecommendations } from '../../src/hooks/useAI';
 import { useDecks } from '../../src/hooks/useDecks';
 import { usePersonalizedSubjects } from '../../src/hooks/usePersonalizedSubjects';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { useQueryClient } from '@tanstack/react-query';
-import { useState, useCallback } from 'react';
+import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
+import { useState, useCallback, useEffect } from 'react';
 import type { Deck, Subject } from '@kd/shared';
+import { apiGet, apiPost } from '../../src/services/api-contracts';
 
-// ─── Accent palette reused for discover decks ─────────────────
+// ─── Accent palette reused for discover decks ────────────────────────────────────────────
 const DECK_ACCENTS = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#14B8A6', '#3B82F6', '#EF4444'];
+
+// ─── Daily Chest Banner ───────────────────────────────────────────────
+// Visible when a daily chest is available to open.
+// Psychology: Variable Reward (Skinner) — the unknown chest contents
+// create anticipation that drives the user back to the app each day.
+
+interface ChestStatus { opened: boolean; availableToday: boolean; }
+interface ChestReward { rarity: string; coins: number; message: string; }
+
+function DailyChestBanner() {
+  const { theme } = useTheme();
+  const queryClient = useQueryClient();
+
+  const { data: status, isLoading: statusLoading } = useQuery<ChestStatus>({
+    queryKey: ['daily-chest-status'],
+    queryFn: () => apiGet<ChestStatus>('/gamify/daily-chest/status'),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const [reward, setReward] = useState<ChestReward | null>(null);
+
+  const openMutation = useMutation<ChestReward, Error>({
+    mutationFn: () => apiPost<ChestReward>('/gamify/daily-chest'),
+    onSuccess: (data) => {
+      setReward(data);
+      void queryClient.invalidateQueries({ queryKey: ['daily-chest-status'] });
+      void queryClient.invalidateQueries({ queryKey: ['gamification'] });
+    },
+  });
+
+  // Idle jiggle animation to attract attention
+  const rot = useSharedValue(0);
+  useEffect(() => {
+    rot.value = withRepeat(
+      withSequence(
+        withTiming(-6, { duration: 120 }),
+        withTiming(6, { duration: 120 }),
+        withTiming(0, { duration: 120 }),
+      ),
+      -1,
+      false,
+    );
+  }, []);
+  const chestStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rot.value}deg` }],
+  }));
+
+  if (statusLoading || !status?.availableToday) return null;
+
+  const RARITY_GRADIENT: Record<string, [string, string]> = {
+    legendary: ['#F59E0B', '#EF4444'],
+    epic:      ['#8B5CF6', '#EC4899'],
+    rare:      ['#3B82F6', '#06B6D4'],
+    common:    ['#6366F1', '#8B5CF6'],
+  };
+  const gradient = reward
+    ? (RARITY_GRADIENT[reward.rarity] ?? RARITY_GRADIENT['common']!)
+    : ['#F59E0B', '#F97316'] as [string, string];
+
+  return (
+    <TouchableOpacity
+      onPress={() => !openMutation.isPending && !reward && openMutation.mutate()}
+      activeOpacity={0.85}
+      disabled={!!reward || openMutation.isPending}
+      accessibilityRole="button"
+      accessibilityLabel={reward ? `Chest opened! ${reward.message}` : 'Open your daily chest'}
+      style={{ borderRadius: radius.xl, overflow: 'hidden' }}
+    >
+      <LinearGradient
+        colors={gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: spacing.lg,
+          paddingVertical: spacing.md,
+          gap: spacing.md,
+        }}
+      >
+        {reward ? (
+          <>
+            <Typography style={{ fontSize: 28 }}>
+              {reward.rarity === 'legendary' ? '✨' : reward.rarity === 'epic' ? '💫' : reward.rarity === 'rare' ? '💠' : '💰'}
+            </Typography>
+            <View style={{ flex: 1 }}>
+              <Typography variant="captionBold" color="rgba(255,255,255,0.8)" style={{ fontSize: 10 }}>
+                {reward.rarity.toUpperCase()} DROP
+              </Typography>
+              <Typography variant="label" color="#FFF">{reward.message}</Typography>
+            </View>
+            <Ionicons name="checkmark-circle" size={22} color="rgba(255,255,255,0.9)" />
+          </>
+        ) : (
+          <>
+            <Animated.Text style={[{ fontSize: 28 }, chestStyle]}>📦</Animated.Text>
+            <View style={{ flex: 1 }}>
+              <Typography variant="captionBold" color="rgba(255,255,255,0.8)" style={{ fontSize: 10 }}>
+                DAILY CHEST
+              </Typography>
+              <Typography variant="label" color="#FFF">
+                {openMutation.isPending ? 'Opening…' : 'Tap to open your bonus chest!'}
+              </Typography>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.8)" />
+          </>
+        )}
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+}
+
 
 // ─── Section header ───────────────────────────────────────────
 
@@ -399,6 +513,9 @@ export default function StudyScreen() {
           </View>
 
           <TrialPassBanner />
+
+          {/* Daily Chest — available once per day, tappable inline */}
+          <DailyChestBanner />
 
           {/* Quick Stats Row */}
           {(hasSubjects || hasRecent) && (

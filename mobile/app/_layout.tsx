@@ -16,6 +16,7 @@ import { SubscriptionProvider } from '../src/contexts/SubscriptionContext';
 import { ConfigProvider } from '../src/contexts/ConfigContext';
 import { GlobalUIProvider } from '../src/contexts/GlobalUIContext';
 import { darkTheme, spacing, radius } from '../src/theme/tokens';
+import { CelebrationOverlay } from '../src/components/CelebrationOverlay';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -132,13 +133,24 @@ function RootNavigation() {
         <Stack.Screen name="exams/[examId]/subjects" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="battles" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="social/index" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="social/create-pact" options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />
+        <Stack.Screen name="social/pact-detail" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="profile-tiers" options={{ animation: 'slide_from_right' }} />
       </Stack>
   );
 
   // Only mount SubscriptionProvider when authenticated — prevents premature
   // 401 fetches before auth tokens are ready.
   if (isAuthenticated) {
-    return <ConfigProvider><SubscriptionProvider>{navStack}</SubscriptionProvider></ConfigProvider>;
+    return (
+      <ConfigProvider>
+        <SubscriptionProvider>
+          {navStack}
+          {/* Celebration Cascade — polls for pending rewards and plays them */}
+          <CelebrationOverlay />
+        </SubscriptionProvider>
+      </ConfigProvider>
+    );
   }
   return navStack;
 }

@@ -1,5 +1,5 @@
 // ─── Social Screen ──────────────────────────────────────────
-// Friend list, search users, pending requests.
+// Friend list, search users, pending requests, and activity feed.
 // Accessible from the Battles header icon and profile.
 
 import { useState, useCallback, useEffect, useRef } from 'react';
@@ -22,8 +22,47 @@ import {
   useRemoveFriend,
 } from '../../src/hooks/useFriend';
 import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
+import { useQuery } from '@tanstack/react-query';
+import { apiGet } from '../../src/services/api-contracts';
+import { fetchActivePact } from '../../src/services/behavioral-contracts';
 
-type Tab = 'friends' | 'search' | 'requests';
+// ─── Feed Pagination Envelope ────────────────────────────────
+// /feed returns { events: FeedEvent[], nextCursor: number | null, hasMore: boolean }
+// apiGet<T> extracts response.data.data, so we must type T as the envelope,
+// not as FeedEvent[] directly.
+interface FeedPage {
+  events: FeedEvent[];
+  nextCursor: number | null;
+  hasMore: boolean;
+}
+
+// ─── Feed Event Types (aligned with feed.service.ts) ───────────────────────────────
+
+interface FeedEvent {
+  id: string;
+  type:
+    | 'level_unlock'
+    | 'streak_milestone'
+    | 'legendary_drop'
+    | 'badge_earned'
+    | 'study_pact_complete'
+    | 'tournament_win';
+  actorName: string;
+  actorAvatar?: string | null;
+  payload: Record<string, unknown>;
+  createdAt: string;
+}
+
+const FEED_EVENT_COPY: Record<FeedEvent['type'], { icon: string; label: (p: Record<string, unknown>) => string }> = {
+  level_unlock:          { icon: '🔓', label: (p) => `unlocked ${String(p['levelName'] ?? 'a new level')} in ${String(p['subjectName'] ?? 'a subject')}` },
+  streak_milestone:      { icon: '🔥', label: (p) => `hit a ${String(p['streakDays'] ?? '')}-day streak!` },
+  legendary_drop:        { icon: '✨', label: () => 'got a LEGENDARY coin drop!' },
+  badge_earned:          { icon: '🏅', label: (p) => `earned the ${String(p['badgeName'] ?? 'a new badge')} badge` },
+  study_pact_complete:   { icon: '🤝', label: (p) => `completed a study pact: ${String(p['pactName'] ?? '')}` },
+  tournament_win:        { icon: '🏆', label: () => 'won a tournament!' },
+};
+
+type Tab = 'friends' | 'activity' | 'search' | 'requests';
 
 export default function SocialScreen() {
   const { theme } = useTheme();
@@ -44,6 +83,22 @@ export default function SocialScreen() {
   const { data: pendingData, isLoading: pendingLoading, refetch: refetchPending } = usePendingFriendRequests();
   const { data: searchResults, isLoading: searchLoading, refetch: refetchSearch } = useUserSearch(debouncedQuery);
 
+  // Activity feed — friend milestone events from /api/v1/feed
+  // Psychology: FOMO Social Proof — seeing friends achieve things drives
+  // immediate study sessions to keep up.
+  //
+  // NOTE: /feed returns a pagination envelope { events, nextCursor, hasMore }.
+  // We type the response as FeedPage (not FeedEvent[]) so we can safely
+  // read feedResponse.events in the FlatList — avoiding the runtime crash
+  // caused by passing a plain object to FlatList.data.
+  const { data: feedResponse, isLoading: feedLoading, refetch: refetchFeed } = useQuery<FeedPage>({
+    queryKey: ['social-feed'],
+    queryFn: () => apiGet<FeedPage>('/feed'),
+    staleTime: 60 * 1000,  // 1 minute cache — near-real-time
+    enabled: activeTab === 'activity',
+  });
+  const feedEvents: FeedEvent[] = feedResponse?.events ?? [];
+
   const acceptMutation = useAcceptFriendRequest();
   const deleteMutation = useDeleteFriendship();
   const removeMutation = useRemoveFriend();
@@ -53,9 +108,17 @@ export default function SocialScreen() {
   const onRefresh = useCallback(() => {
     void refetchFriends();
     void refetchPending();
-  }, [refetchFriends, refetchPending]);
+    void refetchFeed();
+  }, [refetchFriends, refetchPending, refetchFeed]);
 
   const pendingCount = (pendingData?.received?.length ?? 0);
+  // Check for active pact — used to route the header button
+  // to pact-detail (if active) vs create-pact (if not).
+  const { data: activePact } = useQuery({
+    queryKey: ['active-pact'],
+    queryFn: fetchActivePact,
+    staleTime: 2 * 60 * 1000,
+  });
 
   return (
     <ScreenWrapper>
@@ -87,6 +150,32 @@ export default function SocialScreen() {
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Typography variant="h3" style={{ flex: 1 }}>Friends</Typography>
+        {/* Study Pact CTA — routes to pact-detail if active, otherwise create */}
+        <TouchableOpacity
+          onPress={() =>
+            activePact
+              ? router.push('/social/pact-detail' as never)
+              : router.push('/social/create-pact' as never)
+          }
+          accessibilityRole="button"
+          accessibilityLabel={activePact ? 'View active study pact' : 'Create a study pact'}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.xs,
+            backgroundColor: activePact ? theme.success + '22' : theme.primaryMuted,
+            borderRadius: radius.full,
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.xs + 2,
+            borderWidth: 1,
+            borderColor: activePact ? theme.success + '55' : theme.primary + '44',
+          }}
+        >
+          <Ionicons name="people" size={14} color={activePact ? theme.success : theme.primary} />
+          <Typography variant="captionBold" color={activePact ? theme.success : theme.primary}>
+            {activePact ? 'My Pact' : 'Pact'}
+          </Typography>
+        </TouchableOpacity>
       </View>
 
       {/* ── Tabs ── */}
@@ -95,13 +184,14 @@ export default function SocialScreen() {
           flexDirection: 'row',
           paddingHorizontal: spacing.xl,
           paddingTop: spacing.md,
-          gap: spacing.sm,
+          gap: spacing.xs,
         }}
       >
         {(
           [
-            { key: 'friends', label: 'Friends' },
-            { key: 'search', label: 'Find' },
+            { key: 'friends',  label: 'Friends' },
+            { key: 'activity', label: 'Activity' },
+            { key: 'search',   label: 'Find' },
             { key: 'requests', label: `Requests${pendingCount > 0 ? ` (${pendingCount})` : ''}` },
           ] as { key: Tab; label: string }[]
         ).map((tab) => (
@@ -125,7 +215,7 @@ export default function SocialScreen() {
               variant="bodySemiBold"
               style={{
                 color: activeTab === tab.key ? theme.buttonPrimaryText : theme.text,
-                fontSize: 12,
+                fontSize: 11,
               }}
             >
               {tab.label}
@@ -177,7 +267,92 @@ export default function SocialScreen() {
         </View>
       )}
 
-      {/* ── Friends Tab ── */}
+      {/* ── Activity Feed Tab ── */}
+      {activeTab === 'activity' && (
+        <FlatList
+          data={feedEvents ?? []}
+          keyExtractor={(item) => item.id}
+          refreshControl={
+            <RefreshControl refreshing={feedLoading} onRefresh={() => void refetchFeed()} tintColor={theme.primary} />
+          }
+          contentContainerStyle={{ padding: spacing.xl, gap: spacing.md }}
+          ListEmptyComponent={
+            feedLoading ? (
+              <View style={{ gap: spacing.md }}>
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton key={i} width="100%" height={72} borderRadius={radius.md} />
+                ))}
+              </View>
+            ) : (
+              <View style={{ alignItems: 'center', padding: spacing['2xl'], gap: spacing.md }}>
+                <Typography style={{ fontSize: 48 }}>🌊</Typography>
+                <Typography variant="body" style={{ color: theme.textTertiary, textAlign: 'center' }}>
+                  Your friends haven't been active yet.
+                  {`\n`}Add more friends to see their wins here!
+                </Typography>
+              </View>
+            )
+          }
+          renderItem={({ item, index }) => {
+            const meta = FEED_EVENT_COPY[item.type];
+            const timeAgo = (() => {
+              const diff = Date.now() - new Date(item.createdAt).getTime();
+              const mins = Math.floor(diff / 60000);
+              if (mins < 60) return `${mins}m ago`;
+              const hrs = Math.floor(mins / 60);
+              if (hrs < 24) return `${hrs}h ago`;
+              return `${Math.floor(hrs / 24)}d ago`;
+            })();
+
+            return (
+              <Animated.View
+                entering={FadeInDown.delay(index * 50).duration(300)}
+                style={{
+                  backgroundColor: theme.card,
+                  borderRadius: radius.md,
+                  padding: spacing.base,
+                  flexDirection: 'row',
+                  alignItems: 'flex-start',
+                  gap: spacing.md,
+                  borderWidth: 1,
+                  borderColor: theme.borderLight,
+                }}
+              >
+                {/* Avatar or event emoji */}
+                {item.actorAvatar ? (
+                  <Image
+                    source={{ uri: item.actorAvatar }}
+                    style={{ width: 40, height: 40, borderRadius: radius.full }}
+                  />
+                ) : (
+                  <View
+                    style={{
+                      width: 40, height: 40, borderRadius: radius.full,
+                      backgroundColor: theme.primaryMuted,
+                      alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    <Typography style={{ fontSize: 20 }}>{meta?.icon ?? '📊'}</Typography>
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Typography variant="bodySemiBold" numberOfLines={2}>
+                    {item.actorName}
+                    {' '}
+                    <Typography variant="body" color={theme.textSecondary}>
+                      {meta ? meta.label(item.payload) : 'did something great!'}
+                    </Typography>
+                  </Typography>
+                  <Typography variant="caption" color={theme.textTertiary} style={{ marginTop: 2 }}>
+                    {timeAgo}
+                  </Typography>
+                </View>
+              </Animated.View>
+            );
+          }}
+        />
+      )}
+
       {activeTab === 'friends' && (
         <FlatList
           data={friends ?? []}

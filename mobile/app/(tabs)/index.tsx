@@ -3,7 +3,7 @@
 // selections (selectedExams + selectedSubjects).
 // Falls back to generic "Explore Exams" for unonboarded users.
 
-import { useEffect, useMemo, memo } from 'react';
+import React, { useEffect, useMemo, memo } from 'react';
 import { View, ScrollView, TouchableOpacity } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -34,6 +34,7 @@ import { getEducatorMasteryLevel } from '../../src/utils/mastery';
 
 import { WeeklyHeatmap } from '../../src/components/WeeklyHeatmap';
 import { CoinDisplay } from '../../src/components/CoinDisplay';
+import { WeeklyHighlightCard } from '../../src/components/WeeklyHighlightCard';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useSubscriptionGate } from '../../src/hooks/useSubscriptionGate';
 import { useSubscription } from '../../src/contexts/SubscriptionContext';
@@ -235,6 +236,11 @@ export default function HomeScreen() {
     [streakData?.lastStudyDate],
   );
 
+  // ─── Weekly highlight dismiss state ─────────────────────
+  // In-memory toggle — persists for the session, not across app restarts.
+  // A full persistence layer (AsyncStorage) is a future iteration.
+  const [highlightDismissed, setHighlightDismissed] = React.useState(false);
+
 
   return (
     <ScreenWrapper>
@@ -378,6 +384,13 @@ export default function HomeScreen() {
               studiedToday,
             }} />
           </FadeInView>
+
+          {/* ━━━ Weekly Highlight Reel ━━━ */}
+          {!highlightDismissed && (
+            <FadeInView delay={260}>
+              <WeeklyHighlightCard onDismiss={() => setHighlightDismissed(true)} />
+            </FadeInView>
+          )}
 
           {/* ══════════════════════════════════════════════════════
               PERSONALIZED SECTIONS — only shown if onboarded

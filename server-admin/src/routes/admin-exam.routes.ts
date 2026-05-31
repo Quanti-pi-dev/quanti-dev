@@ -5,6 +5,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { adminExamRepository as examRepository } from '@kd/db';
 import { examSubjectRepository, subjectRepository, adminExamSubjectRepository } from '@kd/db';
+import { notificationService } from '@kd/db';
 
 // ─── Schemas ────────────────────────────────────────────────
 
@@ -83,6 +84,21 @@ export async function adminExamRoutes(fastify: FastifyInstance): Promise<void> {
       return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Exam not found' }, timestamp: new Date().toISOString() });
     }
     const isPublished = await examRepository.togglePublished(id);
+
+    // ── New content trigger (Blueprint §1.1 — Scarcity + Novelty) ──
+    // When an exam goes live, broadcast a push to all active users.
+    // Psychology: Scarcity Principle — "be first to attempt" drives
+    // immediate app opens from users already enrolled in this exam.
+    if (isPublished) {
+      void notificationService.broadcastPush({
+        title: `📋 ${exam.title} is now live!`,
+        body: `Fresh questions just added. Be among the first to attempt the new ${exam.title} content!`,
+        data: { action: 'new_content', examId: id, screen: 'study' },
+        // Only notify users subscribed to this exam (best-effort via topic targeting)
+        topic: `exam_${id}`,
+      }).catch(() => {});
+    }
+
     return reply.send({ success: true, data: { id, isPublished }, timestamp: new Date().toISOString() });
   });
 

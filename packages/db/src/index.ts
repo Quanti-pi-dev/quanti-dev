@@ -79,8 +79,33 @@ export { notificationService } from './services/notification.service.js';
 export { friendService } from './services/friend.service.js';
 export { challengeService } from './services/challenge.service.js';
 export { rewardService } from './services/reward.service.js';
+export type { AwardResult } from './services/reward.service.js';
+export { variableRewardService } from './services/variable-reward.service.js';
+export type { VariableRewardResult, CoinDropRarity, ChestTier, DailyChestResult, NearMiss } from './services/variable-reward.service.js';
+export { feedService } from './services/feed.service.js';
+export type { FeedEvent, FeedEventType } from './services/feed.service.js';
+export { insightRevealService } from './services/insight-reveal.service.js';
+export type { InsightReveal, InsightCategory } from './services/insight-reveal.service.js';
+export { microSessionService } from './services/micro-session.service.js';
+export type { MicroCard, MicroSessionPack } from './services/micro-session.service.js';
+export { studyPactService } from './services/study-pact.service.js';
+export type { StudyPact, PactMember, CreatePactInput, PactDuration } from './services/study-pact.service.js';
+export { flashEventService } from './services/flash-event.service.js';
+export type { FlashEvent, FlashEventType, CreateFlashEventInput } from './services/flash-event.service.js';
+export { progressiveProfileService } from './services/progressive-profile.service.js';
+export type { ProfileUnlockStatus, ProfileTier } from './services/progressive-profile.service.js';
+export { weeklyHighlightService } from './services/weekly-highlight.service.js';
+export type { WeeklyHighlight } from './services/weekly-highlight.service.js';
+export { celebrationService } from './services/celebration.service.js';
+export type { CelebrationSequence, CelebrationStep } from './services/celebration.service.js';
 export { trialPassService } from './services/trialpass.service.js';
 export { instituteService } from './services/institute.service.js';
+export { wagerService } from './services/wager.service.js';
+export type { WagerState, InitiateWagerResult, SubmitWagerAnswerResult } from './services/wager.service.js';
+export { cardAnnotationService } from './services/card-annotation.service.js';
+export type { CardAnnotation } from './services/card-annotation.service.js';
+export { userDeckService } from './services/user-deck.service.js';
+export type { UserDeck, UserDeckCard, CreateUserDeckInput, CreateUserDeckCardInput } from './services/user-deck.service.js';
 export {
   publishScoreUpdate, onScoreUpdate,
   publishBadgeAwarded, onBadgeAwarded,
@@ -114,3 +139,4 @@ export { expirePendingChallenges, finalizeAbandonedChallenges } from './jobs/exp
 export { completeTournaments } from './jobs/expire-tournaments.js';
 export { runInstituteTestLifecycle } from './jobs/institute-test-lifecycle.js';
 export { resetInstituteWeeklyLeaderboards } from './jobs/institute-leaderboard-reset.js';
+export { runSmartNudges } from './jobs/smart-nudges.js';

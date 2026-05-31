@@ -26,6 +26,14 @@ export interface PushPayload {
   data?: Record<string, string>;
 }
 
+export interface BroadcastPayload {
+  /** FCM topic to target (e.g. 'exam_abc123', 'all_users') */
+  topic: string;
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+}
+
 type NotificationEvent =
   | { type: 'welcome'; userId: string; email: string; displayName: string }
   | { type: 'study_reminder'; userId: string; email: string; streakDays: number }
@@ -47,7 +55,14 @@ type NotificationEvent =
   | { type: 'challenge_tie'; userId: string }
   // ─── Friend Events ───────────────────────────
   | { type: 'friend_request_received'; userId: string; requesterName: string }
-  | { type: 'friend_request_accepted'; userId: string; accepterName: string };
+  | { type: 'friend_request_accepted'; userId: string; accepterName: string }
+  // ─── Friend Activity Events (Social FOMO) ────
+  // Push notifications sent to a user's friends when they hit milestones.
+  // Psychology: Social Comparison Theory — seeing peers succeed creates
+  // both motivation and FOMO, driving users back to the app.
+  | { type: 'friend_streak_milestone'; userId: string; friendName: string; streakDays: number }
+  | { type: 'friend_level_unlocked'; userId: string; friendName: string; levelName: string; subjectName: string }
+  | { type: 'friend_score_passed'; userId: string; friendName: string; leaderboard: 'global' | 'weekly' };
 
 // ─── Email Templates ────────────────────────────────────────
 
@@ -251,6 +266,32 @@ class NotificationService {
       case 'friend_request_accepted':
         await this.sendPush({ userId: event.userId, title: 'Friend Added! 🎉', body: `${event.accepterName} accepted your friend request.` });
         break;
+
+      // ─── Friend activity events (FOMO triggers) ────
+      case 'friend_streak_milestone':
+        await this.sendPush({
+          userId: event.userId,
+          title: `🔥 ${event.friendName} is on fire!`,
+          body: `${event.friendName} just hit a ${event.streakDays}-day streak! Can you keep up?`,
+          data: { action: 'friend_profile', screen: 'profile' },
+        });
+        break;
+      case 'friend_level_unlocked':
+        await this.sendPush({
+          userId: event.userId,
+          title: `🔓 ${event.friendName} leveled up!`,
+          body: `${event.friendName} unlocked ${event.levelName} in ${event.subjectName}!`,
+          data: { action: 'study', screen: 'study' },
+        });
+        break;
+      case 'friend_score_passed':
+        await this.sendPush({
+          userId: event.userId,
+          title: `📊 ${event.friendName} just passed you!`,
+          body: `${event.friendName} overtook your ${event.leaderboard} score. Study now to reclaim your rank!`,
+          data: { action: 'leaderboard', screen: 'gamify' },
+        });
+        break;
     }
   }
 
@@ -297,6 +338,59 @@ class NotificationService {
   // Delegates to the shared private sendPush which handles FCM auth + dispatch.
   async sendDirectPush(payload: PushPayload): Promise<void> {
     return this.sendPush(payload);
+  }
+
+  // ─── Public: FCM Topic Broadcast ───────────────────────────
+  // Sends to all FCM-subscribed devices for a given topic (e.g. exam_abc123).
+  // No per-user token lookup needed — FCM fan-out handles delivery.
+  //
+  // Mobile clients subscribe to exam topics on enrollment:
+  //   firebase.messaging().subscribeToTopic(`exam_${examId}`)
+  async broadcastPush(payload: BroadcastPayload): Promise<void> {
+    if (config.env === 'development') {
+      log.debug({ payload }, 'broadcast push (dev mode — skipped)');
+      return;
+    }
+    if (!config.notifications.enabled || !config.fcm.serviceAccountPath) return;
+
+    try {
+      const { auth: fcmAuth, projectId } = await this.getFcmAuth();
+      if (!projectId) return;
+
+      const client = await fcmAuth.getClient();
+      const accessToken = (await client.getAccessToken()).token;
+      if (!accessToken) return;
+
+      // Sanitise topic name: FCM topics allow only [a-zA-Z0-9-_.~%]
+      const topic = payload.topic.replace(/[^a-zA-Z0-9\-_.~%]/g, '_');
+
+      const response = await fetch(
+        `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message: {
+              topic,
+              notification: { title: payload.title, body: payload.body },
+              data: payload.data ?? {},
+            },
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        const err = await response.text().catch(() => 'unknown');
+        log.error({ statusCode: response.status, err, topic }, 'FCM broadcast error');
+      } else {
+        log.info({ topic }, 'FCM broadcast sent');
+      }
+    } catch (err) {
+      log.error({ err }, 'failed to broadcast push via FCM');
+    }
   }
 
   // ─── Push Notification Dispatch (FCM HTTP v1) ──────────

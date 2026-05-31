@@ -18,6 +18,7 @@ import {
   expirePendingChallenges,
   finalizeAbandonedChallenges,
   completeTournaments,
+  runSmartNudges,
 } from '@kd/db';
 
 import { authPlugin } from './middleware/auth.js';
@@ -40,6 +41,11 @@ import { publicConfigRoutes } from './routes/config.routes.js';
 import { instituteStudentRoutes } from './routes/institute.routes.js';
 import { instituteTestRoutes } from './routes/institute-tests.routes.js';
 import { tournamentRoutes } from './routes/tournament.routes.js';
+import { feedRoutes } from './routes/feed.routes.js';
+import { microSessionRoutes } from './routes/micro-session.routes.js';
+import { studyPactRoutes } from './routes/study-pact.routes.js';
+import { profileRoutes } from './routes/profile.routes.js';
+import { userContentRoutes } from './routes/user-content.routes.js';
 
 // ─── Fastify Instance ─────────────────────────────────────────
 
@@ -129,6 +135,13 @@ async function registerRoutes() {
   await server.register(tournamentRoutes, { prefix: '/api/v1' });
   await server.register(instituteStudentRoutes, { prefix: '/api/v1' });
   await server.register(instituteTestRoutes,    { prefix: '/api/v1' });
+  await server.register(feedRoutes,              { prefix: '/api/v1/feed' });
+  await server.register(microSessionRoutes,      { prefix: '/api/v1/micro-session' });
+  await server.register(studyPactRoutes,         { prefix: '/api/v1/study-pacts' });
+  await server.register(profileRoutes,           { prefix: '/api/v1/profile' });
+  // Content creation investment (Hook Model §4.2)
+  // Personal decks, deck sharing, and card annotations
+  await server.register(userContentRoutes,       { prefix: '/api/v1' });
 }
 
 // ─── Cron Jobs ────────────────────────────────────────────────
@@ -183,6 +196,35 @@ function startCronJobs() {
   setInterval(() => void locked('complete-tournaments', 120,
     () => completeTournaments(log)), 5 * 60 * 1000);
 
+  // Smart study nudges (behavioral psychology) — every 30 minutes
+  // Scans user learning states and fires contextual push notifications:
+  // streak-at-risk, knowledge decay, near-level-unlock, comeback.
+  setInterval(() => void locked('smart-nudges', 120,
+    () => runSmartNudges(log)), 30 * 60 * 1000);
+
+  // Study pact evaluation — daily at midnight (check via hourly interval)
+  setInterval(() => void locked('evaluate-pacts', 300, async () => {
+    const { studyPactService } = await import('@kd/db');
+    await studyPactService.evaluateActivePacts();
+    log.info('Study pacts evaluated');
+  }), 60 * 60 * 1000);
+
+  // Flash event lifecycle — every 2 minutes (activate scheduled, expire completed)
+  setInterval(() => void locked('flash-event-lifecycle', 30, async () => {
+    const { flashEventService } = await import('@kd/db');
+    await flashEventService.processEventLifecycle();
+  }), 2 * 60 * 1000);
+
+  // Weekly highlight reel — Sunday 7 PM (check hourly)
+  setInterval(() => void locked('weekly-highlights', 3600, async () => {
+    const nowCheck = new Date();
+    if (nowCheck.getUTCDay() === 0 && nowCheck.getUTCHours() >= 19) {
+      const { weeklyHighlightService } = await import('@kd/db');
+      await weeklyHighlightService.generateAndSendHighlights();
+      log.info('Weekly highlights generated');
+    }
+  }), 60 * 60 * 1000);
+
   log.info('Cron jobs scheduled');
 }
 
@@ -196,6 +238,30 @@ async function start() {
     await connectDatabases(server.log);
     await tournamentRepository.ensureIndexes().catch(err =>
       server.log.error(err, 'tournament-indexes failed'));
+    // Content creation investment: ensure MongoDB indexes for user decks
+    // and card annotations (unique constraint on {userId, cardId}).
+    await (async () => {
+      try {
+        const db = (await import('@kd/db')).getMongoDb();
+        await Promise.all([
+          // card_annotations: one note per user per card
+          db.collection('card_annotations').createIndex(
+            { userId: 1, cardId: 1 }, { unique: true, background: true },
+          ),
+          // user_decks: fast lookup by owner and shared recipients
+          db.collection('user_decks').createIndex({ ownerId: 1 }, { background: true }),
+          db.collection('user_decks').createIndex(
+            { sharedWithUserIds: 1 }, { background: true },
+          ),
+          // user_deck_cards: ordered card list per deck
+          db.collection('user_deck_cards').createIndex(
+            { deckId: 1, order: 1 }, { background: true },
+          ),
+        ]);
+      } catch (err) {
+        server.log.error(err, 'user-content-indexes failed');
+      }
+    })();
     await server.listen({ port: config.port, host: config.host });
     server.log.info(`🚀  User API listening on http://${config.host}:${config.port}  [${config.env}]`);
     startCronJobs();

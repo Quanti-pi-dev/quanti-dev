@@ -5,7 +5,7 @@ import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'ax
 import { auth } from '../lib/firebase';
 import { authEmitter } from './authEmitter';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:10000';
 
 function makeInstance(baseURL: string) {
   return axios.create({

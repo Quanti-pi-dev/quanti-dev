@@ -411,6 +411,7 @@ export default function FlashcardStudyScreen() {
         incorrectCount={incorrectCount}
         skippedCount={skippedCount}
         sessionCoinsEarned={sessionCoinsEarned}
+        deckId={effectiveDeckId}
         onStudyAgain={() => {
           setCurrentIdx(0);
           setAnswered([]);

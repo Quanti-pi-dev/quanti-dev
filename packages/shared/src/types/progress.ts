@@ -1,6 +1,7 @@
 // ─── Progress & Study ───────────────────────────────────────
 
 import type { SubjectLevel } from './content.js';
+import type { VariableRewardInfo, NearMiss, InsightReveal } from './gamification.js';
 
 export interface ProgressRecord {
   userId: string;
@@ -95,4 +96,13 @@ export interface LevelAnswerResult {
   newlyUnlockedLevel?: SubjectLevel;
   /** Total coins earned by this single answer event (0 if no new coins). */
   coinsEarned: number;
+  /** Variable reward rarity info — controls celebration intensity on the client.
+   *  Only present for correct answers that earned coins. */
+  variableReward?: VariableRewardInfo;
+  /** Near-miss celebrations — "so close!" moments to drive continued play.
+   *  Empty array if no near-misses detected. */
+  nearMisses?: NearMiss[];
+  /** Periodic insight reveal — personalized "quantified self" data.
+   *  Only present every Nth answer (configurable, default 10). */
+  insight?: InsightReveal;
 }

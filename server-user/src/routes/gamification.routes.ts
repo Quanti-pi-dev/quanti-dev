@@ -1,5 +1,6 @@
-// ─── Gamification Service Routes ────────────────────────────
-// Coins, badges, leaderboard, shop.
+// ─── Gamification Service Routes ────────────────────────────────────
+// Coins, badges, leaderboard, shop, daily chest,
+// flash events (homepage blitz banner), and celebration cascade queue.
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
@@ -123,6 +124,162 @@ export async function gamificationRoutes(fastify: FastifyInstance): Promise<void
     return reply.status(statusCode).send({
       success: result.success,
       data: { message: result.message, effect: result.effect ?? null },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ─── POST /gamify/daily-chest — Open daily bonus chest ────
+  // First study session each day triggers a mystery chest with
+  // random coin drops and temporary multiplier boosts.
+  // Psychology: Variable reward (Rewards of the Hunt) — the daily
+  // chest creates a daily appointment mechanic while the randomized
+  // tiers (bronze/silver/gold) activate dopamine prediction-error.
+  fastify.post('/daily-chest', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { variableRewardService: vrService } = await import('@kd/db');
+    const result = await vrService.openDailyChest(request.user!.id);
+    return reply.send({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ─── GET /gamify/daily-chest/status — Check chest availability ─
+  // Returns whether the user has already opened today's chest.
+  // The mobile client uses this to show/hide the chest icon on the home screen.
+  fastify.get('/daily-chest/status', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { variableRewardService: vrService } = await import('@kd/db');
+    const opened = await vrService.hasOpenedChestToday(request.user!.id);
+    return reply.send({
+      success: true,
+      data: { opened, availableToday: !opened },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ─── GET /gamify/flash-event/active — Active flash events ──
+  // Returns the currently active flash event (if any) for the homepage
+  // blitz banner on the mobile client.
+  //
+  // Psychology: Scarcity Principle (Cialdini) — time-limited 2x coin
+  // events create urgency that drives immediate study sessions.
+  fastify.get('/flash-event/active', async (_request: FastifyRequest, reply: FastifyReply) => {
+    const { flashEventService } = await import('@kd/db');
+    const events = await flashEventService.getActiveEvents();
+    // Return the most impactful active event (highest multiplier)
+    const topEvent = events.sort((a, b) => b.multiplier - a.multiplier)[0] ?? null;
+    return reply.send({
+      success: true,
+      data: topEvent,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ─── GET /gamify/celebration/pending — Poll celebration queue ─
+  // The mobile CelebrationOverlay polls this every 30 seconds.
+  // Returns a CelebrationSequence (or null) from the user's Redis queue.
+  //
+  // Step types are normalised to match the client's CelebrationStepType:
+  //   Backend → Client:
+  //   coin_shower  → coin_drop
+  //   streak_fire  → streak_milestone
+  //   stat_card    → stat_card  (passed-through; client falls back to null render)
+  //   social_card  → social_card (passed-through)
+  //   sound_effect → sound_effect (passed-through; client ignores on native)
+  //
+  // Psychology: Peak-End Rule (Kahneman) — multi-step celebrations create
+  // memorable emotional peaks that reinforce the study habit.
+  fastify.get('/celebration/pending', async (request: FastifyRequest, reply: FastifyReply) => {
+    const userId = request.user!.id;
+    const redis = getRedisClient();
+    const raw = await redis.get(`celebration_queue:${userId}`);
+
+    if (!raw) {
+      return reply.send({ success: true, data: null, timestamp: new Date().toISOString() });
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const sequence = JSON.parse(raw);
+
+      // Normalise step types from backend to client naming convention
+      const CLIENT_TYPE_MAP: Record<string, string> = {
+        coin_shower:  'coin_drop',
+        streak_fire:  'streak_milestone',
+      };
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      if (Array.isArray(sequence?.steps)) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+        sequence.steps = (sequence.steps as any[]).map((step: any) => ({
+          ...step,
+          type: CLIENT_TYPE_MAP[step.type as string] ?? step.type,
+        }));
+      }
+
+      return reply.send({ success: true, data: sequence, timestamp: new Date().toISOString() });
+    } catch {
+      // Malformed queue entry — clear it and return null
+      await redis.del(`celebration_queue:${userId}`);
+      return reply.send({ success: true, data: null, timestamp: new Date().toISOString() });
+    }
+  });
+
+  // ─── POST /gamify/celebration/ack — Acknowledge celebration ──
+  // Called by the mobile client after the overlay finishes playing.
+  // Removes the celebration from the Redis queue so it doesn't replay.
+  fastify.post('/celebration/ack', async (request: FastifyRequest, reply: FastifyReply) => {
+    const userId = request.user!.id;
+    const redis = getRedisClient();
+    await redis.del(`celebration_queue:${userId}`);
+    return reply.send({ success: true, data: { acknowledged: true }, timestamp: new Date().toISOString() });
+  });
+
+  // ─── GET /gamify/wager/active — Get current active wager status ──
+  fastify.get('/wager/active', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { wagerService } = await import('@kd/db');
+    const state = await wagerService.getActiveWager(request.user!.id);
+    return reply.send({
+      success: true,
+      data: state,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ─── POST /gamify/wager/initiate — Start a new wager session ──
+  fastify.post('/wager/initiate', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { wagerService } = await import('@kd/db');
+    const bodySchema = z.object({
+      wagerCoins: z.number().int().positive(),
+      deckId: z.string().optional(),
+    });
+    const { wagerCoins, deckId } = bodySchema.parse(request.body);
+    const result = await wagerService.initiateWager(request.user!.id, wagerCoins, deckId);
+    if (!result.success) {
+      return reply.status(400).send({
+        success: false,
+        message: result.message,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    return reply.send({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ─── POST /gamify/wager/submit — Submit answer for a card ──
+  fastify.post('/wager/submit', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { wagerService } = await import('@kd/db');
+    const bodySchema = z.object({
+      cardId: z.string(),
+      selectedOptionId: z.string(),
+    });
+    const { cardId, selectedOptionId } = bodySchema.parse(request.body);
+    const result = await wagerService.submitWagerAnswer(request.user!.id, cardId, selectedOptionId);
+    return reply.send({
+      success: true,
+      data: result,
       timestamp: new Date().toISOString(),
     });
   });
