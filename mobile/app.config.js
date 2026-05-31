@@ -1,0 +1,86 @@
+module.exports = {
+  expo: {
+    name: "Quanti-Pi",
+    slug: "quanti-pi",
+    version: "1.0.0",
+    runtimeVersion: "1.0.0",
+    orientation: "portrait",
+    icon: "./assets/icon.png",
+    scheme: "quanti-pi",
+    userInterfaceStyle: "automatic",
+    splash: {
+      image: "./assets/splash-icon.png",
+      resizeMode: "contain",
+      backgroundColor: "#1C1C1E"
+    },
+    ios: {
+      supportsTablet: false,
+      bundleIdentifier: "com.kd.quantipi",
+      buildNumber: "1",
+      infoPlist: {
+        NSCameraUsageDescription: "Used for profile photo upload.",
+        NSPhotoLibraryUsageDescription: "Used to select a profile photo.",
+        UIBackgroundModes: [
+          "fetch",
+          "remote-notification"
+        ]
+      }
+    },
+    android: {
+      adaptiveIcon: {
+        foregroundImage: "./assets/adaptive-icon.png",
+        backgroundColor: "#1C1C1E"
+      },
+      package: "com.kd.quantipi",
+      versionCode: 1,
+      googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
+      permissions: [
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
+    },
+    web: {
+      bundler: "metro",
+      output: "single",
+      favicon: "./assets/favicon.png"
+    },
+    plugins: [
+      "expo-router",
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#2563EB",
+          "sounds": []
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#1C1C1E",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200
+        }
+      ],
+      "expo-image",
+      "expo-web-browser",
+      "@react-native-google-signin/google-signin"
+    ],
+    experiments: {
+      typedRoutes: true
+    },
+    updates: {
+      enabled: true,
+      fallbackToCacheTimeout: 3000,
+      url: "https://u.expo.dev/19b0064b-a10d-471c-9865-5af3946ab73a"
+    },
+    extra: {
+      router: {},
+      eas: {
+        projectId: "19b0064b-a10d-471c-9865-5af3946ab73a"
+      }
+    }
+  }
+};
