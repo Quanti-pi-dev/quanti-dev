@@ -4,7 +4,7 @@ import { useAuth } from '../src/contexts/AuthContext';
 import { useTheme } from '../src/theme';
 
 export default function RootIndex() {
-  const { isAuthenticated, isLoading, preferences, user } = useAuth();
+  const { isAuthenticated, isLoading, preferences } = useAuth();
   const { theme } = useTheme();
 
   if (isLoading) {
@@ -17,10 +17,6 @@ export default function RootIndex() {
 
   if (!isAuthenticated) {
     return <Redirect href={'/(auth)/signup' as any} />;
-  }
-
-  if (user?.role === 'admin') {
-    return <Redirect href={'/(admin)/dashboard' as any} />;
   }
 
   if (!preferences?.onboardingCompleted) {

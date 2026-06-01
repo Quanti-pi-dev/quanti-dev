@@ -21,12 +21,14 @@ import { ConfirmModal } from '@/components/confirm-modal';
 import { useToast } from '@/components/toast';
 import { ArrowLeft, Plus, Pencil, Trash2, Upload, X, ChevronRight, Sparkles, Loader2 } from 'lucide-react';
 import { Latex } from '@/components/latex';
+import { ImagePicker } from '@/components/image-picker';
 
 // ─── Types ────────────────────────────────────────────────────
 
 interface Option {
   id: string;
   text: string;
+  imageUrl?: string | null;
 }
 
 interface Flashcard {
@@ -36,6 +38,7 @@ interface Flashcard {
   correctAnswerId: string;
   explanation?: string | null;
   imageUrl?: string | null;
+  explanationImageUrl?: string | null;
   tags?: string[];
   source?: string;
   sourceYear?: number;
@@ -90,22 +93,27 @@ function CardModal({
   onSaved: () => void;
 }) {
   const isEdit = !!card;
-  const defaultOptions = [
-    { id: 'A', text: '' },
-    { id: 'B', text: '' },
-    { id: 'C', text: '' },
-    { id: 'D', text: '' },
+  const defaultOptions: Option[] = [
+    { id: 'A', text: '', imageUrl: null },
+    { id: 'B', text: '', imageUrl: null },
+    { id: 'C', text: '', imageUrl: null },
+    { id: 'D', text: '', imageUrl: null },
   ];
 
   const [question, setQuestion]         = useState(card?.question ?? '');
-  const [options, setOptions]           = useState<Option[]>(card?.options ?? defaultOptions);
+  const [options, setOptions]           = useState<Option[]>(card?.options?.map(o => ({ ...o, imageUrl: o.imageUrl ?? null })) ?? defaultOptions);
   const [correctAnswerId, setCorrect]   = useState(card?.correctAnswerId ?? 'A');
   const [explanation, setExplanation]   = useState(card?.explanation ?? '');
+  const [imageUrl, setImageUrl]         = useState<string | null>(card?.imageUrl ?? null);
+  const [explanationImageUrl, setExplanationImageUrl] = useState<string | null>(card?.explanationImageUrl ?? null);
   const [saving, setSaving]             = useState(false);
   const [error, setError]               = useState('');
 
   const setOptionText = (idx: number, text: string) =>
     setOptions(opts => opts.map((o, i) => i === idx ? { ...o, text } : o));
+
+  const setOptionImage = (idx: number, url: string | null) =>
+    setOptions(opts => opts.map((o, i) => i === idx ? { ...o, imageUrl: url } : o));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,7 +122,7 @@ function CardModal({
       return;
     }
     setSaving(true); setError('');
-    const payload = { question, options, correctAnswerId, explanation: explanation || null };
+    const payload = { question, options, correctAnswerId, explanation: explanation || null, imageUrl: imageUrl || null, explanationImageUrl: explanationImageUrl || null };
     try {
       if (isEdit) {
         await adminApi.put(`/api/admin/flashcards/${card!.id}`, payload);
@@ -150,26 +158,35 @@ function CardModal({
             </div>
 
             <div>
+              <ImagePicker value={imageUrl} onChange={setImageUrl} label="Question Image (optional)" compact />
+            </div>
+
+            <div>
               <label className={LABEL}>Answer Options *</label>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {options.map((opt, idx) => (
-                  <div key={opt.id} className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-zinc-400 w-5 shrink-0">{opt.id}</span>
-                    <input
-                      value={opt.text}
-                      onChange={e => setOptionText(idx, e.target.value)}
-                      placeholder={`Option ${opt.id}`}
-                      className={INPUT}
-                    />
-                    <input
-                      type="radio"
-                      name="correct"
-                      value={opt.id}
-                      checked={correctAnswerId === opt.id}
-                      onChange={() => setCorrect(opt.id)}
-                      className="accent-violet-500 shrink-0 w-4 h-4 cursor-pointer"
-                      title="Mark as correct"
-                    />
+                  <div key={opt.id} className="rounded-lg p-2.5" style={{ background: correctAnswerId === opt.id ? 'rgba(139,92,246,0.06)' : 'transparent', border: correctAnswerId === opt.id ? '1px solid rgba(139,92,246,0.15)' : '1px solid transparent' }}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-zinc-400 w-5 shrink-0">{opt.id}</span>
+                      <input
+                        value={opt.text}
+                        onChange={e => setOptionText(idx, e.target.value)}
+                        placeholder={`Option ${opt.id}`}
+                        className={INPUT}
+                      />
+                      <input
+                        type="radio"
+                        name="correct"
+                        value={opt.id}
+                        checked={correctAnswerId === opt.id}
+                        onChange={() => setCorrect(opt.id)}
+                        className="accent-violet-500 shrink-0 w-4 h-4 cursor-pointer"
+                        title="Mark as correct"
+                      />
+                    </div>
+                    <div className="ml-7 mt-1.5">
+                      <ImagePicker value={opt.imageUrl ?? null} onChange={url => setOptionImage(idx, url)} label={`Option ${opt.id} Image`} compact />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -179,6 +196,9 @@ function CardModal({
             <div>
               <label className={LABEL}>Explanation (optional)</label>
               <textarea value={explanation} onChange={e => setExplanation(e.target.value)} rows={2} placeholder="Why is this the correct answer?" className={INPUT} />
+              <div className="mt-1.5">
+                <ImagePicker value={explanationImageUrl} onChange={setExplanationImageUrl} label="Explanation Image (optional)" compact />
+              </div>
             </div>
 
             <div className="flex gap-3 pt-2">
@@ -206,34 +226,47 @@ function CardModal({
                     <p className="text-sm text-zinc-600 italic">No question text entered yet…</p>
                   )}
 
+                  {/* Image preview */}
+                  {imageUrl && (
+                    <img src={imageUrl} alt="Question" className="mt-2 rounded-lg border border-zinc-800 max-h-32 object-contain" />
+                  )}
+
                   {/* Options */}
                   <div className="grid grid-cols-2 gap-1.5 mt-4">
                     {options.map(opt => (
                       <div
                         key={opt.id}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-colors duration-200 ${
+                        className={`px-3 py-1.5 rounded-lg text-xs transition-colors duration-200 ${
                           opt.id === correctAnswerId
                             ? 'bg-emerald-950/60 border border-emerald-800/60 text-emerald-300'
                             : 'bg-zinc-900 border border-zinc-800/50 text-zinc-500'
                         }`}
                       >
-                        <span className="font-bold shrink-0">{opt.id}.</span>
-                        <span className="truncate">
-                          {opt.text.trim() ? (
-                            <Latex text={opt.text} />
-                          ) : (
-                            <span className="text-zinc-700 italic">Empty…</span>
-                          )}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold shrink-0">{opt.id}.</span>
+                          <span className="truncate">
+                            {opt.text.trim() ? (
+                              <Latex text={opt.text} />
+                            ) : (
+                              <span className="text-zinc-700 italic">Empty…</span>
+                            )}
+                          </span>
+                        </div>
+                        {opt.imageUrl && (
+                          <img src={opt.imageUrl} alt={`Option ${opt.id}`} className="mt-1 rounded max-h-16 object-contain" />
+                        )}
                       </div>
                     ))}
                   </div>
                 </div>
 
                 {/* Explanation */}
-                {explanation.trim() && (
+                {(explanation.trim() || explanationImageUrl) && (
                   <div className="mt-3 text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-3">
-                    <Latex text={explanation} />
+                    {explanation.trim() && <Latex text={explanation} />}
+                    {explanationImageUrl && (
+                      <img src={explanationImageUrl} alt="Explanation" className="mt-1 rounded max-h-20 object-contain" />
+                    )}
                   </div>
                 )}
               </div>
@@ -657,8 +690,13 @@ export default function DeckFlashcardsPage() {
           {cards.map(card => (
             <div key={card.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
               <div className="flex items-start justify-between gap-4">
-                <div className="text-sm text-white font-medium leading-relaxed flex-1">
-                  <Latex text={card.question} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-white font-medium leading-relaxed">
+                    <Latex text={card.question} />
+                  </div>
+                  {card.imageUrl && (
+                    <img src={card.imageUrl} alt="Question" className="mt-2 rounded-lg border border-zinc-800 max-h-24 object-contain" />
+                  )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {card.source && (

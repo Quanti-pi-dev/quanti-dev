@@ -38,6 +38,7 @@ import { useGlowPulse, TIMING_FLIP } from '../theme/animations';
 interface Option {
   key: 'A' | 'B' | 'C' | 'D';
   text: string;
+  imageUrl?: string | null;
 }
 
 interface FlashCardProps {
@@ -47,6 +48,7 @@ interface FlashCardProps {
   explanation?: string;
   /** Optional image URL rendered above the question (e.g. diagrams, graphs). */
   imageUrl?: string | null;
+  explanationImageUrl?: string | null;
   style?: ViewStyle;
   onAnswer?: (correct: boolean, selectedKey: 'A' | 'B' | 'C' | 'D') => void;
   onSkip?: () => void;
@@ -62,6 +64,7 @@ export const FlashCard = memo(function FlashCard({
   correctKey,
   explanation,
   imageUrl,
+  explanationImageUrl,
   style,
   onAnswer,
   onSkip,
@@ -297,9 +300,19 @@ export const FlashCard = memo(function FlashCard({
                   )}
                 </View>
 
-                <RichContent variant="bodySmall" color={s.textColor} style={{ flex: 1 }}>
-                  {opt.text || opt.key}
-                </RichContent>
+                <View style={{ flex: 1, gap: spacing.xs }}>
+                  <RichContent variant="bodySmall" color={s.textColor}>
+                    {opt.text || opt.key}
+                  </RichContent>
+                  {opt.imageUrl ? (
+                    <Image
+                      source={{ uri: opt.imageUrl }}
+                      style={{ width: '100%', height: 100, borderRadius: radius.md, marginTop: spacing.xs }}
+                      contentFit="contain"
+                      transition={200}
+                    />
+                  ) : null}
+                </View>
 
                 {/* Trailing icon for correct/selected */}
                 {showCheckmark && (
@@ -417,10 +430,22 @@ export const FlashCard = memo(function FlashCard({
                 Correct answer: {correctKey}
               </Typography>
             </View>
-            {explanation ? (
-              <RichContent variant="bodySmall" color={theme.textSecondary}>
-                {explanation}
-              </RichContent>
+            {(explanation || explanationImageUrl) ? (
+              <View style={{ gap: spacing.sm, marginTop: spacing.xs }}>
+                {explanation ? (
+                  <RichContent variant="bodySmall" color={theme.textSecondary}>
+                    {explanation}
+                  </RichContent>
+                ) : null}
+                {explanationImageUrl ? (
+                  <Image
+                    source={{ uri: explanationImageUrl }}
+                    style={{ width: '100%', height: 160, borderRadius: radius.md }}
+                    contentFit="contain"
+                    transition={200}
+                  />
+                ) : null}
+              </View>
             ) : null}
           </ScrollView>
         </View>

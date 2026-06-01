@@ -9,6 +9,7 @@ import { View, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-nat
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -93,9 +94,9 @@ function PYQBadge({ year, paper }: { year?: number | null; paper?: string | null
 // ─── Answer Option ───────────────────────────────────────────
 
 function AnswerOption({
-  text, index, selected, correct, showResult, onPress,
+  text, imageUrl, index, selected, correct, showResult, onPress,
 }: {
-  text: string; index: number; selected: boolean; correct: boolean;
+  text: string; imageUrl?: string | null; index: number; selected: boolean; correct: boolean;
   showResult: boolean; onPress: () => void;
 }) {
   const { theme, isDark } = useTheme();
@@ -121,7 +122,7 @@ function AnswerOption({
       disabled={showResult}
       activeOpacity={0.7}
       style={{
-        flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+        flexDirection: 'row', alignItems: imageUrl ? 'flex-start' : 'center', gap: spacing.md,
         paddingHorizontal: spacing.md, paddingVertical: spacing.md,
         borderRadius: radius.xl, backgroundColor: bg,
         borderWidth: 1.5, borderColor: border + '50',
@@ -132,6 +133,7 @@ function AnswerOption({
           width: 28, height: 28, borderRadius: 14,
           backgroundColor: selected ? (showResult ? (correct ? '#10B981' : '#EF4444') : '#F59E0B') + '22' : theme.cardAlt,
           alignItems: 'center', justifyContent: 'center',
+          marginTop: imageUrl ? 2 : 0,
         }}
       >
         <Typography
@@ -142,9 +144,20 @@ function AnswerOption({
           {labels[index]}
         </Typography>
       </View>
-      <RichContent variant="body" color={theme.text} style={{ flex: 1, fontSize: 14 }}>
-        {text}
-      </RichContent>
+      <View style={{ flex: 1, gap: spacing.xs }}>
+        <RichContent variant="body" color={theme.text} style={{ fontSize: 14 }}>
+          {text}
+        </RichContent>
+        {imageUrl ? (
+          <Image
+            source={{ uri: imageUrl }}
+            style={{ width: '100%', height: 100, borderRadius: radius.md, marginTop: 4 }}
+            contentFit="contain"
+            transition={200}
+            cachePolicy="memory-disk"
+          />
+        ) : null}
+      </View>
       {showResult && correct && <Ionicons name="checkmark-circle" size={18} color="#10B981" />}
       {showResult && selected && !correct && <Ionicons name="close-circle" size={18} color="#EF4444" />}
     </TouchableOpacity>
@@ -415,6 +428,19 @@ export default function PYQPracticeScreen() {
               </View>
             )}
 
+            {currentCard.imageUrl ? (
+              <Image
+                source={{ uri: currentCard.imageUrl }}
+                style={{
+                  width: '100%', height: 160, borderRadius: radius.lg,
+                  borderWidth: 1, borderColor: theme.border, marginBottom: spacing.xs,
+                }}
+                contentFit="contain"
+                transition={200}
+                cachePolicy="memory-disk"
+              />
+            ) : null}
+
             <RichContent variant="h4" color={theme.text} style={{ lineHeight: 26 }}>
               {currentCard.question}
             </RichContent>
@@ -425,6 +451,7 @@ export default function PYQPracticeScreen() {
                 <AnswerOption
                   key={ans.id}
                   text={ans.text}
+                  imageUrl={ans.imageUrl}
                   index={i}
                   selected={selectedAnswer === ans.id}
                   correct={ans.id === currentCard.correctAnswerId}
@@ -435,7 +462,7 @@ export default function PYQPracticeScreen() {
             </View>
 
             {/* Explanation */}
-            {revealed && currentCard.explanation && (
+            {revealed && (currentCard.explanation || currentCard.explanationImageUrl) && (
               <Animated.View entering={FadeInDown.delay(100).duration(300)}>
                 <View style={{
                   padding: spacing.md, borderRadius: radius.xl,
@@ -444,9 +471,20 @@ export default function PYQPracticeScreen() {
                   gap: spacing.xs,
                 }}>
                   <Typography variant="captionBold" color={theme.primary}>Explanation</Typography>
-                  <RichContent variant="body" color={theme.textSecondary} style={{ fontSize: 13, lineHeight: 20 }}>
-                    {currentCard.explanation}
-                  </RichContent>
+                  {currentCard.explanation ? (
+                    <RichContent variant="body" color={theme.textSecondary} style={{ fontSize: 13, lineHeight: 20 }}>
+                      {currentCard.explanation}
+                    </RichContent>
+                  ) : null}
+                  {currentCard.explanationImageUrl ? (
+                    <Image
+                      source={{ uri: currentCard.explanationImageUrl }}
+                      style={{ width: '100%', height: 160, borderRadius: radius.md, marginTop: spacing.xs }}
+                      contentFit="contain"
+                      transition={200}
+                      cachePolicy="memory-disk"
+                    />
+                  ) : null}
                 </View>
               </Animated.View>
             )}

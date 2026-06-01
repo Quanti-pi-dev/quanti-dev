@@ -8,6 +8,7 @@ import { View, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -28,10 +29,12 @@ import {
 
 function AnswerPill({
   text,
+  imageUrl,
   isCorrect,
   isSelected,
 }: {
   text: string;
+  imageUrl?: string | null;
   isCorrect: boolean;
   isSelected: boolean;
 }) {
@@ -50,7 +53,7 @@ function AnswerPill({
     <View
       style={{
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: imageUrl ? 'flex-start' : 'center',
         gap: spacing.xs,
         paddingHorizontal: spacing.md,
         paddingVertical: spacing.sm,
@@ -60,10 +63,21 @@ function AnswerPill({
         borderColor: border + '40',
       }}
     >
-      {icon && <Ionicons name={icon as any} size={16} color={border} />}
-      <Typography variant="caption" color={textColor} style={{ flex: 1 }}>
-        {text}
-      </Typography>
+      {icon && <Ionicons name={icon as any} size={16} color={border} style={{ marginTop: imageUrl ? 2 : 0 }} />}
+      <View style={{ flex: 1, gap: spacing.xs }}>
+        <Typography variant="caption" color={textColor}>
+          {text}
+        </Typography>
+        {imageUrl ? (
+          <Image
+            source={{ uri: imageUrl }}
+            style={{ width: '100%', height: 80, borderRadius: radius.md, marginTop: 4 }}
+            contentFit="contain"
+            transition={200}
+            cachePolicy="memory-disk"
+          />
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -166,6 +180,7 @@ function ErrorCard({
               <AnswerPill
                 key={answer.id}
                 text={answer.text}
+                imageUrl={answer.imageUrl}
                 isCorrect={answer.id === entry.correctAnswerId}
                 isSelected={answer.id === entry.selectedAnswerId}
               />

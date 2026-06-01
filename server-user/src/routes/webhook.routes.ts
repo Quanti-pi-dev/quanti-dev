@@ -295,12 +295,24 @@ async function handleSubscriptionCharged(
   }
 
   // Extend the billing period and reset retry counter
+  // If the subscription was trialing, this is the trial→active conversion.
+  const wasTrialing = sub.status === 'trialing';
+
   await subscriptionRepository.updateStatus(sub.id, 'active', {
     currentPeriodStart: newPeriodStart,
     currentPeriodEnd: newPeriodEnd,
     retryCount: 0,
     cancelAtPeriodEnd: false,
   });
+
+  // Log trial conversion event for analytics (CFO metric)
+  if (wasTrialing) {
+    await subscriptionRepository.logEvent(sub.id, sub.userId, 'trial_converted', 'trialing', 'active', {
+      source: 'webhook',
+      razorpay_subscription_id: razorpaySubscriptionId,
+      paid_count: subEntity.paid_count,
+    });
+  }
 
   // Record the recurring payment if we have payment details
   if (paymentEntity) {

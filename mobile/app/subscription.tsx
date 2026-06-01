@@ -28,7 +28,10 @@ import {
   fetchPlans,
   initiateCheckout,
   verifyPayment,
+  formatPrice,
+  formatCycle,
 } from '../src/services/subscription.service';
+import { SubscriptionSuccessOverlay } from '../src/components/subscription/SubscriptionSuccessOverlay';
 import { useConfig } from '../src/contexts/ConfigContext';
 import type { Plan, CouponValidationResult } from '@kd/shared';
 import type { BillingCycle } from '@kd/shared';
@@ -133,6 +136,45 @@ function EmptyState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+// ─── Checkout error parser ────────────────────────────────────
+// Razorpay SDK errors come in multiple shapes:
+//  1. { code: 2 }                         — user cancelled
+//  2. { code: 0, description: "..." }     — SDK failure
+//  3. { error: { code, description, reason, step } } — API error (the screenshot bug)
+//  4. Standard Error objects from our own API layer
+
+function parseCheckoutError(err: unknown): string {
+  if (typeof err === 'object' && err !== null) {
+    const e = err as Record<string, unknown>;
+
+    // Nested Razorpay API error — the shape that was leaking raw JSON
+    if (typeof e.error === 'object' && e.error !== null) {
+      const inner = e.error as Record<string, unknown>;
+      const reason = inner.reason as string | undefined;
+      const step = inner.step as string | undefined;
+
+      if (reason === 'payment_error' || step === 'payment_authentication') {
+        return 'Payment could not be processed. Please try a different payment method.';
+      }
+      if (reason === 'payment_declined') {
+        return 'Your payment was declined. Please check your card details or try another method.';
+      }
+      // Use description only if it's a real string (not the literal "undefined")
+      if (typeof inner.description === 'string' && inner.description !== 'undefined' && inner.description.length > 0) {
+        return inner.description;
+      }
+    }
+
+    // Flat SDK error shape
+    if (typeof e.description === 'string' && e.description.length > 0) {
+      return e.description;
+    }
+  }
+
+  if (err instanceof Error) return err.message;
+  return 'Something went wrong. Please try again.';
+}
+
 // ─── Main screen ──────────────────────────────────────────────
 
 export default function SubscriptionScreen() {
@@ -160,9 +202,12 @@ export default function SubscriptionScreen() {
   const [cycle, setCycle] = useState<BillingCycle>('monthly');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [checkingOut, setCheckingOut] = useState<string | null>(null); // planId being processed
+  const [checkingOut, setCheckingOut] = useState<string | null>(null);
   const [couponResult, setCouponResult] = useState<CouponValidationResult | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [successOverlay, setSuccessOverlay] = useState<{
+    title: string; subtitle: string; buttonText: string;
+  } | null>(null);
 
   // ─── Load plans ──────────────────────────────────────────
   const loadPlans = useCallback(async () => {
@@ -196,109 +241,105 @@ export default function SubscriptionScreen() {
   const upgradablePlans = sorted.filter((p) => p.tier > currentTier);
   const isOnHighestPlan = isSubscribed && upgradablePlans.length === 0;
 
-  // ─── Checkout ────────────────────────────────────────────
-  async function handleSelectPlan(plan: Plan) {
-    setSelectedPlan(plan);
+  // ─── Plan selection (no checkout yet) ─────────────────────
+  function handlePlanTap(plan: Plan) {
+    setSelectedPlan((prev) => prev?.id === plan.id ? null : plan);
+    setCouponResult(null);
+  }
+
+  // ─── Checkout (only after explicit confirm) ───────────────
+  async function handleCheckout() {
+    if (!selectedPlan) return;
+    const plan = selectedPlan;
     setCheckingOut(plan.id);
 
     try {
       const result = await initiateCheckout(plan.id, couponResult?.valid ? couponResult.couponId : undefined);
+      const isTrial = result.trialDays > 0;
 
-      if (result.trial) {
-        // Trial started immediately — use the returned subscription data directly
-        // to avoid stale cache from server refetch
-        if (result.subscription) {
-          // Build a minimal SubscriptionSummary from the checkout result
-          setSubscription({
-            id: result.subscription?.id ?? '',
-            status: 'trialing',
-            plan,
-            currentPeriodEnd: result.subscription?.currentPeriodEnd ?? '',
-            trialEnd: result.subscription?.trialEnd ?? null,
-            cancelAtPeriodEnd: false,
-            isActive: true,
-            daysRemaining: plan.trialDays,
-          });
-        } else {
-          await refreshSubscription();
-        }
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        showAlert({
-          title: '🎉 Trial Started!',
-          message: `Your ${plan.trialDays}-day free trial of ${plan.displayName} is now active.`,
-          type: 'info',
-          buttons: [{ text: 'Start Learning', onPress: navigateAfterAction }],
-        });
-        return;
-      }
-
-      // Paid: open native Razorpay checkout modal
+      // ── Open Razorpay checkout (trial = mandate auth, paid = charge) ──
       if (!result.keyId) {
         throw new Error('Checkout response is missing payment key. Please try again.');
       }
 
       const isSubscriptionMode = !!result.razorpaySubscriptionId;
-
       const razorpayOptions = {
         key: result.keyId,
-        // Subscription mode: capture a recurring mandate (UPI Autopay / card)
-        // Order mode: one-off payment (legacy / grandfathered users)
         ...(isSubscriptionMode
           ? { subscription_id: result.razorpaySubscriptionId! }
           : { order_id: result.orderId!, amount: result.amountPaise }),
         currency: result.currency ?? 'INR',
         name: 'Quanti-pi',
-        description: isSubscriptionMode
-          ? `${plan.displayName} ${cycle} plan — auto-renews`
-          : `${plan.displayName} ${cycle} plan`,
+        description: isTrial
+          ? `${plan.displayName} — ${result.trialDays}-day free trial`
+          : `${plan.displayName} ${cycle} plan — auto-renews`,
         theme: { color: '#2563EB' },
+        prefill: result.prefill ?? {},
       };
 
-      // RazorpayCheckout.open() presents a native payment modal.
-      // In subscription mode the response contains razorpay_subscription_id.
-      // In order mode the response contains razorpay_order_id.
       const paymentResult = await RazorpayCheckout.open(razorpayOptions);
 
-      // Verify payment server-side — use returned summary directly
-      // to bypass potentially stale Redis cache.
-      // For subscriptions, the verification uses razorpay_subscription_id.
-      const activatedSummary = await verifyPayment(
-        isSubscriptionMode
-          ? {
-              razorpayOrderId: result.razorpaySubscriptionId!,
-              razorpayPaymentId: (paymentResult as { razorpay_payment_id: string }).razorpay_payment_id,
-              razorpaySignature: (paymentResult as { razorpay_signature: string }).razorpay_signature,
-            }
-          : {
-              razorpayOrderId: (paymentResult as { razorpay_order_id: string }).razorpay_order_id,
-              razorpayPaymentId: (paymentResult as { razorpay_payment_id: string }).razorpay_payment_id,
-              razorpaySignature: (paymentResult as { razorpay_signature: string }).razorpay_signature,
-            },
-      );
+      // ── Verify with retry ─────────────────────────────────
+      const verifyPayload = isSubscriptionMode
+        ? {
+            razorpayOrderId: result.razorpaySubscriptionId!,
+            razorpayPaymentId: (paymentResult as { razorpay_payment_id: string }).razorpay_payment_id,
+            razorpaySignature: (paymentResult as { razorpay_signature: string }).razorpay_signature,
+          }
+        : {
+            razorpayOrderId: (paymentResult as { razorpay_order_id: string }).razorpay_order_id,
+            razorpayPaymentId: (paymentResult as { razorpay_payment_id: string }).razorpay_payment_id,
+            razorpaySignature: (paymentResult as { razorpay_signature: string }).razorpay_signature,
+          };
 
-      setSubscription(activatedSummary);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showAlert({
-        title: '✅ Subscription Active!',
-        message: isSubscriptionMode
-          ? `You're now on ${plan.displayName}. Your plan will auto-renew ${cycle === 'monthly' ? 'monthly' : 'weekly'} — cancel anytime.`
-          : `You're now on ${plan.displayName}. Happy learning!`,
-        type: 'info',
-        buttons: [{ text: 'Let\'s Go!', onPress: navigateAfterAction }],
-      });
-    } catch (err: unknown) {
-      // Razorpay SDK rejects with { code, description } on user cancel or failure
-      const razorpayErr = err as { code?: number; description?: string };
-      if (razorpayErr.code === 2) {
-        // code 2 = user cancelled — don't show an error alert
-        return;
+      let activatedSummary;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          activatedSummary = await verifyPayment(verifyPayload);
+          break;
+        } catch (verifyErr) {
+          if (attempt === 2) {
+            showAlert({
+              title: isTrial ? 'Trial Setup Pending' : 'Payment Received',
+              message: isTrial
+                ? 'Your trial is being activated. It will appear shortly — please restart the app if needed.'
+                : 'Your payment was successful but activation is taking a moment. Your subscription will appear shortly — please restart the app if needed.',
+              type: 'info',
+              buttons: [{ text: 'OK', onPress: navigateAfterAction }],
+            });
+            return;
+          }
+          await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+        }
       }
-      const msg =
-        razorpayErr.description ??
-        (err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+
+      setSubscription(activatedSummary!);
+
+      // ── Success overlay adapts to trial vs paid ──
+      if (isTrial) {
+        const chargeDate = new Date();
+        chargeDate.setDate(chargeDate.getDate() + result.trialDays);
+        const chargeDateStr = chargeDate.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+
+        setSuccessOverlay({
+          title: 'Trial Started!',
+          subtitle: `Your ${result.trialDays}-day free trial of ${plan.displayName} is active. You won't be charged until ${chargeDateStr}.`,
+          buttonText: 'Start Learning',
+        });
+      } else {
+        setSuccessOverlay({
+          title: 'Subscription Active!',
+          subtitle: isSubscriptionMode
+            ? `You're now on ${plan.displayName}. Auto-renews ${cycle === 'monthly' ? 'monthly' : 'weekly'} — cancel anytime.`
+            : `You're now on ${plan.displayName}. Happy learning!`,
+          buttonText: 'Let\'s Go!',
+        });
+      }
+    } catch (err: unknown) {
+      if ((err as { code?: number }).code === 2) return;
       showAlert({
         title: 'Checkout Failed',
-        message: msg,
+        message: parseCheckoutError(err),
         type: 'info',
         buttons: [{ text: 'OK' }],
       });
@@ -396,7 +437,6 @@ export default function SubscriptionScreen() {
           ) : (
             <View style={{ gap: spacing.lg }}>
               {upgradablePlans.map((plan, i) => {
-                // Master always gets the "Most Popular" treatment
                 const isPopular = Number(plan.tier) === 3 || plan.displayName.includes('Master');
 
                 return (
@@ -408,9 +448,9 @@ export default function SubscriptionScreen() {
                       plan={plan}
                       isPopular={isPopular}
                       isCurrentPlan={false}
-                      onSelect={handleSelectPlan}
+                      isSelected={selectedPlan?.id === plan.id}
+                      onSelect={handlePlanTap}
                     />
-                    {/* Processing overlay for this card */}
                     {checkingOut === plan.id && (
                       <View
                         style={{
@@ -429,17 +469,38 @@ export default function SubscriptionScreen() {
             </View>
           )}
 
-          {/* ── Coupon input (visible after selecting a plan) ── */}
-          {/* Only show after plan is selected to avoid validating against wrong planId */}
-          {!isOnHighestPlan && selectedPlan && (
-            <Animated.View entering={FadeInDown.delay(400).duration(350)}>
-              <Typography variant="label" color={theme.textSecondary} style={{ marginBottom: spacing.xs }}>
-                Have a coupon?
-              </Typography>
-              <CouponInput
-                planId={selectedPlan.id}
-                onValidated={setCouponResult}
-              />
+          {/* ── Checkout section: coupon + confirm (appears after plan selected) ── */}
+          {!isOnHighestPlan && selectedPlan && !checkingOut && (
+            <Animated.View entering={FadeInDown.duration(350)} style={{ gap: spacing.lg }}>
+              {/* Coupon input */}
+              <View>
+                <Typography variant="label" color={theme.textSecondary} style={{ marginBottom: spacing.xs }}>
+                  Have a coupon?
+                </Typography>
+                <CouponInput planId={selectedPlan.id} onValidated={setCouponResult} />
+              </View>
+
+              {/* Confirm button */}
+              <TouchableOpacity onPress={handleCheckout} activeOpacity={0.85}>
+                <LinearGradient
+                  colors={['#6366F1', '#3B82F6']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{ borderRadius: radius.lg, paddingVertical: spacing.md, alignItems: 'center' }}
+                >
+                  <Typography variant="label" color="#FFFFFF">
+                    {selectedPlan.trialDays > 0 && !(couponResult?.valid)
+                      ? `Start ${selectedPlan.trialDays}-Day Free Trial`
+                      : `Pay ${formatPrice(couponResult?.valid ? couponResult.finalPricePaise : selectedPlan.pricePaise)}${formatCycle(selectedPlan.billingCycle)}`}
+                  </Typography>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              {selectedPlan.trialDays > 0 && !(couponResult?.valid) && (
+                <Typography variant="caption" color={theme.textTertiary} align="center">
+                  {selectedPlan.trialDays}-day free trial · Then {formatPrice(selectedPlan.pricePaise)}{formatCycle(selectedPlan.billingCycle)} · Cancel anytime
+                </Typography>
+              )}
             </Animated.View>
           )}
 
@@ -447,6 +508,20 @@ export default function SubscriptionScreen() {
           <GuaranteesRow />
         </View>
       </ScrollView>
+
+      {/* ── Success overlay ── */}
+      {successOverlay && (
+        <SubscriptionSuccessOverlay
+          visible
+          title={successOverlay.title}
+          subtitle={successOverlay.subtitle}
+          buttonText={successOverlay.buttonText}
+          onDismiss={() => {
+            setSuccessOverlay(null);
+            navigateAfterAction();
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }

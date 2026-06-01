@@ -179,4 +179,35 @@ export async function instituteMgmtRoutes(fastify: FastifyInstance): Promise<voi
       });
     },
   );
+
+  // ── POST /institutes/:instituteId/upload/presign — R2 presigned URL for content images ─
+  const presignSchema = z.object({
+    mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  });
+
+  fastify.post<{ Params: { instituteId: string }; Body: unknown }>(
+    '/institutes/:instituteId/upload/presign',
+    { preHandler: [requireInstituteRole('institute_admin', 'educator', 'examiner')] },
+    async (request, reply) => {
+      const { mimeType } = presignSchema.parse(request.body);
+      const { generateAdminPresignedUrl } = await import('@kd/db');
+
+      try {
+        // Reuse the admin presign function — images are stored under content/<userId>/
+        const result = await generateAdminPresignedUrl(request.user!.id, mimeType);
+        return reply.send({
+          success: true,
+          data: { uploadUrl: result.uploadUrl, cdnUrl: result.cdnUrl },
+          timestamp: new Date().toISOString(),
+        });
+      } catch (err) {
+        request.log.error({ err }, 'Failed to generate institute presigned URL');
+        return reply.status(500).send({
+          success: false,
+          error: { code: 'PRESIGN_FAILED', message: 'Could not generate upload URL' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+    },
+  );
 }

@@ -24,8 +24,10 @@ import { Upload, Trash2, X, ChevronLeft, ChevronRight, Check, Search, BookOpen }
 
 interface PYQCard {
   id: string; deckId: string; question: string;
-  options: Array<{ id: string; text: string }>;
+  options: Array<{ id: string; text: string; imageUrl?: string | null }>;
   correctAnswerId: string; explanation: string | null;
+  imageUrl?: string | null;
+  explanationImageUrl?: string | null;
   sourceYear: number | null; sourcePaper: string | null;
   tags: string[]; createdAt: string;
 }
@@ -170,11 +172,13 @@ function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImpor
   const PLACEHOLDER = JSON.stringify([{
     question: 'Which article guarantees right to equality?',
     options: [
-      { id: 'A', text: 'Article 12' }, { id: 'B', text: 'Article 14' },
+      { id: 'A', text: 'Article 12' }, { id: 'B', text: 'Article 14', imageUrl: 'https://…/img.png' },
       { id: 'C', text: 'Article 19' }, { id: 'D', text: 'Article 21' },
     ],
     correctAnswerId: 'B',
     explanation: 'Article 14 guarantees equality before law.',
+    imageUrl: 'https://…/question.png',
+    explanationImageUrl: 'https://…/explanation.png',
   }], null, 2);
 
   const ready = !!selectedExam && !!selectedSubject && !!selectedTopic && raw.trim().length > 0;
@@ -445,6 +449,9 @@ export default function PYQPage() {
                   <div className="text-sm text-white font-medium leading-relaxed">
                     <Latex text={card.question} />
                   </div>
+                  {card.imageUrl && (
+                    <img src={card.imageUrl} alt="Question" className="mt-2 rounded-lg border border-zinc-800 max-h-24 object-contain" />
+                  )}
                 </div>
                 <button onClick={() => { setDeleteTarget(card.id); setDeleteError(''); }}
                   disabled={deleting === card.id}
@@ -455,19 +462,27 @@ export default function PYQPage() {
               <div className="grid grid-cols-2 gap-1.5 mt-3">
                 {card.options.map(opt => (
                   <div key={opt.id}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs ${
+                    className={`px-3 py-1.5 rounded-lg text-xs ${
                       opt.id === card.correctAnswerId
                         ? 'bg-emerald-950/60 border border-emerald-800/60 text-emerald-300'
                         : 'bg-zinc-800/60 text-zinc-400'
                     }`}>
-                    <span className="font-bold shrink-0">{opt.id}.</span>
-                    <span className="truncate"><Latex text={opt.text} /></span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold shrink-0">{opt.id}.</span>
+                      <span className="truncate"><Latex text={opt.text} /></span>
+                    </div>
+                    {opt.imageUrl && (
+                      <img src={opt.imageUrl} alt={`Option ${opt.id}`} className="mt-1 ml-5 rounded max-h-14 object-contain" />
+                    )}
                   </div>
                 ))}
               </div>
-              {card.explanation && (
+              {(card.explanation || card.explanationImageUrl) && (
                 <div className="mt-2 text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-3 line-clamp-2">
-                  <Latex text={card.explanation} />
+                  {card.explanation && <Latex text={card.explanation} />}
+                  {card.explanationImageUrl && (
+                    <img src={card.explanationImageUrl} alt="Explanation" className="mt-1 rounded max-h-16 object-contain" />
+                  )}
                 </div>
               )}
             </div>

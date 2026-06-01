@@ -125,18 +125,24 @@ class PaymentService {
   // This replaces createOrder for paid, recurring subscriptions.
   // The SDK uses the returned subscription_id to launch the checkout modal
   // which captures the customer's UPI Autopay / card mandate.
+  //
+  // When `startAt` is provided (Unix timestamp), the first charge is deferred
+  // until that date. The period between mandate auth and startAt is a free trial.
   async createRazorpaySubscription(input: {
     razorpayPlanId: string;
     totalCount: number;   // How many billing cycles (use a large number like 120 for "indefinite")
     customerId?: string;  // Razorpay customer ID if already known
     customerNotify?: 0 | 1;
     subscriptionReceiptId?: string;
+    /** Unix timestamp (seconds). When set, first charge is deferred = free trial period. */
+    startAt?: number;
   }): Promise<{ razorpaySubscriptionId: string; shortUrl?: string }> {
     const sub = await razorpayRequest<RazorpaySubscriptionResponse>('POST', '/subscriptions', {
       plan_id: input.razorpayPlanId,
       total_count: input.totalCount,
       customer_notify: input.customerNotify ?? 1,
       ...(input.customerId ? { customer_id: input.customerId } : {}),
+      ...(input.startAt ? { start_at: input.startAt } : {}),
     });
     return {
       razorpaySubscriptionId: sub.id,

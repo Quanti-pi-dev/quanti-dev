@@ -9,12 +9,14 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../../src/theme';
 import { spacing, radius } from '../../../../src/theme/tokens';
 import { ScreenWrapper } from '../../../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../../../src/components/ui/Typography';
+import { RichContent } from '../../../../src/components/ui/RichContent';
 import { ProgressBar } from '../../../../src/components/ui/ProgressBar';
 import { Skeleton } from '../../../../src/components/ui/Skeleton';
 import {
@@ -327,11 +329,25 @@ export default function TakeTestScreen() {
             <Typography variant="caption" color={theme.textTertiary}>{q.marks} marks</Typography>
           </View>
 
+          {/* Question image */}
+          {q.imageUrl ? (
+            <Image
+              source={{ uri: q.imageUrl }}
+              style={{
+                width: '100%', height: 160, borderRadius: radius.lg,
+                borderWidth: 1, borderColor: theme.border, marginBottom: spacing.md,
+              }}
+              contentFit="contain"
+              transition={200}
+              cachePolicy="memory-disk"
+            />
+          ) : null}
+
           {/* Question text */}
-          <Typography variant="body" color={theme.text}
+          <RichContent variant="body" color={theme.text}
             style={{ fontSize: 16, lineHeight: 26, marginBottom: spacing.xl }}>
             {q.text}
-          </Typography>
+          </RichContent>
 
           {/* Options */}
           <View style={{ gap: spacing.sm }}>
@@ -343,7 +359,7 @@ export default function TakeTestScreen() {
                   onPress={() => selectAnswer(q.id, opt.id)}
                   activeOpacity={0.75}
                   style={{
-                    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+                    flexDirection: 'row', alignItems: opt.imageUrl ? 'flex-start' : 'center', gap: spacing.md,
                     padding: spacing.md, borderRadius: radius.xl,
                     backgroundColor: selected ? 'rgba(99,102,241,0.15)' : theme.card,
                     borderWidth: 2,
@@ -356,16 +372,28 @@ export default function TakeTestScreen() {
                     backgroundColor: selected ? '#6366f1' : theme.background,
                     borderWidth: 1.5, borderColor: selected ? '#6366f1' : theme.border,
                     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    marginTop: opt.imageUrl ? 2 : 0,
                   }}>
                     <Typography variant="caption" color={selected ? 'white' : theme.textSecondary}
                       style={{ fontWeight: '700' }}>
                       {String.fromCharCode(65 + oi)}
                     </Typography>
                   </View>
-                  <Typography variant="body" color={selected ? '#a5b4fc' : theme.text}
-                    style={{ flex: 1, fontSize: 14, lineHeight: 20 }}>
-                    {opt.text}
-                  </Typography>
+                  <View style={{ flex: 1, gap: spacing.xs }}>
+                    <Typography variant="body" color={selected ? '#a5b4fc' : theme.text}
+                      style={{ fontSize: 14, lineHeight: 20 }}>
+                      {opt.text}
+                    </Typography>
+                    {opt.imageUrl ? (
+                      <Image
+                        source={{ uri: opt.imageUrl }}
+                        style={{ width: '100%', height: 100, borderRadius: radius.md, marginTop: 4 }}
+                        contentFit="contain"
+                        transition={200}
+                        cachePolicy="memory-disk"
+                      />
+                    ) : null}
+                  </View>
                   {selected && <Ionicons name="checkmark-circle" size={18} color="#6366f1" />}
                 </TouchableOpacity>
               );

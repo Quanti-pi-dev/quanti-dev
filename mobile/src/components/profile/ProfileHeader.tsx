@@ -18,7 +18,6 @@ interface ProfileHeaderProps {
   enrollmentId?: string;
   email: string;
   avatarUri: string | null;
-  isAdmin: boolean;
   coins: number;
   onEditPress: () => void;
   onCoinsPress: () => void;
@@ -30,7 +29,6 @@ export const ProfileHeader = React.memo(function ProfileHeader({
   enrollmentId,
   email,
   avatarUri,
-  isAdmin,
   coins,
   onEditPress,
   onCoinsPress,
@@ -73,7 +71,7 @@ export const ProfileHeader = React.memo(function ProfileHeader({
             )}
             <Typography variant="caption" color={theme.textTertiary}>{email}</Typography>
             <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs }}>
-              <Badge label={isAdmin ? 'Admin' : 'Student'} variant={isAdmin ? 'warning' : 'primary'} size="sm" />
+              <Badge label="Student" variant="primary" size="sm" />
             </View>
           </View>
           <TouchableOpacity

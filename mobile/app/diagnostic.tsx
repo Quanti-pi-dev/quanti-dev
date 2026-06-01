@@ -9,6 +9,7 @@ import { View, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -40,6 +41,7 @@ const LEVEL_COLORS: Record<string, string> = {
 
 function DiagnosticAnswerOption({
   text,
+  imageUrl,
   index,
   selected,
   correct,
@@ -47,6 +49,7 @@ function DiagnosticAnswerOption({
   onPress,
 }: {
   text: string;
+  imageUrl?: string | null;
   index: number;
   selected: boolean;
   correct: boolean;
@@ -75,7 +78,7 @@ function DiagnosticAnswerOption({
       activeOpacity={0.75}
       style={{
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: imageUrl ? 'flex-start' : 'center',
         gap: spacing.md,
         padding: spacing.md,
         borderRadius: radius.xl,
@@ -94,6 +97,7 @@ function DiagnosticAnswerOption({
             : selected ? theme.primary + '22' : theme.cardAlt,
           alignItems: 'center',
           justifyContent: 'center',
+          marginTop: imageUrl ? 2 : 0,
         }}
       >
         <Typography
@@ -104,9 +108,20 @@ function DiagnosticAnswerOption({
           {labels[index]}
         </Typography>
       </View>
-      <RichContent variant="body" color={theme.text} style={{ flex: 1, fontSize: 14 }}>
-        {text}
-      </RichContent>
+      <View style={{ flex: 1, gap: spacing.xs }}>
+        <RichContent variant="body" color={theme.text} style={{ fontSize: 14 }}>
+          {text}
+        </RichContent>
+        {imageUrl ? (
+          <Image
+            source={{ uri: imageUrl }}
+            style={{ width: '100%', height: 100, borderRadius: radius.md, marginTop: 4 }}
+            contentFit="contain"
+            transition={200}
+            cachePolicy="memory-disk"
+          />
+        ) : null}
+      </View>
       {revealed && correct && <Ionicons name="checkmark-circle" size={18} color="#10B981" />}
       {revealed && selected && !correct && <Ionicons name="close-circle" size={18} color="#EF4444" />}
     </TouchableOpacity>
@@ -477,6 +492,18 @@ export default function DiagnosticScreen() {
       >
         {currentCard && (
           <Animated.View entering={FadeIn.duration(200)} key={currentIdx}>
+            {currentCard.imageUrl ? (
+              <Image
+                source={{ uri: currentCard.imageUrl }}
+                style={{
+                  width: '100%', height: 160, borderRadius: radius.lg,
+                  borderWidth: 1, borderColor: theme.border, marginBottom: spacing.md,
+                }}
+                contentFit="contain"
+                transition={200}
+                cachePolicy="memory-disk"
+              />
+            ) : null}
             <RichContent variant="h4" color={theme.text} style={{ lineHeight: 26, marginBottom: spacing.md }}>
               {currentCard.question}
             </RichContent>
@@ -486,6 +513,7 @@ export default function DiagnosticScreen() {
                 <DiagnosticAnswerOption
                   key={ans.id}
                   text={ans.text}
+                  imageUrl={ans.imageUrl}
                   index={i}
                   selected={selectedId === ans.id}
                   correct={ans.id === currentCard.correctAnswerId}

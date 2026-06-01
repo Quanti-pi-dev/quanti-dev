@@ -171,9 +171,11 @@ export interface UserDeckCard {
   id: string;
   deckId: string;
   question: string;
-  options: Array<{ id: string; text: string }>;
+  options: Array<{ id: string; text: string; imageUrl?: string | null }>;
   correctAnswerId: string;
   explanation: string | null;
+  imageUrl?: string | null;
+  explanationImageUrl?: string | null;
   order: number;
 }
 
@@ -240,9 +242,10 @@ export interface WagerState {
     id: string;
     deckId: string;
     question: string;
-    options: Array<{ id: string; text: string }>;
+    options: Array<{ id: string; text: string; imageUrl?: string | null }>;
     explanation: string | null;
     imageUrl?: string | null;
+    explanationImageUrl?: string | null;
   }>;
   correctCount: number;
   currentCardIndex: number;
@@ -258,9 +261,10 @@ export interface InitiateWagerResult {
     id: string;
     deckId: string;
     question: string;
-    options: Array<{ id: string; text: string }>;
+    options: Array<{ id: string; text: string; imageUrl?: string | null }>;
     explanation: string | null;
     imageUrl?: string | null;
+    explanationImageUrl?: string | null;
   }>;
 }
 

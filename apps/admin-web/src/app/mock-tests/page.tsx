@@ -21,6 +21,7 @@ import { DataTable } from '@/components/data-table';
 import { ConfirmModal } from '@/components/confirm-modal';
 import { useToast } from '@/components/toast';
 import { Latex } from '@/components/latex';
+import { ImagePicker } from '@/components/image-picker';
 import {
   Plus, Pencil, Trash2, X, ToggleLeft, ToggleRight,
   ChevronLeft, ChevronRight, Check, BookOpen, Layers, Settings2,
@@ -48,9 +49,11 @@ interface MockTest {
 interface CustomQuestion {
   _id: string;
   question: string;
-  options: { id: string; text: string }[];
+  options: { id: string; text: string; imageUrl?: string | null }[];
   correctAnswerId: string;
   explanation: string;
+  imageUrl?: string | null;
+  explanationImageUrl?: string | null;
 }
 
 interface ExamOption {
@@ -576,13 +579,15 @@ function QuestionEditorModal({
   const blank = (): Omit<CustomQuestion, '_id'> => ({
     question: '',
     options: [
-      { id: 'A', text: '' },
-      { id: 'B', text: '' },
-      { id: 'C', text: '' },
-      { id: 'D', text: '' },
+      { id: 'A', text: '', imageUrl: null },
+      { id: 'B', text: '', imageUrl: null },
+      { id: 'C', text: '', imageUrl: null },
+      { id: 'D', text: '', imageUrl: null },
     ],
     correctAnswerId: 'A',
     explanation: '',
+    imageUrl: null,
+    explanationImageUrl: null,
   });
   const [form, setForm] = useState(blank());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -611,10 +616,17 @@ function QuestionEditorModal({
       return { ...p, options: opts };
     });
 
+  const setOptionImage = (idx: number, url: string | null) =>
+    setForm(p => {
+      const opts = [...p.options];
+      opts[idx] = { ...opts[idx], imageUrl: url };
+      return { ...p, options: opts };
+    });
+
   const addOption = () =>
     setForm(p => ({
       ...p,
-      options: [...p.options, { id: OPTION_IDS[p.options.length] ?? String(p.options.length + 1), text: '' }],
+      options: [...p.options, { id: OPTION_IDS[p.options.length] ?? String(p.options.length + 1), text: '', imageUrl: null }],
     }));
 
   const removeOption = (idx: number) =>
@@ -627,7 +639,14 @@ function QuestionEditorModal({
   // start editing an existing question
   const startEdit = (q: CustomQuestion) => {
     setEditingId(q._id);
-    setForm({ question: q.question, options: q.options, correctAnswerId: q.correctAnswerId, explanation: q.explanation });
+    setForm({
+      question: q.question,
+      options: q.options.map(o => ({ ...o, imageUrl: o.imageUrl ?? null })),
+      correctAnswerId: q.correctAnswerId,
+      explanation: q.explanation,
+      imageUrl: q.imageUrl ?? null,
+      explanationImageUrl: q.explanationImageUrl ?? null,
+    });
     setFormError('');
   };
 
@@ -705,20 +724,28 @@ function QuestionEditorModal({
                       <div className="text-sm text-zinc-200 leading-snug">
                         <Latex text={q.question} />
                       </div>
+                      {q.imageUrl && (
+                        <img src={q.imageUrl} alt="Question" className="mt-2 rounded-lg border border-zinc-700 max-h-20 object-contain" />
+                      )}
                       <div className="grid grid-cols-2 gap-1 mt-2">
                         {q.options.map(opt => (
                           <div
                             key={opt.id}
-                            className={`flex items-start gap-1.5 text-xs px-2 py-1 rounded-lg ${
+                            className={`text-xs px-2 py-1 rounded-lg ${
                               opt.id === q.correctAnswerId
                                 ? 'bg-emerald-900/30 border border-emerald-700/40 text-emerald-300'
                                 : 'text-zinc-400'
                             }`}
                           >
-                            {opt.id === q.correctAnswerId
-                              ? <CircleCheck size={11} className="text-emerald-400 shrink-0 mt-0.5" />
-                              : <Circle size={11} className="text-zinc-600 shrink-0 mt-0.5" />}
-                            <Latex text={opt.text} className="leading-snug" />
+                            <div className="flex items-start gap-1.5">
+                              {opt.id === q.correctAnswerId
+                                ? <CircleCheck size={11} className="text-emerald-400 shrink-0 mt-0.5" />
+                                : <Circle size={11} className="text-zinc-600 shrink-0 mt-0.5" />}
+                              <Latex text={opt.text} className="leading-snug" />
+                            </div>
+                            {opt.imageUrl && (
+                              <img src={opt.imageUrl} alt={`Option ${opt.id}`} className="mt-1 ml-4 rounded max-h-14 object-contain" />
+                            )}
                           </div>
                         ))}
                       </div>
@@ -726,6 +753,9 @@ function QuestionEditorModal({
                         <div className="mt-2 text-xs text-zinc-500 italic">
                           <Latex text={q.explanation} />
                         </div>
+                      )}
+                      {q.explanationImageUrl && (
+                        <img src={q.explanationImageUrl} alt="Explanation" className="mt-1.5 rounded-lg border border-zinc-700 max-h-16 object-contain" />
                       )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
@@ -775,6 +805,14 @@ function QuestionEditorModal({
               <LatexPreview text={form.question} />
             </div>
 
+            {/* Question image */}
+            <ImagePicker
+              value={form.imageUrl}
+              onChange={url => setForm(p => ({ ...p, imageUrl: url }))}
+              label="Question Image (optional)"
+              compact
+            />
+
             {/* Options */}
             <div>
               <label className={LABEL}>Options <span className="text-zinc-600 font-normal">(click ● to mark correct)</span></label>
@@ -811,6 +849,14 @@ function QuestionEditorModal({
                         )}
                       </div>
                       <LatexPreview text={opt.text} />
+                      <div className="ml-4">
+                        <ImagePicker
+                          value={opt.imageUrl ?? null}
+                          onChange={url => setOptionImage(i, url)}
+                          label={`Option ${opt.id} Image`}
+                          compact
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -839,6 +885,14 @@ function QuestionEditorModal({
                 className={INPUT}
               />
               <LatexPreview text={form.explanation} />
+              <div className="mt-1.5">
+                <ImagePicker
+                  value={form.explanationImageUrl}
+                  onChange={url => setForm(p => ({ ...p, explanationImageUrl: url }))}
+                  label="Explanation Image (optional)"
+                  compact
+                />
+              </div>
             </div>
 
             {/* Form actions */}

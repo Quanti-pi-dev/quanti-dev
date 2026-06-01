@@ -402,7 +402,7 @@ export default function ActiveChallengeScreen() {
                     borderWidth: 1.5,
                     borderColor: optionBorder,
                     flexDirection: 'row',
-                    alignItems: 'center',
+                    alignItems: option.imageUrl ? 'flex-start' : 'center',
                     gap: spacing.md,
                   }}
                 >
@@ -413,6 +413,7 @@ export default function ActiveChallengeScreen() {
                       backgroundColor: keyBg,
                       alignItems: 'center', justifyContent: 'center',
                       flexShrink: 0,
+                      marginTop: option.imageUrl ? 2 : 0,
                     }}
                   >
                     {showResult && isSelected ? (
@@ -428,9 +429,20 @@ export default function ActiveChallengeScreen() {
                     )}
                   </View>
 
-                  <Typography variant="body" style={{ flex: 1, fontSize: 14 }}>
-                    {option.text}
-                  </Typography>
+                  <View style={{ flex: 1, gap: spacing.xs }}>
+                    <Typography variant="body" style={{ fontSize: 14 }}>
+                      {option.text}
+                    </Typography>
+                    {option.imageUrl ? (
+                      <Image
+                        source={{ uri: option.imageUrl }}
+                        style={{ width: '100%', height: 100, borderRadius: radius.md, marginTop: 4 }}
+                        contentFit="contain"
+                        transition={200}
+                        cachePolicy="memory-disk"
+                      />
+                    ) : null}
+                  </View>
 
                   {/* Trailing result icon */}
                   {showResult && isSelected && (

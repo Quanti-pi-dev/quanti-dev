@@ -6,6 +6,7 @@ import { View, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -234,6 +235,15 @@ export default function TestResultScreen() {
                       💡 {ans.explanation}
                     </Typography>
                   )}
+                  {ans.explanationImageUrl ? (
+                    <Image
+                      source={{ uri: ans.explanationImageUrl }}
+                      style={{ width: '100%', height: 140, borderRadius: radius.md, marginTop: spacing.xs }}
+                      contentFit="contain"
+                      transition={200}
+                      cachePolicy="memory-disk"
+                    />
+                  ) : null}
                 </Animated.View>
               ))}
             </View>

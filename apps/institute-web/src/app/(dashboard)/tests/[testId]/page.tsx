@@ -13,11 +13,13 @@ import { Latex } from '@/components/latex';
 
 // ── Types ────────────────────────────────────────────────────────
 
-interface TestOption { id: string; text: string; }
+interface TestOption { id: string; text: string; imageUrl?: string | null; }
 interface TestQuestion {
   id: string; text: string; options: TestOption[];
   correctAnswerId: string; explanation?: string | null;
   marks: number; source: string;
+  imageUrl?: string | null;
+  explanationImageUrl?: string | null;
 }
 interface TestSettings {
   shuffleQuestions: boolean;
@@ -395,6 +397,9 @@ function QuestionCard({ question: q, index }: { question: TestQuestion; index: n
             <div className={`text-white text-sm ${expanded ? '' : 'line-clamp-2'}`}>
               <Latex text={q.text} />
             </div>
+            {q.imageUrl && (
+              <img src={q.imageUrl} alt="Question" className="mt-2 rounded-lg max-h-24 object-contain" style={{ border: '1px solid var(--color-surface-700)' }} />
+            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-xs px-2 py-0.5 rounded"
@@ -410,28 +415,36 @@ function QuestionCard({ question: q, index }: { question: TestQuestion; index: n
         <div className="px-5 pb-5">
           <div className="space-y-2 ml-9">
             {q.options.map((opt, oi) => (
-              <div key={opt.id} className="flex items-center gap-3 px-3 py-2 rounded-lg"
+              <div key={opt.id} className="px-3 py-2 rounded-lg"
                 style={{
                   background: opt.id === q.correctAnswerId ? 'rgba(34,197,94,0.1)' : 'var(--color-surface-800)',
                   border: `1px solid ${opt.id === q.correctAnswerId ? 'rgba(34,197,94,0.3)' : 'var(--color-surface-700)'}`,
                 }}>
-                <span className="text-xs font-bold w-5 text-center shrink-0"
-                  style={{ color: opt.id === q.correctAnswerId ? '#4ade80' : 'var(--color-surface-400)' }}>
-                  {String.fromCharCode(65 + oi)}
-                </span>
-                <div className="text-sm flex-1" style={{ color: opt.id === q.correctAnswerId ? '#4ade80' : '#e2e2f0' }}>
-                  <Latex text={opt.text} />
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-bold w-5 text-center shrink-0"
+                    style={{ color: opt.id === q.correctAnswerId ? '#4ade80' : 'var(--color-surface-400)' }}>
+                    {String.fromCharCode(65 + oi)}
+                  </span>
+                  <div className="text-sm flex-1" style={{ color: opt.id === q.correctAnswerId ? '#4ade80' : '#e2e2f0' }}>
+                    <Latex text={opt.text} />
+                  </div>
+                  {opt.id === q.correctAnswerId && (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  )}
                 </div>
-                {opt.id === q.correctAnswerId && (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                {opt.imageUrl && (
+                  <img src={opt.imageUrl} alt={`Option ${String.fromCharCode(65 + oi)}`} className="mt-1.5 ml-8 rounded-lg max-h-20 object-contain" style={{ border: '1px solid var(--color-surface-700)' }} />
                 )}
               </div>
             ))}
           </div>
-          {q.explanation && (
+          {(q.explanation || q.explanationImageUrl) && (
             <div className="ml-9 mt-3 px-3 py-2 rounded-lg text-xs"
               style={{ background: 'rgba(99,102,241,0.08)', color: 'var(--color-surface-300)', border: '1px solid rgba(99,102,241,0.15)' }}>
-              <span>💡 </span><Latex text={q.explanation} />
+              {q.explanation && <><span>💡 </span><Latex text={q.explanation} /></>}
+              {q.explanationImageUrl && (
+                <img src={q.explanationImageUrl} alt="Explanation" className="mt-1.5 rounded-lg max-h-20 object-contain" />
+              )}
             </div>
           )}
         </div>

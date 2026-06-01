@@ -38,6 +38,7 @@ interface PlanCardProps {
   plan: Plan;
   isPopular?: boolean;
   isCurrentPlan?: boolean;
+  isSelected?: boolean;
   onSelect: (plan: Plan) => void;
 }
 
@@ -45,7 +46,7 @@ const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 // ─── Component ────────────────────────────────────────────────
 
-export function PlanCard({ plan, isPopular, isCurrentPlan, onSelect }: PlanCardProps) {
+export function PlanCard({ plan, isPopular, isCurrentPlan, isSelected, onSelect }: PlanCardProps) {
   const { theme } = useTheme();
   const scale = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
@@ -62,8 +63,10 @@ export function PlanCard({ plan, isPopular, isCurrentPlan, onSelect }: PlanCardP
 
   const cardBorderStyle = isCurrentPlan
     ? { borderWidth: 2, borderColor: theme.success }
+    : isSelected
+    ? { borderWidth: 2, borderColor: theme.primary }
     : isPopular
-    ? { borderWidth: 0 } // gradient wrapper provides border
+    ? { borderWidth: 0 }
     : { borderWidth: 1, borderColor: theme.border };
 
   const card = (

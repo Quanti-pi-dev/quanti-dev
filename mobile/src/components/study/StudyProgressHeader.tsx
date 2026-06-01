@@ -1,6 +1,7 @@
 // ─── StudyProgressHeader ────────────────────────────────────
-// Shows deck title, "Card X of Y" + correct count + animated progress bar.
-// Improved with animated fill, score pills, and richer visual hierarchy.
+// Contextual study signals instead of a raw "Card X of Y" counter.
+// Psychology: replaces a meaningless position-in-shuffled-deck number
+// with streak momentum (Goal Gradient), correct count, and encouragement.
 
 import React, { useEffect } from 'react';
 import { View } from 'react-native';
@@ -19,12 +20,14 @@ interface StudyProgressHeaderProps {
   currentIdx: number;
   total: number;
   correctCount: number;
+  currentStreak: number;
 }
 
 export const StudyProgressHeader = React.memo(function StudyProgressHeader({
   currentIdx,
   total,
   correctCount,
+  currentStreak,
 }: StudyProgressHeaderProps) {
   const { theme } = useTheme();
   const rawProgress = total > 0 ? (currentIdx + 1) / total : 0;
@@ -41,12 +44,42 @@ export const StudyProgressHeader = React.memo(function StudyProgressHeader({
     width: `${progressValue.value * 100}%` as unknown as number,
   }));
 
+  // ─── Contextual label based on momentum ────────────────────
+  // Streak ≥ 3: hot streak (amber, bold)
+  // Streak 1–2:  positive progress (green, calm)
+  // Streak 0 with answers: encouragement
+  // Nothing answered yet: empty (first card, no context)
+  const streakLabel = currentStreak >= 3
+    ? `🔥 ${currentStreak} in a row!`
+    : currentStreak >= 1
+      ? `🎯 ${correctCount} correct`
+      : correctCount > 0
+        ? 'Keep going!'
+        : '';
+
+  const streakColor = currentStreak >= 3
+    ? '#F59E0B'
+    : currentStreak >= 1
+      ? theme.success
+      : theme.textTertiary;
+
+  // Progress bar color follows the streak state
+  const barColor = currentStreak >= 3
+    ? '#F59E0B'
+    : correctCount > 0
+      ? theme.success
+      : theme.primary;
+
   return (
     <View style={{ paddingHorizontal: spacing.xl, paddingVertical: spacing.sm, gap: spacing.sm }}>
-      {/* Counter row */}
+      {/* Contextual label + score pills */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="caption" color={theme.textTertiary}>
-          Card {currentIdx + 1} of {total}
+        <Typography
+          variant="caption"
+          color={streakColor}
+          style={currentStreak >= 3 ? { fontWeight: '700' } : undefined}
+        >
+          {streakLabel}
         </Typography>
 
         {/* Score pills */}
@@ -102,7 +135,7 @@ export const StudyProgressHeader = React.memo(function StudyProgressHeader({
             {
               height: '100%',
               borderRadius: radius.full,
-              backgroundColor: correctCount > 0 ? theme.success : theme.primary,
+              backgroundColor: barColor,
             },
           ]}
         />

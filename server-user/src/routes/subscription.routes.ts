@@ -65,35 +65,20 @@ export async function subscriptionRoutes(fastify: FastifyInstance): Promise<void
       couponCode,
     );
 
-    // Trial: no payment needed
-    if (result.orderId === 'trial') {
-      return reply.send({
-        success: true,
-        data: {
-          trial: true,
-          subscription: result.subscription,
-          plan: result.plan,
-        },
-        timestamp: new Date().toISOString(),
-      });
-    }
-
     // Fetch user profile for checkout prefill
     const userProfile = await userRepository.findByFirebaseUid(request.user!.id);
 
     return reply.send({
       success: true,
       data: {
-        trial: false,
         orderId: result.orderId,
-        // razorpaySubscriptionId is present for auto-debit recurring subscriptions.
-        // When set, the mobile SDK should use subscription_id instead of order_id.
         razorpaySubscriptionId: result.razorpaySubscriptionId ?? null,
         amountPaise: result.amountPaise,
         currency: 'INR',
         keyId: config.razorpay.keyId,
         plan: result.plan,
         discountPaise: result.discountPaise,
+        trialDays: result.trialDays,
         prefill: {
           name: userProfile?.displayName ?? request.user!.email,
           email: request.user!.email,

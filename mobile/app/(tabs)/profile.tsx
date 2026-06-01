@@ -51,7 +51,6 @@ export default function ProfileScreen() {
   const email = user?.email ?? '';
   const enrollmentId = user?.enrollmentId ?? '';
   const avatarUri = user?.avatarUrl ?? null;
-  const isAdmin = user?.role === 'admin';
   const coins = coinData?.balance ?? 0;
 
   // ─── Derived stats ──────────────────────────────────────────
@@ -102,7 +101,6 @@ export default function ProfileScreen() {
           enrollmentId={enrollmentId}
           email={email}
           avatarUri={avatarUri}
-          isAdmin={isAdmin}
           coins={coins}
           onEditPress={() => setEditModalVisible(true)}
           onCoinsPress={() => router.push('/coins-history')}
@@ -196,7 +194,6 @@ export default function ProfileScreen() {
 
         <SettingsSection
           isDark={isDark}
-          isAdmin={isAdmin}
           notificationsEnabled={preferences?.notificationsEnabled ?? false}
           onToggleTheme={toggleTheme}
           onToggleNotifications={async (enabled) => {

@@ -84,6 +84,7 @@ export interface Deck {
 export interface FlashcardOption {
   id: string;
   text: string;
+  imageUrl?: string | null;
   /** What the student likely misunderstands if they pick this wrong option. */
   misconception?: string;
 }
@@ -100,6 +101,7 @@ export interface Flashcard {
   correctAnswerId: string;
   explanation: string | null;
   imageUrl: string | null;
+  explanationImageUrl?: string | null;
   /** Content origin: platform-created, previous-year-question, or AI-generated. */
   source: FlashcardSource;
   /** Display order within the deck (ascending). */
@@ -121,6 +123,7 @@ export interface Question {
   correctAnswerId: string;
   explanation: string | null;
   imageUrl: string | null;
+  explanationImageUrl?: string | null;
   points: number;
 }
 

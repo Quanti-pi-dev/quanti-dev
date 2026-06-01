@@ -25,6 +25,8 @@ interface StudyNavBarProps {
   isCurrentAnswered: boolean;
   onPrev: () => void;
   onNext: () => void;
+  sourceYear?: number;
+  sourcePaper?: string;
 }
 
 function NavButton({
@@ -105,6 +107,8 @@ export const StudyNavBar = React.memo(function StudyNavBar({
   isCurrentAnswered,
   onPrev,
   onNext,
+  sourceYear,
+  sourcePaper,
 }: StudyNavBarProps) {
   const { theme } = useTheme();
   const nextEnabled = canGoNext && isCurrentAnswered;
@@ -151,11 +155,16 @@ export const StudyNavBar = React.memo(function StudyNavBar({
           label="Previous card"
         />
 
-        {/* Center counter with progress dots */}
+        {/* Center — card-specific context (PYQ badge) + dot indicators */}
         <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
-          <Typography variant="label" color={theme.textSecondary}>
-            {currentIdx + 1} / {total}
-          </Typography>
+          {sourceYear ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Ionicons name="document-text-outline" size={13} color="#6366F1" />
+              <Typography variant="label" color="#6366F1" style={{ fontSize: 13 }}>
+                {sourcePaper ? `${sourcePaper} · ${sourceYear}` : `PYQ ${sourceYear}`}
+              </Typography>
+            </View>
+          ) : null}
           {/* Mini dot indicators (up to 8 shown) */}
           {total <= 12 && (
             <View style={{ flexDirection: 'row', gap: 4 }}>

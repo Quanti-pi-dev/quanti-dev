@@ -296,9 +296,11 @@ export interface ErrorJournalEntry {
   topicName: string;
   level: string;
   question: string;
+  imageUrl?: string | null;
+  explanationImageUrl?: string | null;
   correctAnswerId: string;
   selectedAnswerId: string;
-  answers: { id: string; text: string }[];
+  answers: { id: string; text: string; imageUrl?: string | null }[];
   timestamp: number;
 }
 
@@ -321,9 +323,11 @@ export interface ReviewQueueCard {
   topicSlug: string;
   topicName: string;
   question: string;
-  answers: { id: string; text: string }[];
+  answers: { id: string; text: string; imageUrl?: string | null }[];
   correctAnswerId: string;
   explanation: string | null;
+  imageUrl?: string | null;
+  explanationImageUrl?: string | null;
   source: 'original' | 'pyq' | 'ai_generated';
   sourceYear: number | null;
   sourcePaper: string | null;
@@ -351,9 +355,11 @@ export interface PYQMeta {
 export interface PYQPracticeCard {
   cardId: string;
   question: string;
-  answers: { id: string; text: string }[];
+  answers: { id: string; text: string; imageUrl?: string | null }[];
   correctAnswerId: string;
   explanation: string | null;
+  imageUrl?: string | null;
+  explanationImageUrl?: string | null;
   sourceYear: number | null;
   sourcePaper: string | null;
   topicName: string;
@@ -395,9 +401,11 @@ export async function fetchPYQPractice(params?: {
 export interface MockTestCard {
   cardId: string;
   question: string;
-  answers: { id: string; text: string }[];
+  answers: { id: string; text: string; imageUrl?: string | null }[];
   correctAnswerId: string;
   explanation: string | null;
+  imageUrl?: string | null;
+  explanationImageUrl?: string | null;
   source: string;
   sourceYear: number | null;
   sourcePaper: string | null;
@@ -456,9 +464,10 @@ export async function submitMockTestResult(payload: {
 export interface DiagnosticCard {
   cardId: string;
   question: string;
-  answers: { id: string; text: string }[];
+  answers: { id: string; text: string; imageUrl?: string | null }[];
   correctAnswerId: string;
   level: string;
+  imageUrl?: string | null;
   topicName: string;
 }
 
@@ -698,7 +707,7 @@ export interface InstituteTestQuestion {
   id: string;
   text: string;
   imageUrl?: string | null;
-  options: { id: string; text: string }[];
+  options: { id: string; text: string; imageUrl?: string | null }[];
   marks: number;
   topicSlug?: string | null;
 }
@@ -714,11 +723,14 @@ export interface InstituteSubmissionResult {
   submittedAt: string;
   answers: {
     questionId: string;
+    questionText?: string | null;
+    questionImageUrl?: string | null;
     selectedOptionId: string;
     isCorrect: boolean;
     marks: number;
     correctAnswerId: string | null;
     explanation: string | null;
+    explanationImageUrl?: string | null;
   }[];
 }
 

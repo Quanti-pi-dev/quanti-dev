@@ -52,7 +52,6 @@ function SettingRow({ icon, label, onPress, right }: SettingRowProps) {
 
 interface SettingsSectionProps {
   isDark: boolean;
-  isAdmin: boolean;
   notificationsEnabled: boolean;
   onToggleTheme: () => void;
   onToggleNotifications: (enabled: boolean) => Promise<void>;
@@ -61,7 +60,6 @@ interface SettingsSectionProps {
 
 export const SettingsSection = React.memo(function SettingsSection({
   isDark,
-  isAdmin,
   notificationsEnabled,
   onToggleTheme,
   onToggleNotifications,
@@ -124,17 +122,6 @@ export const SettingsSection = React.memo(function SettingsSection({
           <LockedFeatureBanner feature="Priority Support — Master plan only" minTier={3} />
         </View>
       </Card>
-
-      {/* Admin panel */}
-      {isAdmin && (
-        <Card variant="outlined">
-          <SettingRow
-            icon="shield-outline"
-            label="Admin Panel"
-            onPress={() => router.push('/(admin)' as any)}
-          />
-        </Card>
-      )}
 
       {/* Account */}
       <Card>

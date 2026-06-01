@@ -139,12 +139,13 @@ class SubscriptionService {
     planId: string,
     couponCode?: string,
   ): Promise<{
-    orderId: string;          // 'trial' | razorpay_order_id (legacy one-off)
-    razorpaySubscriptionId?: string; // present for recurring paid subscriptions
+    orderId: string;
+    razorpaySubscriptionId?: string;
     amountPaise: number;
     keyId: string;
     plan: Plan;
     discountPaise: number;
+    trialDays: number;         // 0 = no trial; > 0 = mandate with deferred billing
     subscription: Subscription;
   }> {
     // Acquire distributed lock to prevent concurrent checkouts for same user
@@ -175,10 +176,12 @@ class SubscriptionService {
     couponCode?: string,
   ): Promise<{
     orderId: string;
+    razorpaySubscriptionId?: string;
     amountPaise: number;
     keyId: string;
     plan: Plan;
     discountPaise: number;
+    trialDays: number;
     subscription: Subscription;
   }> {
     // 1. Resolve and validate plan
@@ -221,77 +224,15 @@ class SubscriptionService {
       couponId = couponResult.couponId;
     }
 
-    // 5. Delegate to trial or paid path (FIX A11)
-    if (eligibleForTrial && !couponCode) {
-      return this.createTrialSubscription(userId, plan);
-    }
-    return this.createPaidSubscription(userId, plan, finalPricePaise, discountPaise, couponId, couponCode);
+    // 5. Determine trial days for this checkout
+    // Trial-eligible users get a deferred-billing Razorpay mandate (start_at = now + trialDays).
+    // Coupons disable trial (CFO policy: coupon = immediate paid conversion).
+    const effectiveTrialDays = (eligibleForTrial && !couponCode) ? plan.trialDays : 0;
+
+    return this.createPaidSubscription(userId, plan, finalPricePaise, discountPaise, couponId, couponCode, effectiveTrialDays);
   }
 
-  // ─── Trial path: no payment required ────────────────────
-  private async createTrialSubscription(
-    userId: string,
-    plan: Plan,
-  ): Promise<{
-    orderId: string; razorpaySubscriptionId?: string;
-    amountPaise: number; keyId: string;
-    plan: Plan; discountPaise: number; subscription: Subscription;
-  }> {
-    const now = new Date();
-    const trialEnd = new Date(now);
-    trialEnd.setDate(trialEnd.getDate() + plan.trialDays);
-
-    // Cancel existing if it's an upgrade
-    const existing = await subscriptionRepository.findActiveByUserId(userId);
-    if (existing) {
-      if (existing.razorpaySubscriptionId) {
-        try { await paymentService.cancelRazorpaySubscription(existing.razorpaySubscriptionId, 0); } catch(e){}
-      }
-      await subscriptionRepository.updateStatus(existing.id, 'expired');
-      await subscriptionRepository.logEvent(existing.id, userId, 'expired', existing.status, 'expired', { reason: 'superseded_by_trial_upgrade' });
-    }
-
-    const sub = await subscriptionRepository.create({
-      userId,
-      planId: plan.id,
-      status: 'trialing',
-      currentPeriodStart: now,
-      currentPeriodEnd: trialEnd,
-      trialStart: now,
-      trialEnd,
-    });
-
-    await subscriptionRepository.logEvent(sub.id, userId, 'trial_started', null, 'trialing', {
-      plan_slug: plan.slug,
-      trial_days: plan.trialDays,
-    });
-
-    await this.invalidateCache(userId);
-
-    // Fire-and-forget notifications + analytics
-    const user = await userRepository.findByFirebaseUid(userId).catch(() => null);
-    if (user) {
-      void Promise.allSettled([
-        analyticsService.trackTrialStarted(userId, plan.slug, plan.trialDays),
-        notificationService.handleEvent({
-          type: 'trial_started', userId, email: user.email,
-          planName: plan.displayName, trialDays: plan.trialDays,
-        }),
-      ]);
-    }
-
-    return {
-      orderId: 'trial',
-      amountPaise: 0,
-      keyId: '',
-      razorpaySubscriptionId: undefined,
-      plan,
-      discountPaise: 0,
-      subscription: sub,
-    };
-  }
-
-  // ─── Paid path: Razorpay Subscription creation (auto-debit) ──
+  // ─── Razorpay Subscription creation (trial + paid unified) ────
   private async createPaidSubscription(
     userId: string,
     plan: Plan,
@@ -299,12 +240,14 @@ class SubscriptionService {
     discountPaise: number,
     couponId?: string,
     couponCode?: string,
+    trialDays: number = 0,
   ): Promise<{
     orderId: string; razorpaySubscriptionId?: string;
     amountPaise: number; keyId: string;
-    plan: Plan; discountPaise: number; subscription: Subscription;
+    plan: Plan; discountPaise: number; trialDays: number; subscription: Subscription;
   }> {
     const now = new Date();
+    const isTrial = trialDays > 0;
 
     // Lock coupon usage before creating payment
     if (couponId) {
@@ -314,38 +257,54 @@ class SubscriptionService {
       }
     }
 
+    // For trials: period end = trial end (first billing starts after trial).
+    // For paid: period end = now + billing cycle days.
     const periodEnd = new Date(now);
-    periodEnd.setDate(periodEnd.getDate() + billingCycleDays(plan.billingCycle));
+    periodEnd.setDate(periodEnd.getDate() + (isTrial ? trialDays : billingCycleDays(plan.billingCycle)));
+
+    const trialEnd = isTrial ? periodEnd : null;
+    const trialStart = isTrial ? now : null;
+
+    // Cancel existing subscription if this is an upgrade
+    const existing = await subscriptionRepository.findActiveByUserId(userId);
+    if (existing) {
+      if (existing.razorpaySubscriptionId) {
+        try { await paymentService.cancelRazorpaySubscription(existing.razorpaySubscriptionId, 0); } catch(e){}
+      }
+      await subscriptionRepository.updateStatus(existing.id, 'expired');
+      await subscriptionRepository.logEvent(existing.id, userId, 'expired', existing.status, 'expired', { reason: 'superseded_by_upgrade' });
+    }
 
     // ─── Step 1: Lazily ensure a Razorpay Plan exists for this internal plan ───
-    // Razorpay Plans are reusable billing templates. We create once and reuse.
     let razorpayPlanId = plan.razorpayPlanId;
     if (!razorpayPlanId) {
       const { razorpayPlanId: newRpPlanId } = await paymentService.createRazorpayPlan({
         name: plan.displayName,
-        amountPaise: plan.pricePaise, // use full plan price, not discounted
+        amountPaise: plan.pricePaise,
         period: plan.billingCycle,
         currency: plan.currency ?? 'INR',
       });
       razorpayPlanId = newRpPlanId;
-      // Persist so the next user subscribing to this plan reuses the same Razorpay Plan.
-      // Uses WHERE razorpay_plan_id IS NULL to prevent race conditions.
       await planRepository.setRazorpayPlanId(plan.id, razorpayPlanId);
     }
 
     // ─── Step 2: Create Razorpay Subscription (mandate) ─────────────────────
-    // 120 billing cycles ≈ 10 years of monthly / 2.3 years of weekly billing.
-    // Razorpay requires a finite total_count; 120 is a safe upper bound.
+    // For trials: start_at defers first charge to after trial period.
+    // Razorpay registers the mandate immediately but charges ₹0 today.
     let razorpaySubscriptionId: string;
     try {
+      const startAt = isTrial
+        ? Math.floor(periodEnd.getTime() / 1000)  // Unix timestamp: trial end = first charge
+        : undefined;
+
       const { razorpaySubscriptionId: subId } = await paymentService.createRazorpaySubscription({
         razorpayPlanId,
         totalCount: 120,
         customerNotify: 1,
+        startAt,
       });
       razorpaySubscriptionId = subId;
     } catch (err) {
-      // Roll back coupon lock on Razorpay failure
       if (couponId) await couponRepository.decrementUsage(couponId);
       throw err;
     }
@@ -354,40 +313,54 @@ class SubscriptionService {
     const sub = await subscriptionRepository.create({
       userId,
       planId: plan.id,
-      status: 'pending', // waits for webhook or frontend verification to become 'active'
+      status: 'pending',  // becomes 'trialing' or 'active' after verify
       currentPeriodStart: now,
       currentPeriodEnd: periodEnd,
+      trialStart,
+      trialEnd,
       couponId: couponId ?? null,
       razorpaySubscriptionId,
     });
 
     // ─── Step 4: Create payment record ──────────────────────────────────────
-    // For subscription-mode, razorpayOrderId = razorpaySubscriptionId (unique receipt key).
-    // The actual per-cycle charge order is created by Razorpay on each billing date.
     await paymentRepository.create({
       subscriptionId: sub.id,
       userId,
       razorpayOrderId: razorpaySubscriptionId,
-      amountPaise: finalPricePaise,
+      amountPaise: isTrial ? 0 : finalPricePaise,
       razorpaySubscriptionId,
     });
 
-    await subscriptionRepository.logEvent(sub.id, userId, 'created', null, 'active', {
+    const eventType = isTrial ? 'trial_started' : 'created';
+    await subscriptionRepository.logEvent(sub.id, userId, eventType, null, isTrial ? 'trialing' : 'active', {
       plan_slug: plan.slug,
       razorpay_subscription_id: razorpaySubscriptionId,
       razorpay_plan_id: razorpayPlanId,
+      trial_days: trialDays,
     });
 
     // Fire-and-forget analytics
-    void analyticsService.trackCheckoutInitiated(userId, plan.slug, finalPricePaise, couponCode);
+    if (isTrial) {
+      void analyticsService.trackTrialStarted(userId, plan.slug, trialDays);
+      const user = await userRepository.findByFirebaseUid(userId).catch(() => null);
+      if (user) {
+        void notificationService.handleEvent({
+          type: 'trial_started', userId, email: user.email,
+          planName: plan.displayName, trialDays,
+        });
+      }
+    } else {
+      void analyticsService.trackCheckoutInitiated(userId, plan.slug, finalPricePaise, couponCode);
+    }
 
     return {
-      orderId: razorpaySubscriptionId, // used by mobile SDK as subscription_id
+      orderId: razorpaySubscriptionId,
       razorpaySubscriptionId,
-      amountPaise: finalPricePaise,
-      keyId: '',  // filled in route from config
+      amountPaise: isTrial ? 0 : finalPricePaise,
+      keyId: '',
       plan,
       discountPaise,
+      trialDays,
       subscription: sub,
     };
   }
@@ -427,12 +400,17 @@ class SubscriptionService {
     // 4. Mark payment captured
     await paymentRepository.markCaptured(razorpayOrderId, razorpayPaymentId, razorpaySignature);
 
-    // 5. Ensure subscription is active
+    // 5. Activate or start trial
     const sub = await subscriptionRepository.findById(payment.subscriptionId);
     if (!sub) throw new Error('Subscription not found');
 
-    if (sub.status !== 'active') {
-      // Find old active subscription and cancel it
+    // Determine target status: if the sub has a future trialEnd, it should be
+    // 'trialing' (mandate registered, first charge deferred). Otherwise 'active'.
+    const isTrialMandate = sub.trialEnd && new Date(sub.trialEnd) > new Date();
+    const targetStatus = isTrialMandate ? 'trialing' : 'active';
+
+    if (sub.status !== targetStatus) {
+      // Cancel old active subscription if this is an upgrade
       const existing = await subscriptionRepository.findActiveByUserId(userId);
       if (existing && existing.id !== sub.id) {
         if (existing.razorpaySubscriptionId) {
@@ -446,7 +424,7 @@ class SubscriptionService {
         await subscriptionRepository.logEvent(existing.id, userId, 'expired', existing.status, 'expired', { reason: 'superseded_by_upgrade' });
       }
 
-      await subscriptionRepository.updateStatus(sub.id, 'active');
+      await subscriptionRepository.updateStatus(sub.id, targetStatus);
     }
 
     // 6. Record coupon redemption if applicable
@@ -454,8 +432,10 @@ class SubscriptionService {
       await couponRepository.recordRedemption(sub.couponId, userId, sub.id, 0);
     }
 
-    await subscriptionRepository.logEvent(sub.id, userId, 'activated', sub.status, 'active', {
+    const eventType = isTrialMandate ? 'trial_started' : 'activated';
+    await subscriptionRepository.logEvent(sub.id, userId, eventType, sub.status, targetStatus, {
       razorpay_payment_id: razorpayPaymentId,
+      trial_mandate: isTrialMandate,
     });
 
     await this.invalidateCache(userId);

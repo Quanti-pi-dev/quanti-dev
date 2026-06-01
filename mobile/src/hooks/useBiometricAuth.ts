@@ -1,8 +1,27 @@
 // ─── Biometric Authentication Hook ───────────────────────────
 // Provides biometric (Face ID / Fingerprint) authentication support.
 // Used on the Sign-In screen for returning users who have a saved session.
+// Note: expo-local-authentication is an optional peer dep — may not be installed.
 
 import { useState, useEffect, useCallback } from 'react';
+
+// Minimal shape of expo-local-authentication (optional dependency).
+interface LocalAuthModule {
+  hasHardwareAsync(): Promise<boolean>;
+  isEnrolledAsync(): Promise<boolean>;
+  supportedAuthenticationTypesAsync(): Promise<number[]>;
+  authenticateAsync(opts: { promptMessage: string; fallbackLabel?: string }): Promise<{ success: boolean }>;
+}
+
+/** Attempt to load expo-local-authentication at runtime. Returns null if not installed. */
+async function loadLocalAuth(): Promise<LocalAuthModule | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require('expo-local-authentication') as LocalAuthModule;
+  } catch {
+    return null;
+  }
+}
 
 // Biometric types for display labels
 type BiometricType = 'Face ID' | 'Fingerprint' | 'Biometric' | null;
@@ -13,9 +32,10 @@ export function useBiometricAuth() {
 
   useEffect(() => {
     (async () => {
+      const LocalAuth = await loadLocalAuth();
+      if (!LocalAuth) return;
+
       try {
-        // Dynamic import — expo-local-authentication may not be installed
-        const LocalAuth = await import('expo-local-authentication');
         const hasHardware = await LocalAuth.hasHardwareAsync();
         const isEnrolled = await LocalAuth.isEnrolledAsync();
         if (hasHardware && isEnrolled) {
@@ -27,15 +47,16 @@ export function useBiometricAuth() {
           else setBiometricType('Biometric');
         }
       } catch {
-        // expo-local-authentication not installed — biometrics unavailable
         setIsAvailable(false);
       }
     })();
   }, []);
 
   const authenticate = useCallback(async (): Promise<boolean> => {
+    const LocalAuth = await loadLocalAuth();
+    if (!LocalAuth) return false;
+
     try {
-      const LocalAuth = await import('expo-local-authentication');
       const result = await LocalAuth.authenticateAsync({
         promptMessage: 'Sign in to Quanti-pi',
         fallbackLabel: 'Use Password',

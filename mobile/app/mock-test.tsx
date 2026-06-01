@@ -8,6 +8,7 @@ import { View, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -66,6 +67,7 @@ function TimerBadge({ seconds, total }: { seconds: number; total: number }) {
 
 function AnswerOption({
   text,
+  imageUrl,
   index,
   selected,
   correct,
@@ -73,6 +75,7 @@ function AnswerOption({
   onPress,
 }: {
   text: string;
+  imageUrl?: string | null;
   index: number;
   selected: boolean;
   correct: boolean;
@@ -103,7 +106,7 @@ function AnswerOption({
       activeOpacity={0.7}
       style={{
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: imageUrl ? 'flex-start' : 'center',
         gap: spacing.md,
         paddingHorizontal: spacing.md,
         paddingVertical: spacing.md,
@@ -121,6 +124,7 @@ function AnswerOption({
           backgroundColor: selected ? (showResult ? (correct ? '#10B981' : '#EF4444') : theme.primary) + '22' : theme.cardAlt,
           alignItems: 'center',
           justifyContent: 'center',
+          marginTop: imageUrl ? 2 : 0,
         }}
       >
         <Typography
@@ -131,9 +135,20 @@ function AnswerOption({
           {labels[index]}
         </Typography>
       </View>
-      <RichContent variant="body" color={theme.text} style={{ flex: 1 }}>
-        {text}
-      </RichContent>
+      <View style={{ flex: 1, gap: spacing.xs }}>
+        <RichContent variant="body" color={theme.text}>
+          {text}
+        </RichContent>
+        {imageUrl ? (
+          <Image
+            source={{ uri: imageUrl }}
+            style={{ width: '100%', height: 100, borderRadius: radius.md, marginTop: 4 }}
+            contentFit="contain"
+            transition={200}
+            cachePolicy="memory-disk"
+          />
+        ) : null}
+      </View>
       {showResult && correct && <Ionicons name="checkmark-circle" size={18} color="#10B981" />}
       {showResult && selected && !correct && <Ionicons name="close-circle" size={18} color="#EF4444" />}
     </TouchableOpacity>
@@ -799,6 +814,19 @@ export default function MockTestScreen() {
               </View>
             ) : null}
 
+            {currentCard.imageUrl ? (
+              <Image
+                source={{ uri: currentCard.imageUrl }}
+                style={{
+                  width: '100%', height: 160, borderRadius: radius.lg,
+                  borderWidth: 1, borderColor: theme.border, marginBottom: spacing.xs,
+                }}
+                contentFit="contain"
+                transition={200}
+                cachePolicy="memory-disk"
+              />
+            ) : null}
+
             <RichContent variant="h4" color={theme.text}>
               {currentCard.question}
             </RichContent>
@@ -809,6 +837,7 @@ export default function MockTestScreen() {
                 <AnswerOption
                   key={ans.id}
                   text={ans.text}
+                  imageUrl={ans.imageUrl}
                   index={i}
                   selected={currentAnswer === ans.id}
                   correct={ans.id === currentCard.correctAnswerId}

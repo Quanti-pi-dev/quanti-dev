@@ -20,15 +20,17 @@ export async function fetchMySubscription(): Promise<SubscriptionSummary | null>
 // ─── Checkout ─────────────────────────────────────────────────
 
 export interface CheckoutResult {
-  trial: boolean;
-  orderId?: string;
-  /** Present for recurring paid subscriptions — used as subscription_id in Razorpay SDK. */
+  orderId: string;
+  /** Present for recurring subscriptions — used as subscription_id in Razorpay SDK. */
   razorpaySubscriptionId?: string | null;
-  amountPaise?: number;
+  amountPaise: number;
   currency?: string;
-  keyId?: string;
+  keyId: string;
   plan: Plan;
   discountPaise?: number;
+  /** 0 = immediate paid; >0 = trial with mandate (first charge deferred) */
+  trialDays: number;
+  prefill?: { name?: string; email?: string };
   subscription?: {
     id: string;
     currentPeriodEnd: string;

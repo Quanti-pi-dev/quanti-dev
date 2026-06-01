@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Trash2, Save, Eye, ChevronDown, Sparkles, Loader2, X } from 'lucide-react';
 import Link from 'next/link';
 import { Latex } from '@/components/latex';
+import { ImagePicker } from '@/components/ImagePicker';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -20,20 +21,22 @@ interface SubjectOption {
 interface QuestionDraft {
   id: string;
   text: string;
-  options: { id: string; text: string }[];
+  options: { id: string; text: string; imageUrl?: string | null }[];
   correctAnswerId: string;
   explanation: string;
   marks: number;
   topicSlug: string | null;
   source: 'custom';
+  imageUrl: string | null;
+  explanationImageUrl: string | null;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────
 
-function makeOption(text = '') { return { id: crypto.randomUUID(), text }; }
+function makeOption(text = '') { return { id: crypto.randomUUID(), text, imageUrl: null }; }
 function makeQuestion(): QuestionDraft {
   const opts = [makeOption(), makeOption(), makeOption(), makeOption()];
-  return { id: crypto.randomUUID(), text: '', options: opts, correctAnswerId: opts[0]!.id, explanation: '', marks: 4, topicSlug: null, source: 'custom' };
+  return { id: crypto.randomUUID(), text: '', options: opts, correctAnswerId: opts[0]!.id, explanation: '', marks: 4, topicSlug: null, source: 'custom', imageUrl: null, explanationImageUrl: null };
 }
 
 // ── Component ──────────────────────────────────────────────────────
@@ -88,6 +91,11 @@ export default function NewTestPage() {
       ...q, options: q.options.map((o, j) => j === oIdx ? { ...o, text } : o),
     }));
 
+  const updateOptImage = (qIdx: number, oIdx: number, imageUrl: string | null) =>
+    setQuestions(qs => qs.map((q, i) => i !== qIdx ? q : {
+      ...q, options: q.options.map((o, j) => j === oIdx ? { ...o, imageUrl } : o),
+    }));
+
   const addOption = (qIdx: number) =>
     setQuestions(qs => qs.map((q, i) => i !== qIdx ? q : {
       ...q, options: [...q.options, makeOption()],
@@ -130,6 +138,8 @@ export default function NewTestPage() {
         marks: q.marks ?? 4,
         topicSlug: null,
         source: 'custom' as const,
+        imageUrl: null,
+        explanationImageUrl: null,
       }));
       setQuestions(qs => {
         // Remove empty placeholder questions
@@ -351,28 +361,47 @@ export default function NewTestPage() {
                     style={inputStyle} />
                 </div>
 
+                <ImagePicker
+                  value={q.imageUrl}
+                  onChange={url => updateQ(qIdx, { imageUrl: url })}
+                  instituteId={instituteId!}
+                  label="Question Image (optional)"
+                  compact
+                />
+
                 <div className="space-y-2">
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-surface-300)' }}>Options & Correct Answer *</label>
                   {q.options.map((opt, oIdx) => (
-                    <div key={opt.id} className="flex items-center gap-3">
-                      <button onClick={() => updateQ(qIdx, { correctAnswerId: opt.id })}
-                        className="w-5 h-5 rounded-full border-2 shrink-0 transition-all duration-150 flex items-center justify-center"
-                        style={{ borderColor: q.correctAnswerId === opt.id ? '#6366f1' : 'var(--color-surface-600)', background: q.correctAnswerId === opt.id ? '#6366f1' : 'transparent' }}>
-                        {q.correctAnswerId === opt.id && <span className="w-2 h-2 rounded-full bg-white" />}
-                      </button>
-                      <input value={opt.text} onChange={e => updateOpt(qIdx, oIdx, e.target.value)}
-                        placeholder={`Option ${String.fromCharCode(65 + oIdx)}`}
-                        className="flex-1 px-3 py-2 rounded-lg text-sm text-white placeholder-gray-600 outline-none"
-                        style={{
-                          background: q.correctAnswerId === opt.id ? 'rgba(99,102,241,0.1)' : 'var(--color-surface-800)',
-                          border: `1px solid ${q.correctAnswerId === opt.id ? 'rgba(99,102,241,0.4)' : 'var(--color-surface-600)'}`,
-                        }} />
-                      {q.options.length > 2 && (
-                        <button onClick={() => removeOption(qIdx, oIdx)} className="p-1 hover:text-red-400 transition-colors"
-                          style={{ color: 'var(--color-surface-500)' }}>
-                          <Trash2 className="w-3.5 h-3.5" />
+                    <div key={opt.id} className="rounded-lg p-2" style={{ background: q.correctAnswerId === opt.id ? 'rgba(99,102,241,0.06)' : 'transparent', border: q.correctAnswerId === opt.id ? '1px solid rgba(99,102,241,0.12)' : '1px solid transparent' }}>
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => updateQ(qIdx, { correctAnswerId: opt.id })}
+                          className="w-5 h-5 rounded-full border-2 shrink-0 transition-all duration-150 flex items-center justify-center"
+                          style={{ borderColor: q.correctAnswerId === opt.id ? '#6366f1' : 'var(--color-surface-600)', background: q.correctAnswerId === opt.id ? '#6366f1' : 'transparent' }}>
+                          {q.correctAnswerId === opt.id && <span className="w-2 h-2 rounded-full bg-white" />}
                         </button>
-                      )}
+                        <input value={opt.text} onChange={e => updateOpt(qIdx, oIdx, e.target.value)}
+                          placeholder={`Option ${String.fromCharCode(65 + oIdx)}`}
+                          className="flex-1 px-3 py-2 rounded-lg text-sm text-white placeholder-gray-600 outline-none"
+                          style={{
+                            background: q.correctAnswerId === opt.id ? 'rgba(99,102,241,0.1)' : 'var(--color-surface-800)',
+                            border: `1px solid ${q.correctAnswerId === opt.id ? 'rgba(99,102,241,0.4)' : 'var(--color-surface-600)'}`,
+                          }} />
+                        {q.options.length > 2 && (
+                          <button onClick={() => removeOption(qIdx, oIdx)} className="p-1 hover:text-red-400 transition-colors"
+                            style={{ color: 'var(--color-surface-500)' }}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="ml-8 mt-1.5">
+                        <ImagePicker
+                          value={opt.imageUrl ?? null}
+                          onChange={url => updateOptImage(qIdx, oIdx, url)}
+                          instituteId={instituteId!}
+                          label={`Option ${String.fromCharCode(65 + oIdx)} Image`}
+                          compact
+                        />
+                      </div>
                     </div>
                   ))}
 
@@ -391,6 +420,15 @@ export default function NewTestPage() {
                     placeholder="Explanation (shown after submit)…"
                     className="w-full px-3 py-2 rounded-lg text-xs text-white placeholder-gray-600 outline-none"
                     style={{ background: 'var(--color-surface-900)', border: '1px solid var(--color-surface-700)' }} />
+                  <div className="mt-1.5">
+                    <ImagePicker
+                      value={q.explanationImageUrl}
+                      onChange={url => updateQ(qIdx, { explanationImageUrl: url })}
+                      instituteId={instituteId!}
+                      label="Explanation Image (optional)"
+                      compact
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -409,6 +447,11 @@ export default function NewTestPage() {
                         <p className="text-sm text-zinc-600 italic">No question text entered yet…</p>
                       )}
 
+                      {/* Image preview */}
+                      {q.imageUrl && (
+                        <img src={q.imageUrl} alt="Question" className="mt-2 rounded-lg border border-zinc-800 max-h-24 object-contain" />
+                      )}
+
                       {/* Topic tag pill */}
                       {q.topicSlug && (
                         <span className="inline-block mt-2 text-[10px] px-2 py-0.5 rounded-full"
@@ -422,32 +465,40 @@ export default function NewTestPage() {
                         {q.options.map((opt, oIdx) => (
                           <div
                             key={opt.id}
-                            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs transition-colors duration-200 ${
+                            className={`px-3 py-2 rounded-lg text-xs transition-colors duration-200 ${
                               opt.id === q.correctAnswerId
                                 ? 'bg-emerald-950/60 border border-emerald-800/60 text-emerald-300'
                                 : 'bg-zinc-900 border border-zinc-800/50 text-zinc-500'
                             }`}
                           >
-                            <span className="text-xs font-bold w-5 text-center shrink-0"
-                              style={{ color: opt.id === q.correctAnswerId ? '#4ade80' : 'var(--color-surface-500)' }}>
-                              {String.fromCharCode(65 + oIdx)}
-                            </span>
-                            <span className="truncate flex-1">
-                              {opt.text.trim() ? (
-                                <Latex text={opt.text} />
-                              ) : (
-                                <span className="text-zinc-700 italic">Empty option…</span>
-                              )}
-                            </span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs font-bold w-5 text-center shrink-0"
+                                style={{ color: opt.id === q.correctAnswerId ? '#4ade80' : 'var(--color-surface-500)' }}>
+                                {String.fromCharCode(65 + oIdx)}
+                              </span>
+                              <span className="truncate flex-1">
+                                {opt.text.trim() ? (
+                                  <Latex text={opt.text} />
+                                ) : (
+                                  <span className="text-zinc-700 italic">Empty option…</span>
+                                )}
+                              </span>
+                            </div>
+                            {opt.imageUrl && (
+                              <img src={opt.imageUrl} alt={`Option ${String.fromCharCode(65 + oIdx)}`} className="mt-1 ml-8 rounded max-h-16 object-contain" />
+                            )}
                           </div>
                         ))}
                       </div>
                     </div>
 
                     {/* Explanation */}
-                    {q.explanation.trim() && (
+                    {(q.explanation.trim() || q.explanationImageUrl) && (
                       <div className="mt-3 text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-3">
-                        <span>💡 </span><Latex text={q.explanation} />
+                        {q.explanation.trim() && <><span>💡 </span><Latex text={q.explanation} /></>}
+                        {q.explanationImageUrl && (
+                          <img src={q.explanationImageUrl} alt="Explanation" className="mt-1 rounded max-h-20 object-contain" />
+                        )}
                       </div>
                     )}
                   </div>

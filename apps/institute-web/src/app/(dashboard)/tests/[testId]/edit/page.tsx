@@ -24,9 +24,11 @@ import { Latex } from '@/components/latex';
 interface PoolQuestion {
   id: string;
   text: string;
-  options: { id: string; text: string }[];
+  options: { id: string; text: string; imageUrl?: string | null }[];
   correctAnswerId: string;
   explanation?: string | null;
+  explanationImageUrl?: string | null;
+  imageUrl?: string | null;
   marks: number;
   subjectId?: string;
   topicSlug?: string;
@@ -115,21 +117,29 @@ function QuestionCard({
           {q.options.map((opt, i) => (
             <div
               key={opt.id}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm"
+              className="px-3 py-1.5 rounded-lg text-sm"
               style={{
                 background: opt.id === q.correctAnswerId ? 'rgba(34,197,94,0.08)' : 'var(--color-surface-800)',
                 border: `1px solid ${opt.id === q.correctAnswerId ? 'rgba(34,197,94,0.3)' : 'var(--color-surface-700)'}`,
                 color: opt.id === q.correctAnswerId ? '#4ade80' : '#e2e2f0',
               }}
             >
-              <span className="font-bold text-xs w-4 shrink-0">{String.fromCharCode(65 + i)}</span>
-              <span className="flex-1 text-left"><Latex text={opt.text} /></span>
-              {opt.id === q.correctAnswerId && <Check className="w-3.5 h-3.5 ml-auto shrink-0" />}
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-xs w-4 shrink-0">{String.fromCharCode(65 + i)}</span>
+                <span className="flex-1 text-left"><Latex text={opt.text} /></span>
+                {opt.id === q.correctAnswerId && <Check className="w-3.5 h-3.5 ml-auto shrink-0" />}
+              </div>
+              {opt.imageUrl && (
+                <img src={opt.imageUrl} alt={`Option ${String.fromCharCode(65 + i)}`} className="mt-1 ml-6 rounded max-h-16 object-contain" />
+              )}
             </div>
           ))}
-          {q.explanation && (
+          {(q.explanation || q.explanationImageUrl) && (
             <div className="text-xs mt-2 px-2 text-left" style={{ color: 'var(--color-surface-400)' }}>
-              <span>💡 </span><Latex text={q.explanation} />
+              {q.explanation && <><span>💡 </span><Latex text={q.explanation} /></>}
+              {q.explanationImageUrl && (
+                <img src={q.explanationImageUrl} alt="Explanation" className="mt-1 rounded max-h-16 object-contain" />
+              )}
             </div>
           )}
         </div>

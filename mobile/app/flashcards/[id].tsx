@@ -236,17 +236,28 @@ export default function FlashcardStudyScreen() {
   const isCurrentAnswered = answered[currentIdx] !== undefined;
 
   // FIX PF5: Memoize filtered counts to avoid O(n) scan on every render
-  const { correctCount, answeredCount, incorrectCount, skippedCount, isComplete } = useMemo(() => {
+  const { correctCount, answeredCount, incorrectCount, skippedCount, isComplete, currentStreak } = useMemo(() => {
     const correct = answered.filter((a) => a === true).length;
     const answeredTotal = answered.filter((a) => a !== undefined).length;
     const incorrect = answered.filter((a) => a === false).length;
     const skipped = answered.filter((a) => a === 'skipped').length;
+
+    // Current streak: consecutive correct answers counting backward
+    // from the most recently answered card (skips unanswered gaps).
+    let streak = 0;
+    for (let i = answered.length - 1; i >= 0; i--) {
+      if (answered[i] === undefined) continue;
+      if (answered[i] === true) streak++;
+      else break; // false or 'skipped' breaks the streak
+    }
+
     return {
       correctCount: correct,
       answeredCount: answeredTotal,
       incorrectCount: incorrect,
       skippedCount: skipped,
       isComplete: total > 0 && answeredTotal === total,
+      currentStreak: streak,
     };
   }, [answered, total]);
 
@@ -432,6 +443,7 @@ export default function FlashcardStudyScreen() {
   const cardOptions = (card.options ?? []).slice(0, 4).map((opt, i) => ({
     key: LETTER_KEYS[i]!,
     text: opt.text,
+    imageUrl: opt.imageUrl,
   }));
   const correctLetterKey = LETTER_KEYS[
     (card.options ?? []).findIndex((o) => o.id === card.correctAnswerId)
@@ -447,6 +459,7 @@ export default function FlashcardStudyScreen() {
         currentIdx={currentIdx}
         total={total}
         correctCount={correctCount}
+        currentStreak={currentStreak}
       />
 
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
@@ -463,6 +476,7 @@ export default function FlashcardStudyScreen() {
               correctKey={correctLetterKey}
               explanation={card.explanation ?? ''}
               imageUrl={card.imageUrl}
+              explanationImageUrl={card.explanationImageUrl}
               onAnswer={handleAnswer}
               onSkip={handleSkip}
             />
@@ -486,6 +500,8 @@ export default function FlashcardStudyScreen() {
         isCurrentAnswered={isCurrentAnswered}
         onPrev={goPrev}
         onNext={goNext}
+        sourceYear={card.sourceYear}
+        sourcePaper={card.sourcePaper}
       />
 
       {/* Level unlock modal */}
