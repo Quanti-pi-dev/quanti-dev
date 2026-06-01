@@ -21,6 +21,7 @@ const URGENCY_CONFIG = {
   'review-soon': { color: '#F59E0B', icon: '⚠️', label: 'Review soon' },
   stable: { color: '#10B981', icon: '✅', label: 'Stable' },
   mastered: { color: '#6366F1', icon: '💎', label: 'Mastered' },
+  'not-started': { color: '#94A3B8', icon: '○', label: 'Not started' },
 } as const;
 
 const TREND_ICONS = {
@@ -41,6 +42,42 @@ function getMasteryLabel(retention: number): { label: string; color: string } {
 function TopicHealthRow({ topic }: { topic: TopicMemoryState }) {
   const { theme } = useTheme();
   const urgencyCfg = URGENCY_CONFIG[topic.urgency];
+  const isNotStarted = topic.urgency === 'not-started';
+
+  if (isNotStarted) {
+    return (
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing.sm,
+          paddingLeft: spacing.base,
+          paddingVertical: spacing.xs,
+          borderLeftWidth: 2,
+          borderLeftColor: '#94A3B820',
+          marginLeft: spacing.sm,
+          opacity: 0.5,
+        }}
+      >
+        <Typography variant="bodySmall" style={{ flex: 1 }} numberOfLines={1} color={theme.textTertiary}>
+          {topic.topicName}
+        </Typography>
+        <View
+          style={{
+            backgroundColor: '#94A3B810',
+            paddingHorizontal: 6,
+            paddingVertical: 2,
+            borderRadius: radius.full,
+          }}
+        >
+          <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 9 }}>
+            Not started
+          </Typography>
+        </View>
+      </View>
+    );
+  }
+
   const trendCfg = TREND_ICONS[topic.trend];
   const mastery = getMasteryLabel(topic.retentionEstimate);
 
@@ -218,6 +255,23 @@ function SubjectHealthSection({
         </View>
       )}
 
+      {/* Coverage indicator */}
+      {subject.totalTopicsInSubject > 0 && (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.xs,
+            paddingLeft: spacing.lg,
+          }}
+        >
+          <Ionicons name="layers-outline" size={11} color={theme.textTertiary} />
+          <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 10 }}>
+            {subject.studiedTopics} of {subject.totalTopicsInSubject} topics studied
+          </Typography>
+        </View>
+      )}
+
       {/* Expanded topic list */}
       {isExpanded && (
         <View style={{ gap: spacing.xs, marginTop: spacing.xs }}>
@@ -330,6 +384,7 @@ export function KnowledgeHealthMap({ data, totalOverdue, totalDueSoon }: Knowled
               { label: 'Developing', color: '#F59E0B' },
               { label: 'Proficient', color: '#10B981' },
               { label: 'Master', color: '#6366F1' },
+              { label: 'Not started', color: '#94A3B8' },
             ].map((level) => (
               <View
                 key={level.label}

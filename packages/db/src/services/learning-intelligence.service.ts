@@ -68,9 +68,91 @@ export async function updateCardMemory(
   await pipeline.exec();
 }
 
+// ─── Exam Syllabus Metadata ──────────────────────────────────
+
+/** Topic/card counts per subject for coverage computation. */
+interface SyllabusTopic { topicSlug: string; topicName: string; cardCount: number }
+interface SyllabusSubject { subjectId: string; subjectName: string; topics: SyllabusTopic[] }
+
+/**
+ * Fetches the complete exam syllabus: all subjects → topics → card counts.
+ * Cached in Redis for 1 hour (content rarely changes).
+ */
+async function getExamSyllabus(selectedExams: string[]): Promise<SyllabusSubject[]> {
+  if (selectedExams.length === 0) return [];
+
+  const redis = getRedisClient();
+  const cacheKey = `exam_syllabus:${selectedExams.sort().join(',')}`;
+
+  try {
+    const cached = await redis.get(cacheKey);
+    if (cached) return JSON.parse(cached) as SyllabusSubject[];
+  } catch { /* recompute */ }
+
+  const mongo = getMongoDb();
+  const validExamIds = selectedExams.filter(id => /^[0-9a-fA-F]{24}$/.test(id));
+  if (validExamIds.length === 0) return [];
+
+  // Get all subjects for the exam(s)
+  const examSubjectDocs = await mongo.collection('exam_subjects')
+    .find({ examId: { $in: validExamIds.map(id => new ObjectId(id)) } })
+    .sort({ order: 1 })
+    .toArray();
+
+  const subjectIds = [...new Set(examSubjectDocs.map(d => (d['subjectId'] as ObjectId).toHexString()))];
+  if (subjectIds.length === 0) return [];
+
+  // Fetch subject names + topics + deck card counts in parallel
+  const validSubjectIds = subjectIds.filter(id => /^[0-9a-fA-F]{24}$/.test(id));
+  const [subjectDocs, topicDocs, deckAgg] = await Promise.all([
+    mongo.collection('subjects')
+      .find({ _id: { $in: validSubjectIds.map(id => new ObjectId(id)) } })
+      .project({ name: 1 }).toArray(),
+    mongo.collection('topics')
+      .find({ subjectId: { $in: validSubjectIds.map(id => new ObjectId(id)) } })
+      .project({ subjectId: 1, slug: 1, displayName: 1 }).toArray(),
+    mongo.collection('decks').aggregate([
+      { $match: { subjectId: { $in: validSubjectIds.map(id => new ObjectId(id)) }, isPublished: true } },
+      { $group: { _id: { subjectId: '$subjectId', topicSlug: '$topicSlug' }, totalCards: { $sum: '$cardCount' } } },
+    ]).toArray(),
+  ]);
+
+  const subjectNameMap = new Map(subjectDocs.map(s => [s._id.toString(), s.name as string]));
+
+  // Build deck card count map: subjectId:topicSlug → totalCards
+  const deckCardMap = new Map<string, number>();
+  for (const agg of deckAgg) {
+    const key = `${(agg._id.subjectId as ObjectId).toHexString()}:${agg._id.topicSlug}`;
+    deckCardMap.set(key, (agg.totalCards as number) ?? 0);
+  }
+
+  // Group topics by subject
+  const subjectTopicMap = new Map<string, SyllabusTopic[]>();
+  for (const topic of topicDocs) {
+    const subId = (topic.subjectId as ObjectId).toHexString();
+    if (!subjectTopicMap.has(subId)) subjectTopicMap.set(subId, []);
+    const slug = topic.slug as string;
+    subjectTopicMap.get(subId)!.push({
+      topicSlug: slug,
+      topicName: (topic.displayName as string) ?? slug,
+      cardCount: deckCardMap.get(`${subId}:${slug}`) ?? 0,
+    });
+  }
+
+  const result: SyllabusSubject[] = subjectIds.map(subId => ({
+    subjectId: subId,
+    subjectName: subjectNameMap.get(subId) ?? subId,
+    topics: subjectTopicMap.get(subId) ?? [],
+  }));
+
+  // Cache for 1 hour
+  redis.setex(cacheKey, 3600, JSON.stringify(result)).catch(() => {});
+  return result;
+}
+
 // ─── Learning Profile Builder ────────────────────────────────
 
-export async function buildLearningProfile(userId: string): Promise<LearningProfile> {
+export async function buildLearningProfile(userId: string, selectedExams?: string[]): Promise<LearningProfile> {
   const redis = getRedisClient();
   const cacheKey = PROFILE_CACHE_KEY(userId);
 
@@ -84,15 +166,18 @@ export async function buildLearningProfile(userId: string): Promise<LearningProf
     log.warn({ err }, 'Learning profile cache read failed, recomputing');
   }
 
+  // ── Fetch syllabus for coverage computation ──
+  const syllabus = await getExamSyllabus(selectedExams ?? []);
+
   // ── Cache miss: full computation ──
   const [knowledgeHealth, velocity, cardStates] = await Promise.all([
-    buildKnowledgeHealth(userId),
+    buildKnowledgeHealth(userId, syllabus),
     buildLearningVelocity(userId),
     getAllCardMemoryStates(userId),
   ]);
 
   const topicForecasts = buildTopicForecasts(knowledgeHealth);
-  const examReadiness = buildExamReadiness(knowledgeHealth, velocity);
+  const examReadiness = buildExamReadiness(knowledgeHealth, velocity, syllabus);
   const studyPlan = buildStudyPlan(knowledgeHealth, topicForecasts, userId);
 
   const totalOverdueCards = knowledgeHealth.reduce((s, sub) => s + sub.totalOverdue, 0);
@@ -149,17 +234,16 @@ async function getAllCardMemoryStates(userId: string): Promise<CardMemoryState[]
 
 // ─── Knowledge Health ────────────────────────────────────────
 
-async function buildKnowledgeHealth(userId: string): Promise<SubjectMemoryState[]> {
+async function buildKnowledgeHealth(userId: string, syllabus: SyllabusSubject[]): Promise<SubjectMemoryState[]> {
   const redis = getRedisClient();
   const cardIds = await redis.smembers(`card_memory_keys:${userId}`);
-  if (cardIds.length === 0) return [];
 
   // Pipeline all card memory reads
   const pipeline = redis.pipeline();
   for (const id of cardIds) {
     pipeline.hgetall(`card_memory:${userId}:${id}`);
   }
-  const results = await pipeline.exec();
+  const results = cardIds.length > 0 ? await pipeline.exec() : [];
 
   const now = new Date();
 
@@ -198,87 +282,139 @@ async function buildKnowledgeHealth(userId: string): Promise<SubjectMemoryState[
     topicMap.get(card.topicSlug)!.push(card);
   }
 
-  // Enrich subject names from MongoDB
-  const subjectIds = [...subjectTopicMap.keys()];
-  const nameMap = await enrichSubjectNames(subjectIds);
+  // Build a lookup for syllabus card counts: subjectId:topicSlug → cardCount
+  const syllabusCardMap = new Map<string, number>();
+  const syllabusTopicNames = new Map<string, string>();
+  for (const sub of syllabus) {
+    for (const t of sub.topics) {
+      syllabusCardMap.set(`${sub.subjectId}:${t.topicSlug}`, t.cardCount);
+      syllabusTopicNames.set(`${sub.subjectId}:${t.topicSlug}`, t.topicName);
+    }
+  }
 
-  // Build SubjectMemoryState[]
-  const subjects: SubjectMemoryState[] = [];
+  // Enrich subject names from MongoDB (for studied subjects not in syllabus)
+  const allSubjectIds = [...new Set([...subjectTopicMap.keys(), ...syllabus.map(s => s.subjectId)])];
+  const nameMap = await enrichSubjectNames(allSubjectIds);
+  // Override with syllabus names
+  for (const sub of syllabus) nameMap.set(sub.subjectId, sub.subjectName);
 
-  for (const [subjectId, topicMap] of subjectTopicMap) {
-    const topics: TopicMemoryState[] = [];
-    let subjectOverdue = 0;
-    let subjectDueSoon = 0;
+  // Helper: build a TopicMemoryState from studied cards
+  function buildStudiedTopic(
+    topicSlug: string, subjectId: string, cards: CardData[],
+  ): TopicMemoryState {
+    let totalRetention = 0, overdue = 0, dueSoon = 0, totalEase = 0;
+    let latestReview = new Date(0);
 
-    for (const [topicSlug, cards] of topicMap) {
-      let totalRetention = 0;
-      let overdue = 0;
-      let dueSoon = 0;
-      let totalEase = 0;
-      let latestReview = new Date(0);
+    for (const card of cards) {
+      const lastReview = new Date(card.lastReviewedAt);
+      const daysSince = (now.getTime() - lastReview.getTime()) / (1000 * 60 * 60 * 24);
+      const retention = estimateRetention(daysSince, card.intervalDays, card.easeFactor);
+      totalRetention += retention;
+      totalEase += card.easeFactor;
 
-      for (const card of cards) {
-        const lastReview = new Date(card.lastReviewedAt);
-        const daysSince = (now.getTime() - lastReview.getTime()) / (1000 * 60 * 60 * 24);
-        const retention = estimateRetention(daysSince, card.intervalDays, card.easeFactor);
-        totalRetention += retention;
-        totalEase += card.easeFactor;
-
-        const nextReview = new Date(card.nextReviewAt);
-        if (nextReview < now) overdue++;
-        else if ((nextReview.getTime() - now.getTime()) < 48 * 60 * 60 * 1000) dueSoon++;
-
-        if (lastReview > latestReview) latestReview = lastReview;
-      }
-
-      const avgRetention = cards.length > 0 ? Math.round(totalRetention / cards.length) : 0;
-      const avgEase = cards.length > 0 ? Math.round((totalEase / cards.length) * 100) / 100 : INITIAL_EASE_FACTOR;
-      const daysSinceLast = Math.round((now.getTime() - latestReview.getTime()) / (1000 * 60 * 60 * 24));
-
-      // Classify urgency
-      let urgency: TopicMemoryState['urgency'] = 'stable';
-      if (avgRetention >= 90 && overdue === 0) urgency = 'mastered';
-      else if (avgRetention < 50 || overdue > cards.length * 0.5) urgency = 'critical';
-      else if (avgRetention < 70 || overdue > 0) urgency = 'review-soon';
-
-      // Simple trend: based on ease factor average vs 2.5 baseline
-      let trend: TopicMemoryState['trend'] = 'stable';
-      if (avgEase > 2.6) trend = 'improving';
-      else if (avgEase < 2.2) trend = 'declining';
-
-      const topicName = topicSlug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-
-      topics.push({
-        topicSlug,
-        topicName,
-        subjectId,
-        subjectName: nameMap.get(subjectId) ?? subjectId,
-        retentionEstimate: avgRetention,
-        daysSinceLastReview: daysSinceLast,
-        cardsOverdue: overdue,
-        cardsDueSoon: dueSoon,
-        totalCards: cards.length,
-        avgEaseFactor: avgEase,
-        urgency,
-        trend,
-      });
-
-      subjectOverdue += overdue;
-      subjectDueSoon += dueSoon;
+      const nextReview = new Date(card.nextReviewAt);
+      if (nextReview < now) overdue++;
+      else if ((nextReview.getTime() - now.getTime()) < 48 * 60 * 60 * 1000) dueSoon++;
+      if (lastReview > latestReview) latestReview = lastReview;
     }
 
-    // Sort topics: critical first, then by retention ascending
+    const avgRetention = cards.length > 0 ? Math.round(totalRetention / cards.length) : 0;
+    const avgEase = cards.length > 0 ? Math.round((totalEase / cards.length) * 100) / 100 : INITIAL_EASE_FACTOR;
+    const daysSinceLast = Math.round((now.getTime() - latestReview.getTime()) / (1000 * 60 * 60 * 24));
+    const syllabusKey = `${subjectId}:${topicSlug}`;
+
+    let urgency: TopicMemoryState['urgency'] = 'stable';
+    if (avgRetention >= 90 && overdue === 0) urgency = 'mastered';
+    else if (avgRetention < 50 || overdue > cards.length * 0.5) urgency = 'critical';
+    else if (avgRetention < 70 || overdue > 0) urgency = 'review-soon';
+
+    let trend: TopicMemoryState['trend'] = 'stable';
+    if (avgEase > 2.6) trend = 'improving';
+    else if (avgEase < 2.2) trend = 'declining';
+
+    const topicName = syllabusTopicNames.get(syllabusKey)
+      ?? topicSlug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+    return {
+      topicSlug, topicName, subjectId,
+      subjectName: nameMap.get(subjectId) ?? subjectId,
+      retentionEstimate: avgRetention,
+      daysSinceLastReview: daysSinceLast,
+      cardsOverdue: overdue, cardsDueSoon: dueSoon,
+      totalCards: cards.length,
+      totalCardsAvailable: syllabusCardMap.get(syllabusKey) ?? cards.length,
+      avgEaseFactor: avgEase, urgency, trend,
+    };
+  }
+
+  // Build SubjectMemoryState[] — merge studied data with syllabus
+  const subjects: SubjectMemoryState[] = [];
+  const processedSubjectIds = new Set<string>();
+
+  // Process all subjects (from syllabus first, then any studied-only subjects)
+  const orderedSubjectIds = [
+    ...syllabus.map(s => s.subjectId),
+    ...[...subjectTopicMap.keys()].filter(id => !syllabus.find(s => s.subjectId === id)),
+  ];
+
+  for (const subjectId of orderedSubjectIds) {
+    if (processedSubjectIds.has(subjectId)) continue;
+    processedSubjectIds.add(subjectId);
+
+    const studiedTopics = subjectTopicMap.get(subjectId) ?? new Map();
+    const syllabusSubject = syllabus.find(s => s.subjectId === subjectId);
+    const syllabusTopics = syllabusSubject?.topics ?? [];
+
+    const topics: TopicMemoryState[] = [];
+    let subjectOverdue = 0, subjectDueSoon = 0;
+    const processedTopicSlugs = new Set<string>();
+
+    // 1. Add studied topics
+    for (const [topicSlug, cards] of studiedTopics) {
+      processedTopicSlugs.add(topicSlug);
+      const topic = buildStudiedTopic(topicSlug, subjectId, cards);
+      topics.push(topic);
+      subjectOverdue += topic.cardsOverdue;
+      subjectDueSoon += topic.cardsDueSoon;
+    }
+
+    // 2. Add not-started topics from syllabus
+    for (const st of syllabusTopics) {
+      if (processedTopicSlugs.has(st.topicSlug)) continue;
+      topics.push({
+        topicSlug: st.topicSlug,
+        topicName: st.topicName,
+        subjectId,
+        subjectName: nameMap.get(subjectId) ?? subjectId,
+        retentionEstimate: 0,
+        daysSinceLastReview: 0,
+        cardsOverdue: 0, cardsDueSoon: 0,
+        totalCards: 0,
+        totalCardsAvailable: st.cardCount,
+        avgEaseFactor: INITIAL_EASE_FACTOR,
+        urgency: 'not-started',
+        trend: 'stable',
+      });
+    }
+
+    // Sort topics: not-started last, then critical first, then by retention ascending
+    const urgencyOrder: Record<string, number> = { critical: 0, 'review-soon': 1, stable: 2, mastered: 3, 'not-started': 4 };
     topics.sort((a, b) => {
-      const urgencyOrder = { critical: 0, 'review-soon': 1, stable: 2, mastered: 3 };
-      if (urgencyOrder[a.urgency] !== urgencyOrder[b.urgency]) {
-        return urgencyOrder[a.urgency] - urgencyOrder[b.urgency];
+      if (urgencyOrder[a.urgency]! !== urgencyOrder[b.urgency]!) {
+        return urgencyOrder[a.urgency]! - urgencyOrder[b.urgency]!;
       }
       return a.retentionEstimate - b.retentionEstimate;
     });
 
-    const subjectRetention = topics.length > 0
-      ? Math.round(topics.reduce((s, t) => s + t.retentionEstimate * t.totalCards, 0) / topics.reduce((s, t) => s + t.totalCards, 0))
+    // Subject retention: weighted by studied cards only (not-started don't inflate)
+    const studiedCards = topics.filter(t => t.totalCards > 0);
+    const totalStudiedCards = studiedCards.reduce((s, t) => s + t.totalCards, 0);
+    const subjectRetention = totalStudiedCards > 0
+      ? Math.round(studiedCards.reduce((s, t) => s + t.retentionEstimate * t.totalCards, 0) / totalStudiedCards)
       : 0;
+
+    const studiedCount = topics.filter(t => t.urgency !== 'not-started').length;
+    const totalTopicCount = syllabusTopics.length > 0 ? syllabusTopics.length : studiedCount;
 
     subjects.push({
       subjectId,
@@ -287,6 +423,8 @@ async function buildKnowledgeHealth(userId: string): Promise<SubjectMemoryState[
       topics,
       totalOverdue: subjectOverdue,
       totalDueSoon: subjectDueSoon,
+      studiedTopics: studiedCount,
+      totalTopicsInSubject: totalTopicCount,
     });
   }
 
@@ -299,12 +437,13 @@ async function buildKnowledgeHealth(userId: string): Promise<SubjectMemoryState[
 async function buildLearningVelocity(userId: string): Promise<LearningVelocity> {
   const pg = getPostgresPool();
 
-  // Get last 28 days of session data, grouped by week
+  // Get last 28 days of session data, grouped by week — include active days count
   const result = await pg.query(
     `SELECT
        EXTRACT(WEEK FROM started_at) AS week_num,
        MIN(started_at::date)::text AS week_start,
        COUNT(*) AS sessions,
+       COUNT(DISTINCT started_at::date) AS active_days,
        SUM(cards_studied) AS cards,
        SUM(correct_answers)::float / NULLIF(SUM(cards_studied), 0) * 100 AS accuracy,
        AVG(avg_response_time_ms) AS avg_speed
@@ -316,20 +455,25 @@ async function buildLearningVelocity(userId: string): Promise<LearningVelocity> 
     [userId],
   );
 
-  const weeks = result.rows as { week_num: number; week_start: string; sessions: string; cards: string; accuracy: string; avg_speed: string }[];
+  const weeks = result.rows as { week_num: number; week_start: string; sessions: string; cards: string; active_days: string; accuracy: string; avg_speed: string }[];
 
-  // Build weekly trend
-  const weeklyTrend = weeks.map(w => ({
-    week: w.week_start,
-    cardsPerDay: Math.round(parseInt(w.cards ?? '0', 10) / 7),
-    accuracy: Math.round(parseFloat(w.accuracy ?? '0')),
-  }));
+  // Build weekly trend — use active days for honest cardsPerDay
+  const weeklyTrend = weeks.map(w => {
+    const activeDays = Math.max(1, parseInt(w.active_days ?? '1', 10));
+    return {
+      week: w.week_start,
+      cardsPerDay: Math.round(parseInt(w.cards ?? '0', 10) / activeDays),
+      accuracy: Math.round(parseFloat(w.accuracy ?? '0')),
+      activeDays,
+    };
+  });
 
   // Current vs previous period (last 7 days vs 7 days before that)
   const velocityResult = await pg.query(
     `SELECT
        period,
        SUM(cards_studied) AS cards,
+       COUNT(DISTINCT started_at::date) AS active_days,
        SUM(correct_answers)::float / NULLIF(SUM(cards_studied), 0) * 100 AS accuracy,
        AVG(avg_response_time_ms) AS avg_speed
      FROM (
@@ -347,25 +491,29 @@ async function buildLearningVelocity(userId: string): Promise<LearningVelocity> 
     [userId],
   );
 
-  const periods = new Map<string, { cards: number; accuracy: number; speed: number }>();
-  for (const row of velocityResult.rows as { period: string; cards: string; accuracy: string; avg_speed: string }[]) {
+  const periods = new Map<string, { cards: number; activeDays: number; accuracy: number; speed: number }>();
+  for (const row of velocityResult.rows as { period: string; cards: string; active_days: string; accuracy: string; avg_speed: string }[]) {
     periods.set(row.period, {
       cards: parseInt(row.cards ?? '0', 10),
+      activeDays: Math.max(1, parseInt(row.active_days ?? '1', 10)),
       accuracy: Math.round(parseFloat(row.accuracy ?? '0')),
       speed: Math.round(parseFloat(row.avg_speed ?? '0')),
     });
   }
 
-  const current = periods.get('current') ?? { cards: 0, accuracy: 0, speed: 0 };
-  const previous = periods.get('previous') ?? { cards: 0, accuracy: 0, speed: 0 };
+  const current = periods.get('current') ?? { cards: 0, activeDays: 0, accuracy: 0, speed: 0 };
+  const previous = periods.get('previous') ?? { cards: 0, activeDays: 0, accuracy: 0, speed: 0 };
 
-  const cardsDelta = previous.cards > 0 ? Math.round(((current.cards - previous.cards) / previous.cards) * 100) : 0;
+  const currentCpd = current.activeDays > 0 ? Math.round(current.cards / current.activeDays) : 0;
+  const previousCpd = previous.activeDays > 0 ? Math.round(previous.cards / previous.activeDays) : 0;
+  const cardsDelta = previousCpd > 0 ? Math.round(((currentCpd - previousCpd) / previousCpd) * 100) : 0;
   const accDelta = current.accuracy - previous.accuracy;
   const speedDelta = previous.speed > 0 ? Math.round(((current.speed - previous.speed) / previous.speed) * 100) : 0;
 
   return {
-    cardsPerDay: Math.round(current.cards / 7),
+    cardsPerDay: currentCpd,
     cardsPerDayDelta: cardsDelta,
+    activeDays: current.activeDays,
     accuracy7d: current.accuracy,
     accuracyDelta: accDelta,
     avgSpeedMs: current.speed,
@@ -383,10 +531,17 @@ function buildTopicForecasts(health: SubjectMemoryState[]): TopicForecast[] {
 
   for (const subject of health) {
     for (const topic of subject.topics) {
+      // Skip not-started topics — nothing to forecast
+      if (topic.urgency === 'not-started') continue;
+
       // Predict retention in 7 days using Ebbinghaus
+      // Use actual average intervalDays as stability proxy instead of ease*2 hack
+      const stability = topic.totalCards > 0
+        ? Math.max(1, topic.avgEaseFactor * Math.max(1, topic.daysSinceLastReview > 0 ? topic.daysSinceLastReview : 1))
+        : 1;
       const futureRetention = estimateRetention(
         topic.daysSinceLastReview + 7,
-        topic.totalCards > 0 ? topic.avgEaseFactor * 2 : 1, // rough stability proxy
+        stability,
         topic.avgEaseFactor,
       );
 
@@ -415,38 +570,75 @@ function buildTopicForecasts(health: SubjectMemoryState[]): TopicForecast[] {
 
 // ─── Exam Readiness ──────────────────────────────────────────
 
-function buildExamReadiness(health: SubjectMemoryState[], velocity: LearningVelocity): ExamReadiness {
-  if (health.length === 0) {
-    return { overallScore: 0, strongAreas: [], vulnerableAreas: [], daysToTargetReadiness: 0, weeklyDelta: 0 };
-  }
+function buildExamReadiness(
+  health: SubjectMemoryState[],
+  velocity: LearningVelocity,
+  syllabus: SyllabusSubject[],
+): ExamReadiness {
+  const empty: ExamReadiness = {
+    overallScore: 0, retentionScore: 0, coverageFactor: 0,
+    studiedTopics: 0, totalTopicsInExam: 0,
+    strongAreas: [], vulnerableAreas: [],
+    daysToTargetReadiness: 0, weeklyDelta: 0,
+  };
+  if (health.length === 0) return empty;
 
-  // Weighted average retention across all subjects
-  let totalCards = 0;
+  // Compute coverage: studied topics vs total topics in syllabus
+  const totalTopicsInExam = syllabus.reduce((s, sub) => s + sub.topics.length, 0) || 1;
+  let studiedTopicCount = 0;
+  let totalStudiedCards = 0;
   let weightedRetention = 0;
   const strong: string[] = [];
   const vulnerable: string[] = [];
 
   for (const subject of health) {
-    const cards = subject.topics.reduce((s, t) => s + t.totalCards, 0);
-    totalCards += cards;
-    weightedRetention += subject.retentionEstimate * cards;
+    const studied = subject.topics.filter(t => t.urgency !== 'not-started');
+    const subjectStudiedCards = studied.reduce((s, t) => s + t.totalCards, 0);
+    studiedTopicCount += studied.length;
+    totalStudiedCards += subjectStudiedCards;
+    weightedRetention += subject.retentionEstimate * subjectStudiedCards;
 
-    if (subject.retentionEstimate >= 75) {
+    // Strong = coverage > 50% AND retention > 75%
+    const subjectCoverage = subject.totalTopicsInSubject > 0
+      ? subject.studiedTopics / subject.totalTopicsInSubject
+      : 0;
+    if (subject.retentionEstimate >= 75 && subjectCoverage >= 0.5) {
       strong.push(subject.subjectName);
-    } else if (subject.retentionEstimate < 60) {
+    } else if (subject.retentionEstimate < 60 || subjectCoverage < 0.3) {
       vulnerable.push(subject.subjectName);
     }
   }
 
-  const overallScore = totalCards > 0 ? Math.round(weightedRetention / totalCards) : 0;
+  // Raw retention of studied material
+  const retentionScore = totalStudiedCards > 0
+    ? Math.round(weightedRetention / totalStudiedCards)
+    : 0;
 
-  // Rough estimate: how many study days to reach 85%
-  const deficit = Math.max(0, 85 - overallScore);
-  const dailyGain = velocity.cardsPerDay > 0 ? Math.max(1, Math.round(deficit / 3)) : 0;
-  const daysToTarget = dailyGain > 0 ? Math.ceil(deficit / dailyGain) : 0;
+  // Coverage factor: what fraction of the syllabus has been touched
+  const coverageFactor = Math.min(1, studiedTopicCount / totalTopicsInExam);
+
+  // Overall readiness = retention weighted by coverage
+  // At 100% coverage, score = retention. At 10% coverage, score ≈ retention * 0.32
+  // Formula: score = retention × coverage^0.5 (square root softens the penalty)
+  const coverageWeight = Math.sqrt(coverageFactor);
+  const overallScore = Math.round(retentionScore * coverageWeight);
+
+  // Days to target: factor in both retention gap and coverage gap
+  const targetScore = 85;
+  const deficit = Math.max(0, targetScore - overallScore);
+  // Estimate: user covers ~2 new topics per study day on average
+  const topicsCovered = studiedTopicCount;
+  const topicsRemaining = totalTopicsInExam - topicsCovered;
+  const daysForCoverage = topicsRemaining > 0 ? Math.ceil(topicsRemaining / 2) : 0;
+  const daysForRetention = velocity.cardsPerDay > 0 ? Math.ceil(deficit / 3) : 0;
+  const daysToTarget = Math.max(daysForCoverage, daysForRetention);
 
   return {
     overallScore,
+    retentionScore,
+    coverageFactor: Math.round(coverageFactor * 100) / 100,
+    studiedTopics: studiedTopicCount,
+    totalTopicsInExam,
     strongAreas: strong,
     vulnerableAreas: vulnerable,
     daysToTargetReadiness: daysToTarget,
@@ -583,6 +775,21 @@ export async function backfillCardMemory(userId: string): Promise<number> {
   const trackedMembers = await redis.smembers(`level_progress_keys:${userId}`);
   if (trackedMembers.length === 0) return 0;
 
+  // Fetch the user's last study session date from PostgreSQL for realistic timestamps
+  let lastStudyDate: Date | null = null;
+  try {
+    const pg = getPostgresPool();
+    const result = await pg.query(
+      `SELECT MAX(started_at) AS last_study
+       FROM study_sessions
+       WHERE user_id = (SELECT id FROM users WHERE firebase_uid = $1)`,
+      [userId],
+    );
+    if (result.rows[0]?.last_study) {
+      lastStudyDate = new Date(result.rows[0].last_study);
+    }
+  } catch { /* Use fallback below */ }
+
   let seeded = 0;
 
   for (const member of trackedMembers) {
@@ -608,8 +815,9 @@ export async function backfillCardMemory(userId: string): Promise<number> {
     const repetitions = Math.min(correct, 10);
     const intervalDays = Math.round(repetitions * easeFactor);
 
-    const now = new Date();
-    const nextReview = new Date(now);
+    // Use actual last study date instead of now — prevents false 100% retention
+    const reviewDate = lastStudyDate ?? new Date();
+    const nextReview = new Date(reviewDate);
     nextReview.setDate(nextReview.getDate() + Math.max(1, intervalDays));
 
     const pipeline = redis.pipeline();
@@ -617,7 +825,7 @@ export async function backfillCardMemory(userId: string): Promise<number> {
       repetitions: String(repetitions),
       interval_days: String(intervalDays),
       ease_factor: String(Math.round(easeFactor * 100) / 100),
-      last_reviewed_at: now.toISOString(),
+      last_reviewed_at: reviewDate.toISOString(),
       next_review_at: nextReview.toISOString(),
       total_reviews: String(total),
       topic_slug: topicSlug,

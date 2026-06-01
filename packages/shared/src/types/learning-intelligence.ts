@@ -48,12 +48,14 @@ export interface TopicMemoryState {
   cardsOverdue: number;
   /** Cards due within 48 hours. */
   cardsDueSoon: number;
-  /** Total cards tracked for this topic. */
+  /** Total cards tracked (studied) for this topic. */
   totalCards: number;
+  /** Total cards available in this topic across all levels. */
+  totalCardsAvailable: number;
   /** Average ease factor across cards in this topic. */
   avgEaseFactor: number;
-  /** Urgency classification. */
-  urgency: 'critical' | 'review-soon' | 'stable' | 'mastered';
+  /** Urgency classification. 'not-started' = topic exists in syllabus but user hasn't touched it. */
+  urgency: 'critical' | 'review-soon' | 'stable' | 'mastered' | 'not-started';
   /** 7-day trend direction. */
   trend: 'improving' | 'stable' | 'declining';
 }
@@ -64,12 +66,16 @@ export interface SubjectMemoryState {
   subjectName: string;
   /** Weighted average retention across all topics 0–100. */
   retentionEstimate: number;
-  /** Topic-level breakdowns. */
+  /** Topic-level breakdowns (includes not-started topics). */
   topics: TopicMemoryState[];
   /** Total overdue cards across all topics. */
   totalOverdue: number;
   /** Total due-soon cards across all topics. */
   totalDueSoon: number;
+  /** How many topics in this subject the student has studied. */
+  studiedTopics: number;
+  /** Total topics in this subject across the exam syllabus. */
+  totalTopicsInSubject: number;
 }
 
 // ─── Knowledge Gap Forecasting ────────────────────────────────
@@ -89,11 +95,19 @@ export interface TopicForecast {
 }
 
 export interface ExamReadiness {
-  /** Overall readiness score 0–100. */
+  /** Overall readiness score 0–100, factoring in coverage. */
   overallScore: number;
-  /** Subjects/topics the student is exam-ready in. */
+  /** Raw retention of studied cards 0–100 (before coverage penalty). */
+  retentionScore: number;
+  /** Syllabus coverage 0–1 (studied topics / total topics). */
+  coverageFactor: number;
+  /** Topics the student has studied. */
+  studiedTopics: number;
+  /** Total topics in the exam syllabus. */
+  totalTopicsInExam: number;
+  /** Subjects/topics the student is exam-ready in (coverage > 50% AND retention > 75%). */
   strongAreas: string[];
-  /** Subjects/topics at risk of declining. */
+  /** Subjects/topics at risk of declining or underexplored. */
   vulnerableAreas: string[];
   /** Estimated study days to reach target readiness (85%). */
   daysToTargetReadiness: number;
@@ -139,10 +153,12 @@ export interface DailyStudyPlan {
 // ─── Learning Velocity ────────────────────────────────────────
 
 export interface LearningVelocity {
-  /** Cards studied per day (rolling 7-day avg). */
+  /** Cards studied per day (based on actual active study days). */
   cardsPerDay: number;
   /** Cards per day change vs previous 7-day period. */
   cardsPerDayDelta: number;
+  /** Number of days the user actually studied in the last 7 days. */
+  activeDays: number;
   /** Rolling 7-day accuracy. */
   accuracy7d: number;
   /** Accuracy change vs previous 7-day period. */
@@ -156,7 +172,7 @@ export interface LearningVelocity {
   /** Retention change vs previous 7-day period. */
   retentionDelta: number;
   /** 4-week trend data for the velocity chart. */
-  weeklyTrend: { week: string; cardsPerDay: number; accuracy: number }[];
+  weeklyTrend: { week: string; cardsPerDay: number; accuracy: number; activeDays: number }[];
 }
 
 // ─── Full Learning Profile (API Response) ─────────────────────

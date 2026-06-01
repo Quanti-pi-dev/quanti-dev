@@ -795,8 +795,13 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
       );
     }
 
+    // Fetch user's selected exams for coverage-aware stats
+    const { userRepository } = await import('@kd/db');
+    const prefs = await userRepository.getPreferences(userId).catch(() => null);
+    const selectedExams = prefs?.selectedExams ?? [];
+
     const { buildLearningProfile } = await import('@kd/db');
-    const profile = await buildLearningProfile(userId);
+    const profile = await buildLearningProfile(userId, selectedExams);
     return reply.send({ success: true, data: profile, timestamp: new Date().toISOString() });
   });
 

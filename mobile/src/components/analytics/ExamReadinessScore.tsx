@@ -170,7 +170,7 @@ interface ExamReadinessScoreProps {
 export function ExamReadinessScore({ data }: ExamReadinessScoreProps) {
   const { theme } = useTheme();
 
-  if (data.overallScore === 0 && data.strongAreas.length === 0) {
+  if (data.overallScore === 0 && data.strongAreas.length === 0 && data.studiedTopics === 0) {
     return null; // Don't show if no data at all
   }
 
@@ -226,8 +226,19 @@ export function ExamReadinessScore({ data }: ExamReadinessScoreProps) {
           </View>
 
           {/* Ring */}
-          <View style={{ alignItems: 'center' }}>
+          <View style={{ alignItems: 'center', gap: spacing.sm }}>
             <ReadinessRing score={data.overallScore} />
+            {/* Coverage indicator */}
+            {data.totalTopicsInExam > 0 && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 10 }}>
+                  {data.studiedTopics} of {data.totalTopicsInExam} topics covered
+                </Typography>
+                <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 10 }}>
+                  · Retention {data.retentionScore}%
+                </Typography>
+              </View>
+            )}
           </View>
 
           {/* Strong / Vulnerable areas */}

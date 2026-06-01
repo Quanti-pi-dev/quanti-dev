@@ -100,7 +100,7 @@ function DailyChestBanner() {
     common:    ['#6366F1', '#8B5CF6'],
   };
   const gradient = reward
-    ? (RARITY_GRADIENT[reward.rarity] ?? RARITY_GRADIENT['common']!)
+    ? (RARITY_GRADIENT[reward.rarity ?? 'common'] ?? RARITY_GRADIENT['common']!)
     : ['#F59E0B', '#F97316'] as [string, string];
 
   return (
@@ -127,11 +127,11 @@ function DailyChestBanner() {
         {reward ? (
           <>
             <Typography style={{ fontSize: 28 }}>
-              {reward.rarity === 'legendary' ? '✨' : reward.rarity === 'epic' ? '💫' : reward.rarity === 'rare' ? '💠' : '💰'}
+              {(reward.rarity ?? 'common') === 'legendary' ? '✨' : (reward.rarity ?? 'common') === 'epic' ? '💫' : (reward.rarity ?? 'common') === 'rare' ? '💠' : '💰'}
             </Typography>
             <View style={{ flex: 1 }}>
               <Typography variant="captionBold" color="rgba(255,255,255,0.8)" style={{ fontSize: 10 }}>
-                {reward.rarity.toUpperCase()} DROP
+                {(reward.rarity ?? 'common').toUpperCase()} DROP
               </Typography>
               <Typography variant="label" color="#FFF">{reward.message}</Typography>
             </View>

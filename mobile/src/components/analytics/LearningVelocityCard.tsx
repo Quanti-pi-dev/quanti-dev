@@ -255,10 +255,10 @@ export function LearningVelocityCard({ data }: LearningVelocityCardProps) {
                 invertDelta
               />
               <VelocityStat
-                label="Retention"
-                value={`${Math.round(data.accuracy7d * 0.9)}%`}
-                delta={Math.round(data.accuracyDelta * 0.8)}
-                icon="🧠"
+                label="Active Days"
+                value={`${data.activeDays}/7`}
+                delta={0}
+                icon="📅"
                 color="#8B5CF6"
               />
             </View>
