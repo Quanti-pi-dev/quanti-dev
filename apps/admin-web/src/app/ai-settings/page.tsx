@@ -108,6 +108,26 @@ const PROVIDERS: ProviderDef[] = [
       'qwen/qwen2.5-72b-instruct',
     ],
   },
+  {
+    id: 'freellmapi',
+    label: 'FreeLLMAPI (Proxy)',
+    apiKeyConfigKey: 'ai_api_key_freellmapi',
+    placeholder: 'freellmapi-...',
+    hint: 'Unified key from your self-hosted proxy —',
+    tokenUrl: 'http://localhost:3001',
+    tokenUrlLabel: 'open dashboard via SSH tunnel',
+    accent: 'violet',
+    badgeCls: 'bg-violet-950/60 border-violet-800/60 text-violet-400',
+    iconBg:   'bg-violet-950/50 border-violet-800/60 text-violet-400',
+    models: [
+      'free/auto',
+      'free/gemini-2.5-flash',
+      'free/llama-3.3-70b',
+      'free/qwen-2.5-72b',
+      'free/deepseek-v3',
+      'free/mistral-large',
+    ],
+  },
 ];
 
 // ─── Feature definitions ──────────────────────────────────────
@@ -164,6 +184,7 @@ const NVIDIA_PREFIXES = ['deepseek', 'mistral', 'meta/', 'nvidia/', 'moonshot', 
 function detectProvider(model: string): string | null {
   if (!model) return null;
   const m = model.toLowerCase();
+  if (m.startsWith('free/')) return 'freellmapi';
   if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4')) return 'openai';
   if (m.startsWith('claude')) return 'anthropic';
   if (m.startsWith('gemini')) return 'google';

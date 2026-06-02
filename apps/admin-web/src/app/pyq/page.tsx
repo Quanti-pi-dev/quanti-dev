@@ -1,6 +1,6 @@
 'use client';
 
-// ─── PYQ (Previous Year Questions) Page ──────────────────────
+// ─── PYQ Page ──────────────────────
 // GET    /api/admin/pyq          (paginated browse with filters)
 // GET    /api/admin/pyq/meta     (year + paper filter options)
 // POST   /api/admin/pyq/bulk     (bulk import with deck auto-create)
@@ -66,31 +66,30 @@ function ExamPicker({ exams, loading, selected, onSelect }: {
       </div>
       {loading ? <p className="text-xs text-zinc-500 py-4 text-center">Loading…</p>
         : filtered.length === 0 ? <p className="text-xs text-zinc-500 py-4 text-center">No exams found</p>
-        : (
-          <div className="space-y-1 max-h-52 overflow-y-auto pr-1">
-            {filtered.map(ex => (
-              <button key={ex.id} onClick={() => onSelect(ex)}
-                className={`w-full text-left px-3 py-2.5 rounded-xl border text-sm transition-all ${
-                  selected?.id === ex.id
-                    ? 'border-violet-500 bg-violet-600/10 text-white'
-                    : 'border-zinc-700 bg-zinc-800/50 text-zinc-300 hover:border-zinc-600 hover:text-white'
-                }`}>
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">{ex.title}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-zinc-500 bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded-full">{ex.category}</span>
-                    {selected?.id === ex.id && <Check size={13} className="text-violet-400" />}
+          : (
+            <div className="space-y-1 max-h-52 overflow-y-auto pr-1">
+              {filtered.map(ex => (
+                <button key={ex.id} onClick={() => onSelect(ex)}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl border text-sm transition-all ${selected?.id === ex.id
+                      ? 'border-violet-500 bg-violet-600/10 text-white'
+                      : 'border-zinc-700 bg-zinc-800/50 text-zinc-300 hover:border-zinc-600 hover:text-white'
+                    }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{ex.title}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-zinc-500 bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded-full">{ex.category}</span>
+                      {selected?.id === ex.id && <Check size={13} className="text-violet-400" />}
+                    </div>
                   </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
+                </button>
+              ))}
+            </div>
+          )}
     </div>
   );
 }
 
-// ─── Bulk Import Modal (4-step) ───────────────────────────────
+// ─── Bulk Import Modal ───────────────────────────────
 
 function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
   // cascading state
@@ -121,7 +120,7 @@ function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImpor
     setExamsLoading(true);
     adminApi.get<{ data: ExamOption[] }>('/api/admin/exams?pageSize=200')
       .then(r => setExams(r.data.data))
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setExamsLoading(false));
   }, []);
 
@@ -328,18 +327,18 @@ function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImpor
 // ─── Page ─────────────────────────────────────────────────────
 
 export default function PYQPage() {
-  const [cards, setCards]           = useState<PYQCard[]>([]);
-  const [meta, setMeta]             = useState<PYQMeta | null>(null);
+  const [cards, setCards] = useState<PYQCard[]>([]);
+  const [meta, setMeta] = useState<PYQMeta | null>(null);
   const [pagination, setPagination] = useState<Pagination | null>(null);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState('');
-  const [showBulk, setShowBulk]     = useState(false);
-  const [deleting, setDeleting]     = useState<string | null>(null);
-  const [year, setYear]             = useState('');
-  const [paper, setPaper]           = useState('');
-  const [page, setPage]             = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [showBulk, setShowBulk] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [year, setYear] = useState('');
+  const [paper, setPaper] = useState('');
+  const [page, setPage] = useState(1);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [deleteError, setDeleteError]   = useState('');
+  const [deleteError, setDeleteError] = useState('');
   const { toast } = useToast();
   const PAGE_SIZE = 20;
 
@@ -462,11 +461,10 @@ export default function PYQPage() {
               <div className="grid grid-cols-2 gap-1.5 mt-3">
                 {card.options.map(opt => (
                   <div key={opt.id}
-                    className={`px-3 py-1.5 rounded-lg text-xs ${
-                      opt.id === card.correctAnswerId
+                    className={`px-3 py-1.5 rounded-lg text-xs ${opt.id === card.correctAnswerId
                         ? 'bg-emerald-950/60 border border-emerald-800/60 text-emerald-300'
                         : 'bg-zinc-800/60 text-zinc-400'
-                    }`}>
+                      }`}>
                     <div className="flex items-center gap-2">
                       <span className="font-bold shrink-0">{opt.id}.</span>
                       <span className="truncate"><Latex text={opt.text} /></span>

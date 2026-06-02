@@ -1,8 +1,9 @@
 // ─── Unified AI Client ──────────────────────────────────────
 // Multi-provider wrapper that dispatches to Google Gemini, OpenAI,
-// Anthropic, or NVIDIA NIM based on the selected model prefix.
+// Anthropic, NVIDIA NIM, or FreeLLMAPI based on the selected model prefix.
 //
 // Provider detection rules:
+//   - Model starts with 'free/'                     → FreeLLMAPI proxy
 //   - Model starts with 'gpt', 'o1', 'o3', 'o4'    → OpenAI
 //   - Model starts with 'claude'                    → Anthropic
 //   - Model contains '/' (org/model like nvidia hub) → NVIDIA NIM
@@ -27,7 +28,7 @@ const log = createServiceLogger('AIClient');
 
 // ─── Provider Detection ─────────────────────────────────────
 
-export type AIProvider = 'openai' | 'anthropic' | 'google' | 'nvidia';
+export type AIProvider = 'openai' | 'anthropic' | 'google' | 'nvidia' | 'freellmapi';
 
 /** Known NVIDIA NIM model prefixes on build.nvidia.com */
 const NVIDIA_PREFIXES = [
@@ -37,6 +38,11 @@ const NVIDIA_PREFIXES = [
 
 export function detectProvider(model: string): AIProvider {
   const m = model.toLowerCase();
+  // FreeLLMAPI proxy: model names are prefixed with 'free/'
+  // e.g. 'free/auto', 'free/gemini-2.5-flash', 'free/llama-3.3-70b'
+  if (m.startsWith('free/')) {
+    return 'freellmapi';
+  }
   if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4')) {
     return 'openai';
   }
@@ -54,10 +60,11 @@ export function detectProvider(model: string): AIProvider {
 // ─── API Key Resolution ─────────────────────────────────────
 
 const API_KEY_CONFIG: Record<AIProvider, { dbKey: string; envVar: string; label: string }> = {
-  openai:    { dbKey: 'ai_api_key_openai',    envVar: 'OPENAI_API_KEY',    label: 'OpenAI' },
-  anthropic: { dbKey: 'ai_api_key_anthropic',  envVar: 'ANTHROPIC_API_KEY', label: 'Anthropic' },
-  google:    { dbKey: 'ai_api_key_google',     envVar: 'GEMINI_API_KEY',    label: 'Google AI' },
-  nvidia:    { dbKey: 'ai_api_key_nvidia',     envVar: 'NVIDIA_API_KEY',    label: 'NVIDIA NIM' },
+  openai:      { dbKey: 'ai_api_key_openai',      envVar: 'OPENAI_API_KEY',      label: 'OpenAI' },
+  anthropic:   { dbKey: 'ai_api_key_anthropic',   envVar: 'ANTHROPIC_API_KEY',   label: 'Anthropic' },
+  google:      { dbKey: 'ai_api_key_google',      envVar: 'GEMINI_API_KEY',      label: 'Google AI' },
+  nvidia:      { dbKey: 'ai_api_key_nvidia',      envVar: 'NVIDIA_API_KEY',      label: 'NVIDIA NIM' },
+  freellmapi:  { dbKey: 'ai_api_key_freellmapi',  envVar: 'FREELLMAPI_API_KEY',  label: 'FreeLLMAPI Proxy' },
 };
 
 async function resolveApiKey(provider: AIProvider): Promise<string> {
@@ -139,6 +146,26 @@ async function getNvidiaClient(): Promise<OpenAI> {
       apiKey,
       baseURL: 'https://integrate.api.nvidia.com/v1',
     }));
+  }
+  return _openaiClients.get(cacheKey + apiKey)!;
+}
+
+/**
+ * FreeLLMAPI is a self-hosted OpenAI-compatible proxy that pools 16 free-tier
+ * providers (Groq, Gemini, Mistral, SambaNova, Cerebras, OpenRouter, etc.) with
+ * automatic failover. It runs as a sidecar on Instance 1 at port 3001.
+ *
+ * Env vars:
+ *   FREELLMAPI_API_KEY  — the unified 'freellmapi-...' key from the proxy dashboard
+ *   FREELLMAPI_URL      — defaults to http://127.0.0.1:3001/v1 (same-machine)
+ *                         set to http://<instance1-private-ip>:3001/v1 on Instance 2
+ */
+async function getFreeLLMAPIClient(): Promise<OpenAI> {
+  const cacheKey = '__freellmapi__';
+  const apiKey = await resolveApiKey('freellmapi');
+  if (!_openaiClients.has(cacheKey + apiKey)) {
+    const baseURL = process.env['FREELLMAPI_URL'] ?? 'http://127.0.0.1:3001/v1';
+    _openaiClients.set(cacheKey + apiKey, new OpenAI({ apiKey, baseURL }));
   }
   return _openaiClients.get(cacheKey + apiKey)!;
 }
@@ -232,6 +259,30 @@ async function generateWithNvidia(params: AIGenerateParams & { model: string }):
   return text;
 }
 
+async function generateWithFreeLLMAPI(params: AIGenerateParams & { model: string }): Promise<string> {
+  const client = await getFreeLLMAPIClient();
+  // Strip the 'free/' prefix — the proxy receives the raw model name.
+  // 'free/auto' becomes 'auto', letting the proxy's fallback chain decide routing.
+  const actualModel = params.model.replace(/^free\//i, '') || 'auto';
+
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+  if (params.systemPrompt) {
+    messages.push({ role: 'system', content: params.systemPrompt });
+  }
+  messages.push({ role: 'user', content: params.userPrompt });
+
+  const result = await client.chat.completions.create({
+    model: actualModel,
+    messages,
+    max_tokens: params.maxOutputTokens ?? 512,
+    temperature: params.temperature ?? 0.4,
+  });
+
+  const text = result.choices[0]?.message?.content;
+  if (!text) throw new Error('FreeLLMAPI returned an empty response');
+  return text;
+}
+
 // ─── Public API ─────────────────────────────────────────────
 
 /**
@@ -250,6 +301,8 @@ export async function aiGenerate(params: AIGenerateParams): Promise<string> {
   log.debug({ model, provider, featureConfigKey: params.featureConfigKey }, 'AI generate');
 
   switch (provider) {
+    case 'freellmapi':
+      return generateWithFreeLLMAPI(fullParams);
     case 'openai':
       return generateWithOpenAI(fullParams);
     case 'anthropic':
