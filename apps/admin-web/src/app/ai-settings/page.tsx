@@ -121,11 +121,6 @@ const PROVIDERS: ProviderDef[] = [
     iconBg:   'bg-violet-950/50 border-violet-800/60 text-violet-400',
     models: [
       'free/auto',
-      'free/gemini-2.5-flash',
-      'free/llama-3.3-70b',
-      'free/qwen-2.5-72b',
-      'free/deepseek-v3',
-      'free/mistral-large',
     ],
   },
 ];

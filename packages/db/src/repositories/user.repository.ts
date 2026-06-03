@@ -309,6 +309,76 @@ class UserRepository {
       joinedAt: (row.created_at as Date).toISOString(),
     }));
   }
+
+  // ─── Hard delete user + all dependent PG rows ─────────
+  // Runs inside a single transaction. Deletes in FK-safe order
+  // so no constraint violations occur.
+  //
+  // IMPORTANT: Three billing tables (subscriptions, subscription_events,
+  // payments) store firebase_uid — not the PG UUID — in their user_id
+  // column. firebaseUid must be passed explicitly.
+  async deleteUserTransact(id: string, firebaseUid: string): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 1. PG UUID-keyed tables
+      const pgUuidTables = [
+        'study_sessions',
+        'user_badges',
+        'user_purchases',
+        'user_unlocked_decks',
+        'coin_transactions',
+        'coin_pack_purchases',
+        'coupon_redemptions',
+        'institute_members',
+        'study_pact_members',
+        'user_preferences',
+      ];
+      for (const table of pgUuidTables) {
+        await client.query(`DELETE FROM ${table} WHERE user_id = $1`, [id]);
+      }
+
+      // 2. Firebase UID-keyed billing tables
+      //    These tables join to users via firebase_uid, not id.
+      const firebaseTables = [
+        'payments',
+        'subscription_events',
+        'subscriptions',
+      ];
+      for (const table of firebaseTables) {
+        await client.query(`DELETE FROM ${table} WHERE user_id = $1`, [firebaseUid]);
+      }
+
+      // 3. Friendships — two FK columns (PG UUID)
+      await client.query(
+        `DELETE FROM friendships WHERE requester_id = $1 OR addressee_id = $1`,
+        [id],
+      );
+
+      // 4. Challenges — two FK columns (PG UUID)
+      await client.query(
+        `DELETE FROM challenges WHERE creator_id = $1 OR opponent_id = $1`,
+        [id],
+      );
+
+      // 5. Study pacts owned by this user (members already removed above)
+      await client.query(
+        `DELETE FROM study_pacts WHERE creator_id = $1`,
+        [id],
+      );
+
+      // 6. Primary user row
+      await client.query(`DELETE FROM users WHERE id = $1`, [id]);
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
 }
 
 export const userRepository = new UserRepository();

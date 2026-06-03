@@ -7,6 +7,7 @@ import { requireAuth } from '../middleware/rbac.js';
 import { planRepository } from '@kd/db';
 import { paymentRepository } from '@kd/db';
 import { subscriptionService } from '@kd/db';
+import { subscriptionRepository } from '@kd/db';
 import { couponService } from '@kd/db';
 import { userRepository } from '@kd/db';
 import { config } from '@kd/db';
@@ -16,6 +17,9 @@ import { config } from '@kd/db';
 const checkoutSchema = z.object({
   planId: z.string().uuid(),
   couponCode: z.string().min(1).max(32).optional(),
+  /** When true, skip any free trial even if the plan has trialDays configured.
+   *  Set by the client when the user selects a paid plan card (not the FreeTrialCard). */
+  skipTrial: z.boolean().optional().default(false),
 });
 
 const verifySchema = z.object({
@@ -35,12 +39,29 @@ export async function subscriptionRoutes(fastify: FastifyInstance): Promise<void
   // Auth required for all subscription routes
   fastify.addHook('preHandler', requireAuth());
 
-  // ─── GET /plans — List active plans ─────────────────────
-  fastify.get('/plans', async (_request: FastifyRequest, reply: FastifyReply) => {
+  // ─── GET /plans — List active plans (with per-user trial eligibility) ─
+  fastify.get('/plans', async (request: FastifyRequest, reply: FastifyReply) => {
     const plans = await planRepository.listActive();
+
+    // For each plan that offers a trial, check whether this user has already
+    // consumed it. Done in parallel to keep latency low.
+    const plansWithEligibility = await Promise.all(
+      plans.map(async (plan) => {
+        if (plan.trialDays <= 0) {
+          // Plan has no trial — eligibility is irrelevant
+          return { ...plan, trialEligible: false };
+        }
+        const hasHad = await subscriptionRepository.hasHadTrialForTier(
+          request.user!.id,
+          plan.tier,
+        );
+        return { ...plan, trialEligible: !hasHad };
+      }),
+    );
+
     return reply.send({
       success: true,
-      data: plans,
+      data: plansWithEligibility,
       timestamp: new Date().toISOString(),
     });
   });
@@ -57,12 +78,13 @@ export async function subscriptionRoutes(fastify: FastifyInstance): Promise<void
 
   // ─── POST /subscriptions/checkout — Initiate checkout ───
   fastify.post('/subscriptions/checkout', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { planId, couponCode } = checkoutSchema.parse(request.body);
+    const { planId, couponCode, skipTrial } = checkoutSchema.parse(request.body);
 
     const result = await subscriptionService.initiateCheckout(
       request.user!.id,
       planId,
       couponCode,
+      skipTrial,
     );
 
     // Fetch user profile for checkout prefill

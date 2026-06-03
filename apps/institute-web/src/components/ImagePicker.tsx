@@ -12,7 +12,49 @@ import { api } from '@/lib/api';
 import { ImagePlus, X, Loader2 } from 'lucide-react';
 
 const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp'];
-const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
+const MAX_SIZE = 5 * 1024 * 1024; // 5 MB — hard limit before resize
+const MAX_DIMENSION = 1400;       // px — longest edge after resize
+const ENCODE_QUALITY = 0.88;
+
+// ── Client-side resize via Canvas ────────────────────────────
+async function resizeImage(file: File): Promise<{ blob: Blob; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const { naturalWidth: w, naturalHeight: h } = img;
+
+      // Only resize if over the limit
+      if (w <= MAX_DIMENSION && h <= MAX_DIMENSION) {
+        resolve({ blob: file, mimeType: file.type });
+        return;
+      }
+
+      const ratio = Math.min(MAX_DIMENSION / w, MAX_DIMENSION / h);
+      const canvas = document.createElement('canvas');
+      canvas.width  = Math.round(w * ratio);
+      canvas.height = Math.round(h * ratio);
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      // PNG → convert to WebP for better compression; WebP/JPEG stay as-is
+      const outMime = file.type === 'image/png' ? 'image/webp' : file.type;
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { reject(new Error('Canvas resize failed')); return; }
+          resolve({ blob, mimeType: outMime });
+        },
+        outMime,
+        ENCODE_QUALITY,
+      );
+    };
+
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Image load failed')); };
+    img.src = objectUrl;
+  });
+}
 
 interface ImagePickerProps {
   /** Current image URL (CDN URL from R2). */
@@ -45,22 +87,25 @@ export function ImagePicker({ value, onChange, instituteId, label = 'Question Im
     setUploading(true);
     setError('');
     try {
-      // 1. Get presigned URL
+      // 1. Resize / compress on the client
+      const { blob, mimeType } = await resizeImage(file);
+
+      // 2. Get presigned URL
       const res = await api.post<{ data: { uploadUrl: string; cdnUrl: string } }>(
         `/api/inst/v1/institutes/${instituteId}/upload/presign`,
-        { mimeType: file.type },
+        { mimeType },
       );
       const { uploadUrl, cdnUrl } = res.data.data;
 
-      // 2. PUT to R2 directly
+      // 3. PUT to R2 directly
       const putRes = await fetch(uploadUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': file.type },
-        body: file,
+        headers: { 'Content-Type': mimeType },
+        body: blob,
       });
       if (!putRes.ok) throw new Error(`Upload failed: ${putRes.status}`);
 
-      // 3. Return CDN URL to parent
+      // 4. Return CDN URL to parent
       onChange(cdnUrl);
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message ?? 'Upload failed.';

@@ -1,8 +1,9 @@
 // ─── PlanCard ─────────────────────────────────────────────────
-// Full plan card with price, features, badge, and animated CTA.
-// Popular plan gets a gradient border wrapper.
+// Horizontal-carousel plan card — fixed width, full-height,
+// with an embedded CTA button that fires checkout directly.
+// Free trial badge is gone from here; free trial has its own card.
 
-import { View, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity, Dimensions } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -14,10 +15,11 @@ import { PlanFeatureRow } from './PlanFeatureRow';
 import { formatPrice, formatCycle } from '../../services/subscription.service';
 import type { Plan } from '@kd/shared';
 
-// ─── Static feature definitions ──────────────────────────────
-
 import { Ionicons } from '@expo/vector-icons';
 type IconName = keyof typeof Ionicons.glyphMap;
+
+// Card is 80% of screen width so you can peek at the next one
+const CARD_WIDTH = Math.min(Dimensions.get('window').width * 0.78, 300);
 
 const FEATURE_ROWS: { icon: IconName; label: string; key: string }[] = [
   { icon: 'albums-outline',          label: 'Flashcard decks',    key: 'max_decks' },
@@ -32,66 +34,50 @@ const FEATURE_ROWS: { icon: IconName; label: string; key: string }[] = [
   { icon: 'headset-outline',         label: 'Priority support',   key: 'priority_support' },
 ];
 
-// ─── Props ────────────────────────────────────────────────────
-
 interface PlanCardProps {
   plan: Plan;
   isPopular?: boolean;
   isCurrentPlan?: boolean;
-  isSelected?: boolean;
-  onSelect: (plan: Plan) => void;
+  /** Loading spinner overlay while this plan's checkout is in progress */
+  isCheckingOut?: boolean;
+  onCheckout: (plan: Plan) => void;
 }
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
-// ─── Component ────────────────────────────────────────────────
-
-export function PlanCard({ plan, isPopular, isCurrentPlan, isSelected, onSelect }: PlanCardProps) {
+export function PlanCard({ plan, isPopular, isCurrentPlan, isCheckingOut, onCheckout }: PlanCardProps) {
   const { theme } = useTheme();
   const scale = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const features = plan.features as unknown as Record<string, unknown>;
 
-  function handlePress() {
-    if (isCurrentPlan) return;
+  function handleCtaPress() {
+    if (isCurrentPlan || isCheckingOut) return;
     scale.value = withSpring(0.97, { stiffness: 400, damping: 20 }, () => {
       scale.value = withSpring(1, { stiffness: 400, damping: 20 });
     });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onSelect(plan);
+    onCheckout(plan);
   }
 
-  const cardBorderStyle = isCurrentPlan
-    ? { borderWidth: 2, borderColor: theme.success }
-    : isSelected
-    ? { borderWidth: 2, borderColor: theme.primary }
-    : isPopular
-    ? { borderWidth: 0 }
-    : { borderWidth: 1, borderColor: theme.border };
-
-  const card = (
-    <AnimatedTouchable
-      style={[
-        animStyle,
-        {
-          borderRadius: radius['2xl'],
-          padding: spacing.xl,
-          backgroundColor: theme.card,
-          ...cardBorderStyle,
-        },
-      ]}
-      onPress={handlePress}
-      activeOpacity={1}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: isCurrentPlan }}
-      accessibilityLabel={`${plan.displayName} plan. ${isCurrentPlan ? 'This is your current plan.' : `Price is ${formatPrice(plan.pricePaise)} ${formatCycle(plan.billingCycle)}.`}`}
+  const cardInner = (
+    <View
+      style={{
+        borderRadius: radius['2xl'],
+        backgroundColor: theme.card,
+        padding: spacing.xl,
+        flexDirection: 'column',
+        ...(isCurrentPlan
+          ? { borderWidth: 2, borderColor: theme.success }
+          : isPopular
+          ? { borderWidth: 0 }
+          : { borderWidth: 1, borderColor: theme.border }),
+      }}
     >
-      {/* ── Header row ── */}
+      {/* ── Header ── */}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: spacing.xs }}>
         <View style={{ flex: 1 }}>
           <Typography variant="h3">{plan.displayName}</Typography>
-
-          {/* Price */}
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs, marginTop: spacing.xs }}>
             <Typography variant="h2" color={theme.primary}>
               {formatPrice(plan.pricePaise)}
@@ -108,28 +94,15 @@ export function PlanCard({ plan, isPopular, isCurrentPlan, isSelected, onSelect 
             <PlanBadge variant="active" />
           ) : isPopular ? (
             <PlanBadge variant="popular" />
-          ) : plan.trialDays > 0 ? (
-            <PlanBadge variant="trial" />
           ) : null}
         </View>
       </View>
 
-      {/* Trial note */}
-      {plan.trialDays > 0 && !isCurrentPlan && (
-        <Typography
-          variant="captionBold"
-          color={theme.success}
-          style={{ marginTop: spacing.xs, marginBottom: spacing.md }}
-        >
-          {plan.trialDays}-day free trial — no charge today
-        </Typography>
-      )}
-
       {/* ── Divider ── */}
       <View style={{ height: 1, backgroundColor: theme.divider, marginVertical: spacing.base }} />
 
-      {/* ── Feature list ── */}
-      <View style={{ gap: spacing.sm, marginBottom: spacing.xl }}>
+      {/* ── Features ── */}
+      <View style={{ gap: spacing.sm, marginBottom: spacing.xl, flex: 1 }}>
         {FEATURE_ROWS.map((f) => (
           <PlanFeatureRow
             key={f.key}
@@ -140,21 +113,22 @@ export function PlanCard({ plan, isPopular, isCurrentPlan, isSelected, onSelect 
         ))}
       </View>
 
-      {/* ── CTA ── */}
+      {/* ── CTA indicator (non-interactive — whole card is the touch target) ── */}
       {isPopular && !isCurrentPlan ? (
         <LinearGradient
           colors={['#6366F1', '#3B82F6']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          style={{ borderRadius: radius.lg }}
+          style={{ borderRadius: radius.lg, paddingVertical: spacing.md, alignItems: 'center' }}
         >
-          <View
-            style={{ paddingVertical: spacing.md, alignItems: 'center' }}
-          >
-            <Typography variant="label" color="#FFFFFF">
-              {plan.trialDays > 0 ? 'Start Free Trial' : `Choose ${plan.displayName}`}
-            </Typography>
-          </View>
+          {isCheckingOut ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <Ionicons name="sync-outline" size={16} color="#FFFFFF" />
+              <Typography variant="label" color="#FFFFFF">Processing…</Typography>
+            </View>
+          ) : (
+            <Typography variant="label" color="#FFFFFF">Choose {plan.displayName}</Typography>
+          )}
         </LinearGradient>
       ) : (
         <View
@@ -165,18 +139,36 @@ export function PlanCard({ plan, isPopular, isCurrentPlan, isSelected, onSelect 
             backgroundColor: isCurrentPlan ? theme.cardAlt : theme.primary,
           }}
         >
-          <Typography
-            variant="label"
-            color={isCurrentPlan ? theme.textTertiary : '#FFFFFF'}
-          >
-            {isCurrentPlan
-              ? 'Current Plan'
-              : plan.trialDays > 0
-              ? 'Start Free Trial'
-              : `Choose ${plan.displayName}`}
-          </Typography>
+          {isCheckingOut ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <Ionicons name="sync-outline" size={16} color={isCurrentPlan ? theme.textTertiary : '#FFFFFF'} />
+              <Typography variant="label" color={isCurrentPlan ? theme.textTertiary : '#FFFFFF'}>Processing…</Typography>
+            </View>
+          ) : (
+            <Typography variant="label" color={isCurrentPlan ? theme.textTertiary : '#FFFFFF'}>
+              {isCurrentPlan ? 'Current Plan' : `Choose ${plan.displayName}`}
+            </Typography>
+          )}
         </View>
       )}
+    </View>
+  );
+
+  // Whole card is the touch target
+  const card = (
+    <AnimatedTouchable
+      style={[animStyle, { width: CARD_WIDTH }]}
+      onPress={handleCtaPress}
+      activeOpacity={0.92}
+      disabled={isCurrentPlan || isCheckingOut}
+      accessibilityRole="button"
+      accessibilityLabel={
+        isCurrentPlan
+          ? `${plan.displayName} — your current plan`
+          : `Select ${plan.displayName} plan`
+      }
+    >
+      {cardInner}
     </AnimatedTouchable>
   );
 
@@ -187,7 +179,7 @@ export function PlanCard({ plan, isPopular, isCurrentPlan, isSelected, onSelect 
         colors={['#6366F1', '#3B82F6', '#06B6D4']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={{ borderRadius: radius['2xl'], padding: 2 }}
+        style={{ borderRadius: radius['2xl'], padding: 2, width: CARD_WIDTH }}
       >
         {card}
       </LinearGradient>
@@ -196,3 +188,6 @@ export function PlanCard({ plan, isPopular, isCurrentPlan, isSelected, onSelect 
 
   return card;
 }
+
+export { CARD_WIDTH };
+

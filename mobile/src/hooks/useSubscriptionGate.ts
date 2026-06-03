@@ -38,7 +38,7 @@ export interface SubscriptionGate {
 }
 
 export function useSubscriptionGate(): SubscriptionGate {
-  const { isSubscribed, planTier, hasFeature, subscription } = useSubscription();
+  const { isSubscribed, planTier, hasFeature, subscription, aiQuota } = useSubscription();
   const router = useRouter();
 
   const features = subscription?.plan?.features;
@@ -55,8 +55,14 @@ export function useSubscriptionGate(): SubscriptionGate {
       : 1; // free: Emerging + Developing (same as Basic)
 
   const canUseFeature = useCallback(
-    (key: keyof PlanFeatures): boolean => hasFeature(key),
-    [hasFeature],
+    (key: keyof PlanFeatures): boolean => {
+      const hasPlanAccess = hasFeature(key);
+      if (!hasPlanAccess) return false;
+      // Daily quota gate for AI features
+      if (key === 'ai_explanations' && aiQuota?.isExhausted) return false;
+      return true;
+    },
+    [hasFeature, aiQuota],
   );
 
   const isDeckLimitReached = useCallback(

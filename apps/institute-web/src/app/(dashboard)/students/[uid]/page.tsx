@@ -4,10 +4,11 @@ import { use, useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { api } from '@/lib/api';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Target, TrendingUp, TrendingDown, Minus,
   Flame, Calendar, AlertTriangle, Trophy, CheckCircle2,
-  BookOpen, BarChart2, Activity, Clock,
+  BookOpen, BarChart2, Activity, Clock, Trash2, AlertOctagon,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -114,10 +115,17 @@ function ActivityTooltip({ active, payload, label }: { active?: boolean; payload
 export default function StudentProgressPage({ params }: { params: Promise<{ uid: string }> }) {
   const { uid } = use(params);
   const { instituteId } = useAuth();
+  const router = useRouter();
   const [data, setData]       = useState<ProgressData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
   const [activeSubject, setActiveSubject] = useState<string | null>(null);
+
+  // ── Purge state ──────────────────────────────────────────
+  const [showPurgeModal, setShowPurgeModal] = useState(false);
+  const [confirmEmail, setConfirmEmail]     = useState('');
+  const [purging, setPurging]               = useState(false);
+  const [purgeError, setPurgeError]         = useState('');
 
   useEffect(() => {
     if (!instituteId) return;
@@ -137,6 +145,28 @@ export default function StudentProgressPage({ params }: { params: Promise<{ uid:
     };
     void load();
   }, [instituteId, uid]);
+
+  const handlePurge = async () => {
+    if (!data || confirmEmail !== data.student.email) return;
+    setPurging(true);
+    setPurgeError('');
+    try {
+      await api.delete(`/api/inst/v1/institutes/${instituteId}/members/${uid}/purge`);
+      router.push('/students');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: { message?: string } } } })
+        ?.response?.data?.error?.message ?? 'Purge failed. Please try again.';
+      setPurgeError(msg);
+      setPurging(false);
+    }
+  };
+
+  const closeModal = () => {
+    if (purging) return;
+    setShowPurgeModal(false);
+    setConfirmEmail('');
+    setPurgeError('');
+  };
 
   if (loading) return <LoadingSkeleton />;
   if (error || !data) return (
@@ -160,7 +190,8 @@ export default function StudentProgressPage({ params }: { params: Promise<{ uid:
   }));
 
   return (
-    <div className="animate-fade-in max-w-6xl">
+    <>
+      <div className="animate-fade-in max-w-6xl">
       {/* Back + header */}
       <div className="flex items-start gap-4 mb-8">
         <Link href="/students" className="p-2 rounded-xl mt-1 transition-colors hover:text-white shrink-0"
@@ -413,9 +444,134 @@ export default function StudentProgressPage({ params }: { params: Promise<{ uid:
           )}
         </div>
       </div>
-    </div>
+
+      {/* ── Danger Zone ────────────────────────────────────── */}
+      <div className="mt-6 glass p-5" style={{ border: '1px solid rgba(239,68,68,0.25)' }}>
+        <div className="flex items-center gap-2 mb-2">
+          <AlertOctagon className="w-4 h-4 shrink-0" style={{ color: '#f87171' }} />
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#f87171' }}>
+            Danger Zone
+          </p>
+        </div>
+        <p className="text-xs mb-4 leading-relaxed" style={{ color: 'var(--color-surface-400)' }}>
+          Permanently delete this student's account and <strong style={{ color: 'var(--color-surface-200)' }}>all data</strong> across the entire platform — including study history, analytics, subscriptions, and Firebase credentials. This action is irreversible.
+        </p>
+        <button
+          id="btn-purge-student"
+          onClick={() => setShowPurgeModal(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-150"
+          style={{
+            background: 'rgba(239,68,68,0.08)',
+            border: '1px solid rgba(239,68,68,0.35)',
+            color: '#f87171',
+          }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.18)';
+            (e.currentTarget as HTMLElement).style.color = '#fca5a5';
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.08)';
+            (e.currentTarget as HTMLElement).style.color = '#f87171';
+          }}
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          Delete Student &amp; All Data
+        </button>
+      </div>
+    </div>{/* /max-w-6xl */}
+
+    {/* ── Purge confirmation modal ────────────────────────── */}
+    {showPurgeModal && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)' }}
+        onClick={closeModal}
+      >
+        <div
+          className="glass max-w-md w-full p-6 shadow-2xl"
+          style={{ border: '1px solid var(--color-surface-700)' }}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)' }}>
+              <AlertOctagon className="w-5 h-5" style={{ color: '#f87171' }} />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">Permanent Deletion</h3>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-surface-400)' }}>This cannot be undone</p>
+            </div>
+          </div>
+
+          {/* Warning details */}
+          <div className="rounded-xl p-3 mb-5 text-xs space-y-1 leading-relaxed"
+            style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.18)' }}>
+            <p className="font-medium text-white">The following will be permanently deleted:</p>
+            <ul className="list-disc list-inside space-y-0.5 mt-1" style={{ color: 'var(--color-surface-400)' }}>
+              <li>Firebase Authentication account</li>
+              <li>All subscription &amp; payment records</li>
+              <li>All study sessions, badges &amp; progress</li>
+              <li>All MongoDB analytics &amp; annotations</li>
+              <li>Institute membership &amp; test submissions</li>
+            </ul>
+          </div>
+
+          {/* Email confirmation */}
+          <div className="mb-5">
+            <p className="text-xs mb-2" style={{ color: 'var(--color-surface-400)' }}>
+              Type <span className="font-mono select-none" style={{ color: 'var(--color-surface-200)' }}>{student.email}</span> to confirm:
+            </p>
+            <input
+              id="input-confirm-purge-email"
+              type="text"
+              autoComplete="off"
+              placeholder="Enter student email…"
+              value={confirmEmail}
+              onChange={e => setConfirmEmail(e.target.value)}
+              className="w-full rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 outline-none transition-colors"
+              style={{
+                background: 'var(--color-surface-800)',
+                border: confirmEmail === student.email
+                  ? '1px solid rgba(239,68,68,0.6)'
+                  : '1px solid var(--color-surface-600)',
+              }}
+            />
+            {purgeError && (
+              <p className="text-xs mt-2" style={{ color: '#f87171' }}>{purgeError}</p>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={closeModal}
+              disabled={purging}
+              className="px-4 py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+              style={{ background: 'var(--color-surface-700)', color: 'var(--color-surface-200)' }}
+            >
+              Cancel
+            </button>
+            <button
+              id="btn-confirm-purge"
+              onClick={handlePurge}
+              disabled={purging || confirmEmail !== student.email}
+              className="px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{
+                background: confirmEmail === student.email ? '#dc2626' : 'rgba(220,38,38,0.3)',
+                color: 'white',
+              }}
+            >
+              {purging ? 'Deleting…' : <><Trash2 className="w-3 h-3" /> Delete Permanently</>}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
+
 
 // ── Sub-components ───────────────────────────────────────────────
 

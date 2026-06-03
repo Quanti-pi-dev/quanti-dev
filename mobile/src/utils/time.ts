@@ -3,6 +3,20 @@
 // and a compact date formatter for the UI.
 
 /**
+ * Returns the current local date as a "YYYY-MM-DD" string.
+ * Use this instead of `new Date().toISOString().split('T')[0]`,
+ * which always returns the UTC date and causes streak/goal
+ * mismatches for users in non-UTC timezones (e.g. IST = UTC+5:30).
+ */
+export function getLocalDateString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * Converts an ISO date string into a human-readable relative time.
  * Examples: "Just now", "5m ago", "2h ago", "Yesterday", "Mar 28"
  */

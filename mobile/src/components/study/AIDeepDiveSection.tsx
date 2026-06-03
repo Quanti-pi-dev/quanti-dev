@@ -183,10 +183,10 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                   </Typography>
                   <Typography variant="caption" color={theme.textTertiary}>
                     {isWrongAnswer
-                      ? 'Tap to understand your specific mistake'
+                      ? 'Uncover the gap in your reasoning'
                       : hasAIExplanations
-                        ? 'Tap to get a Gemini-powered explanation'
-                        : 'Tap to see the explanation'}
+                        ? 'AI Deep Dive'
+                        : 'Daily AI limit reached \u00b7 Resets tomorrow'}
                   </Typography>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={isWrongAnswer ? '#EF4444' : '#6366F1'} />

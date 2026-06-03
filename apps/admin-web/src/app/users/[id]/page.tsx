@@ -5,17 +5,18 @@
 // payment history, and admin role management.
 //
 // Routes wired:
-//   GET   /api/admin/users/:id
-//   PATCH /api/admin/users/:id/role
+//   GET    /api/admin/users/:id
+//   PATCH  /api/admin/users/:id/role
+//   DELETE /api/admin/users/:id
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { adminApi } from '@/lib/api';
 import { PageShell, Badge, Spinner, ErrorBanner, InlineSpinner } from '@/components/page-shell';
 import { useToast } from '@/components/toast';
 import {
   User, CreditCard, ReceiptText, ShieldCheck, Calendar, Mail,
-  Hash, Fingerprint, ChevronDown,
+  Hash, Fingerprint, ChevronDown, Trash2, AlertOctagon,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -160,9 +161,16 @@ function RoleEditor({ userId, currentRole, onChanged }: { userId: string; curren
 
 export default function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [user, setUser]     = useState<UserDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState('');
+  const router = useRouter();
+  const { toast } = useToast();
+  const [user, setUser]         = useState<UserDetail | null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState('');
+
+  // ── Deletion state ──────────────────────────────────────
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [confirmEmail, setConfirmEmail]       = useState('');
+  const [deleting, setDeleting]               = useState(false);
 
   const fetchUser = useCallback(async () => {
     setError('');
@@ -174,6 +182,27 @@ export default function UserDetailPage() {
   }, [id]);
 
   useEffect(() => { fetchUser(); }, [fetchUser]);
+
+  const handleDelete = async () => {
+    if (!user || confirmEmail !== user.email) return;
+    setDeleting(true);
+    try {
+      await adminApi.delete(`/api/admin/users/${id}`);
+      toast.success('User and all data permanently deleted.');
+      router.push('/users');
+    } catch {
+      toast.error('Failed to delete user. Please try again.');
+      setDeleting(false);
+      setShowDeleteModal(false);
+      setConfirmEmail('');
+    }
+  };
+
+  const closeModal = () => {
+    if (deleting) return;
+    setShowDeleteModal(false);
+    setConfirmEmail('');
+  };
 
   const tier = user ? (TIER_LABELS[user.planTier] ?? { label: `Tier ${user.planTier}`, variant: 'zinc' as const }) : null;
 
@@ -226,6 +255,25 @@ export default function UserDetailPage() {
                 <span className="text-sm text-zinc-400">Role</span>
                 <RoleEditor userId={user.id} currentRole={user.role} onChanged={fetchUser} />
               </div>
+            </div>
+
+            {/* Danger Zone */}
+            <div className="bg-zinc-900 border border-red-950/50 rounded-2xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertOctagon size={14} className="text-red-500 shrink-0" />
+                <p className="text-xs font-semibold uppercase tracking-widest text-red-500">Danger Zone</p>
+              </div>
+              <p className="text-xs text-zinc-500 mb-4 leading-relaxed">
+                Permanently delete this user account along with all subscriptions, payments, study history, and Firebase credentials. This action is <strong className="text-zinc-300">irreversible</strong>.
+              </p>
+              <button
+                id="btn-delete-user"
+                onClick={() => setShowDeleteModal(true)}
+                className="w-full py-2 px-3 rounded-xl text-xs font-semibold border transition-all duration-150 flex items-center justify-center gap-2 bg-red-950/20 border-red-900/50 text-red-400 hover:bg-red-900/40 hover:text-red-200 hover:border-red-700/60"
+              >
+                <Trash2 size={13} />
+                Delete User &amp; All Data
+              </button>
             </div>
           </div>
 
@@ -302,6 +350,93 @@ export default function UserDetailPage() {
           </div>
         </div>
       )}
+
+      {/* ── Delete confirmation modal ────────────────────────── */}
+      {showDeleteModal && user && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)' }}
+          onClick={closeModal}
+        >
+          <div
+            className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-red-950/40 border border-red-900/50 flex items-center justify-center shrink-0">
+                <AlertOctagon size={18} className="text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Permanent Deletion</h3>
+                <p className="text-xs text-zinc-500 mt-0.5">This cannot be undone</p>
+              </div>
+            </div>
+
+            {/* Warning details */}
+            <div className="rounded-xl p-3 mb-5 text-xs space-y-1 leading-relaxed" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.18)' }}>
+              <p className="text-zinc-300 font-medium">The following will be permanently deleted:</p>
+              <ul className="text-zinc-500 list-disc list-inside space-y-0.5 mt-1">
+                <li>Firebase Authentication account</li>
+                <li>All subscription &amp; payment records</li>
+                <li>All study sessions, badges &amp; progress</li>
+                <li>All MongoDB analytics &amp; annotations</li>
+                <li>Friendships, challenges &amp; social data</li>
+              </ul>
+            </div>
+
+            {/* Email confirmation */}
+            <div className="mb-5">
+              <p className="text-xs text-zinc-400 mb-2">
+                Type <span className="font-mono text-zinc-200 select-none">{user.email}</span> to confirm:
+              </p>
+              <input
+                id="input-confirm-email"
+                type="text"
+                autoComplete="off"
+                placeholder="Enter user email…"
+                value={confirmEmail}
+                onChange={e => setConfirmEmail(e.target.value)}
+                className="w-full rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 outline-none transition-colors"
+                style={{
+                  background: 'var(--color-surface-950, #09090b)',
+                  border: confirmEmail === user.email
+                    ? '1px solid rgba(239,68,68,0.6)'
+                    : '1px solid var(--color-surface-700, #3f3f46)',
+                }}
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={closeModal}
+                disabled={deleting}
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                id="btn-confirm-delete"
+                onClick={handleDelete}
+                disabled={deleting || confirmEmail !== user.email}
+                className="px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{
+                  background: confirmEmail === user.email ? '#dc2626' : 'rgba(220,38,38,0.3)',
+                  color: 'white',
+                }}
+              >
+                {deleting ? (
+                  <><InlineSpinner /> Deleting…</>
+                ) : (
+                  <><Trash2 size={13} /> Delete Permanently</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </PageShell>
   );
 }
+

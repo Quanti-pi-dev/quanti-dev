@@ -146,3 +146,7 @@ update_graph.py
 clean_graph.py
 merge.py
 run_semantic*.py
+
+
+packages/db/db/
+scripts/

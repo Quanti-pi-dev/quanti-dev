@@ -7,7 +7,6 @@ COPY package.json package-lock.json ./
 # Copy all package.json files for workspaces to install dependencies
 COPY packages/shared/package.json packages/shared/
 COPY packages/db/package.json packages/db/
-COPY server/package.json server/
 COPY server-user/package.json server-user/
 COPY server-admin/package.json server-admin/
 COPY server-institute/package.json server-institute/
@@ -21,7 +20,6 @@ WORKDIR /app
 # Copy source code
 COPY tsconfig.base.json tsconfig.json ./
 COPY packages/ packages/
-COPY server/ server/
 COPY server-institute/ server-institute/
 
 # Build shared packages and the institute server
@@ -38,7 +36,6 @@ COPY --from=builder /app/package.json ./
 COPY --from=builder /app/package-lock.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/server ./server
 COPY --from=builder /app/server-institute ./server-institute
 
 EXPOSE 10002

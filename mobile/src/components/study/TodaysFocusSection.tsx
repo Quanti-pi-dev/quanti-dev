@@ -25,6 +25,7 @@ import { Typography } from '../ui/Typography';
 import { Skeleton } from '../ui/Skeleton';
 import { useStudyStreak, useProgressSummary } from '../../hooks/useProgress';
 import { useCoinsToday } from '../../hooks/useGamification';
+import { getLocalDateString } from '../../utils/time';
 
 // ─── Constants ────────────────────────────────────────────────
 const DAILY_CARD_GOAL = 30; // default daily target
@@ -200,7 +201,7 @@ export function TodaysFocusSection() {
   const longestStreak = streakData?.longestStreak ?? 0;
   const freezes = streakData?.streakFreezes ?? 0;
   const todayCards = progressData?.weeklyActivity?.find(
-    (d) => d.date === new Date().toISOString().split('T')[0],
+    (d) => d.date === getLocalDateString(),
   )?.cardsStudied ?? 0;
   const totalCards = progressData?.totalCardsCompleted ?? 0;
   const overallAccuracy = progressData?.overallAccuracy ?? 0;
@@ -228,11 +229,11 @@ export function TodaysFocusSection() {
 
   // ── Navigation helpers ────────────────────────────────────
   function handleExploreExams() {
-    router.push('/explore-exams' as never);
+    router.push('/explore-exams');
   }
 
   function handleViewProgress() {
-    router.push('/(tabs)/progress' as never);
+    router.push('/(tabs)/progress');
   }
 
   // ── Loading state ─────────────────────────────────────────
@@ -245,6 +246,76 @@ export function TodaysFocusSection() {
           <Skeleton height={48} borderRadius={radius.xl} style={{ flex: 1 }} />
         </View>
       </View>
+    );
+  }
+
+  // Fix 2B: For brand-new users, skip the empty dashboard card entirely.
+  // Show only the welcome CTA + quick actions to avoid showing a 0/30 ring
+  // alongside an onboarding banner simultaneously.
+  if (!hasStudied) {
+    return (
+      <Animated.View style={sectionAnimStyle}>
+        <View style={{ gap: spacing.md }}>
+          {/* Welcome / onboarding CTA */}
+          <View style={{ paddingHorizontal: spacing.xl }}>
+            <TouchableOpacity
+              onPress={handleExploreExams}
+              activeOpacity={0.8}
+              style={{ borderRadius: radius.xl, overflow: 'hidden' }}
+            >
+              <LinearGradient
+                colors={['#6366F112', '#8B5CF612']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  padding: spacing.lg,
+                  borderRadius: radius.xl,
+                  borderWidth: 1,
+                  borderColor: '#6366F128',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: spacing.md,
+                }}
+              >
+                <View
+                  style={{
+                    width: 50, height: 50, borderRadius: radius.full,
+                    backgroundColor: '#6366F118',
+                    alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="rocket-outline" size={24} color="#6366F1" />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Typography variant="label" color="#6366F1">
+                    Begin your learning journey
+                  </Typography>
+                  <Typography variant="caption" color={theme.textSecondary} style={{ fontSize: 11 }}>
+                    Pick an exam and complete your first session to unlock your personalised mastery profile.
+                  </Typography>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#6366F1AA" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+
+          {/* Quick actions still available to new users */}
+          <View style={{ paddingHorizontal: spacing.xl, flexDirection: 'row', gap: spacing.sm }}>
+            <QuickAction
+              icon="compass-outline"
+              label="Explore Exams"
+              color="#6366F1"
+              onPress={handleExploreExams}
+            />
+            <QuickAction
+              icon="trending-up-outline"
+              label="My Progress"
+              color="#10B981"
+              onPress={handleViewProgress}
+            />
+          </View>
+        </View>
+      </Animated.View>
     );
   }
 
@@ -411,50 +482,6 @@ export function TodaysFocusSection() {
         </View>
 
 
-        {/* ── New user motivational state ─────────────────── */}
-        {!hasStudied && !isLoading && (
-          <View style={{ paddingHorizontal: spacing.xl }}>
-            <TouchableOpacity
-              onPress={handleExploreExams}
-              activeOpacity={0.8}
-              style={{ borderRadius: radius.xl, overflow: 'hidden' }}
-            >
-              <LinearGradient
-                colors={['#6366F112', '#8B5CF612']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{
-                  padding: spacing.lg,
-                  borderRadius: radius.xl,
-                  borderWidth: 1,
-                  borderColor: '#6366F128',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.md,
-                }}
-              >
-                <View
-                  style={{
-                    width: 50, height: 50, borderRadius: radius.full,
-                    backgroundColor: '#6366F118',
-                    alignItems: 'center', justifyContent: 'center',
-                  }}
-                >
-                  <Ionicons name="rocket-outline" size={24} color="#6366F1" />
-                </View>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Typography variant="label" color="#6366F1">
-                    Begin your learning journey
-                  </Typography>
-                  <Typography variant="caption" color={theme.textSecondary} style={{ fontSize: 11 }}>
-                    Pick an exam and complete your first quiz to unlock your personalised mastery profile.
-                  </Typography>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color="#6366F1AA" />
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        )}
       </View>
     </Animated.View>
   );

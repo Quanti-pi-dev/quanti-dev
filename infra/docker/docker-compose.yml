@@ -169,33 +169,6 @@ services:
       - ../../server-institute/src:/app/server-institute/src:ro
       - ../../packages:/app/packages:ro
 
-  # ─── Legacy Monolith (port 3099) — for reference during cutover ──
-  # Keep running until server-user + server-admin are fully validated.
-  # Remove once cutover is complete.
-  api-legacy:
-    build:
-      context: ../../
-      dockerfile: infra/docker/Dockerfile.dev
-    container_name: kd-api-legacy
-    restart: "no"
-    profiles: ["legacy"]     # Only starts with: docker compose --profile legacy up
-    depends_on:
-      postgres:
-        condition: service_healthy
-      mongo:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      <<: *api-env
-      HOST: 0.0.0.0
-      PORT: 3099
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8081}
-    ports:
-      - "3099:3099"
-    volumes:
-      - ../../server/src:/app/server/src:ro
-      - ../../packages:/app/packages:ro
 
 volumes:
   postgres_data:

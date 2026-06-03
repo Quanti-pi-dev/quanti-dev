@@ -164,7 +164,7 @@ async function getFreeLLMAPIClient(): Promise<OpenAI> {
   const cacheKey = '__freellmapi__';
   const apiKey = await resolveApiKey('freellmapi');
   if (!_openaiClients.has(cacheKey + apiKey)) {
-    const baseURL = process.env['FREELLMAPI_URL'] ?? 'http://127.0.0.1:3001/v1';
+    const baseURL = process.env['FREELLMAPI_URL'] || 'http://host.docker.internal:3001/v1';
     _openaiClients.set(cacheKey + apiKey, new OpenAI({ apiKey, baseURL }));
   }
   return _openaiClients.get(cacheKey + apiKey)!;

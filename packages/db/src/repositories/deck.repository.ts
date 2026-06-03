@@ -101,46 +101,6 @@ class DeckRepository {
     return deck;
   }
 
-  /** Find deck by subject + level + optional topicSlug (legacy, cached). */
-  async findBySubjectAndLevel(
-    subjectId: string,
-    level: SubjectLevel,
-    topicSlug?: string,
-  ): Promise<Deck | null> {
-    const redis = getRedisClient();
-    const legacyKey = CacheKey.deckSubject(subjectId, level, topicSlug);
-    const cached = await redis.get(legacyKey);
-    if (cached) {
-      try {
-        return JSON.parse(cached) as Deck;
-      } catch {
-        await redis.unlink(legacyKey);
-      }
-    }
-
-    const filter: Record<string, unknown> = {
-      subjectId: new ObjectId(subjectId),
-      level,
-      isPublished: true,
-    };
-    if (topicSlug) filter['tags'] = topicSlug;
-
-    const doc = await this.col.findOne(filter);
-    if (!doc) return null;
-
-    const deck = this.toDeck(doc);
-
-    // Write legacy key (always)
-    await redis.set(legacyKey, JSON.stringify(deck), 'EX', CACHE_TTL.DECK);
-
-    // Also write hierarchy key if the deck has full exam-scoped metadata
-    if (deck.examId && topicSlug) {
-      const hierarchyKey = CacheKey.deckHierarchy(deck.examId, subjectId, topicSlug, level);
-      await redis.set(hierarchyKey, JSON.stringify(deck), 'EX', CACHE_TTL.DECK);
-    }
-
-    return deck;
-  }
 
   /**
    * Find deck by the full hierarchy path (new, compound-indexed).

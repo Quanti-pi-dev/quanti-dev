@@ -19,17 +19,8 @@ export const CacheKey = {
   deck: (id: string) => `cache:deck:${id}`,
 
   /**
-   * Legacy deck by subject+level+topic (no exam scope).
-   * @deprecated Use `deckHierarchy` for new code.
-   */
-  deckSubject: (subjectId: string, level: string, topicSlug?: string) =>
-    topicSlug
-      ? `cache:deck:subject:${subjectId}:${level}:${topicSlug}`
-      : `cache:deck:subject:${subjectId}:${level}`,
-
-  /**
    * Hierarchy-scoped deck: `cache:deck:hierarchy:{examId}:{subjectId}:{topicSlug}:{level}`
-   * This is the canonical key for the new exam-scoped architecture.
+   * This is the canonical key for the exam-scoped architecture.
    */
   deckHierarchy: (examId: string, subjectId: string, topicSlug: string, level: string) =>
     `cache:deck:hierarchy:${examId}:${subjectId}:${topicSlug}:${level}`,
@@ -51,17 +42,12 @@ interface DeckCacheMeta {
 
 /**
  * Bust all cache keys associated with a deck.
- * Deletes: `cache:deck:{id}`, legacy subject key, and hierarchy key (if available).
+ * Deletes: `cache:deck:{id}` and hierarchy key (if available).
  * Uses Redis UNLINK for non-blocking deletes.
  */
 export async function bustDeckCache(deck: DeckCacheMeta): Promise<void> {
   const redis = getRedisClient();
   const keys: string[] = [CacheKey.deck(deck.id)];
-
-  // Bust legacy subject key if we have enough metadata
-  if (deck.subjectId && deck.level) {
-    keys.push(CacheKey.deckSubject(deck.subjectId, deck.level, deck.topicSlug ?? undefined));
-  }
 
   // Bust hierarchy key if we have all 4 components
   if (deck.examId && deck.subjectId && deck.topicSlug && deck.level) {

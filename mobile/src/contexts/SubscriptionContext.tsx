@@ -7,7 +7,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useMemo } 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchMySubscription } from '../services/subscription.service';
 import { api } from '../services/api';
-import type { SubscriptionSummary } from '@kd/shared';
+import type { SubscriptionSummary, AIQuotaStatus } from '@kd/shared';
 
 const CACHE_KEY = 'sub:cache';
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -36,6 +36,10 @@ interface SubscriptionContextValue {
   setSubscription: (s: SubscriptionSummary | null) => void;
   /** Trial pass state (streak-triggered) */
   trialPass: TrialPassStatus | null;
+  /** Current day's AI quota status. Null while loading. */
+  aiQuota: AIQuotaStatus | null;
+  /** Force-refresh the quota counter from the server. */
+  refreshAIQuota: () => Promise<void>;
 }
 
 const defaultValue: SubscriptionContextValue = {
@@ -47,6 +51,8 @@ const defaultValue: SubscriptionContextValue = {
   refreshSubscription: async () => {},
   setSubscription: () => {},
   trialPass: null,
+  aiQuota: null,
+  refreshAIQuota: async () => {},
 };
 
 const SubscriptionContext = createContext<SubscriptionContextValue>(defaultValue);
@@ -62,11 +68,23 @@ async function fetchTrialPass(): Promise<TrialPassStatus | null> {
   }
 }
 
+// ─── AI Quota Fetcher ────────────────────────────────────────
+
+async function fetchAIQuota(): Promise<AIQuotaStatus | null> {
+  try {
+    const { data } = await api.get('/ai/quota');
+    return (data?.data ?? null) as AIQuotaStatus | null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Provider ────────────────────────────────────────────────
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const [subscription, setSubscriptionState] = useState<SubscriptionSummary | null>(null);
   const [trialPass, setTrialPass] = useState<TrialPassStatus | null>(null);
+  const [aiQuota, setAIQuota] = useState<AIQuotaStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // ─── Load cache from AsyncStorage on mount ──────────────
@@ -102,7 +120,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
   const refreshSubscription = useCallback(async () => {
     try {
-      const [data, pass] = await Promise.all([
+      const [data, pass, quota] = await Promise.all([
         Promise.race([
           fetchMySubscription(),
           new Promise<never>((_, reject) =>
@@ -110,15 +128,22 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
           ),
         ]),
         fetchTrialPass(),
+        fetchAIQuota(),
       ]);
       setSubscription(data);
       setTrialPass(pass);
+      setAIQuota(quota);
     } catch {
       // Network failure or timeout — keep existing state
     } finally {
       setIsLoading(false);
     }
   }, [setSubscription]);
+
+  const refreshAIQuota = useCallback(async () => {
+    const quota = await fetchAIQuota();
+    setAIQuota(quota);
+  }, []);
 
   useEffect(() => { refreshSubscription(); }, [refreshSubscription]);
 
@@ -131,6 +156,10 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       }
       // If user has an active trial pass, grant Pro-level features
       if (trialPass?.active) return true;
+      
+      // Free users get ai_explanations (gated by daily quota instead)
+      if (key === 'ai_explanations') return true;
+      
       return false;
     },
     [subscription, trialPass],
@@ -157,7 +186,9 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     refreshSubscription,
     setSubscription,
     trialPass,
-  }), [subscription, isLoading, isSubscribed, effectiveTier, hasFeature, refreshSubscription, setSubscription, trialPass]);
+    aiQuota,
+    refreshAIQuota,
+  }), [subscription, isLoading, isSubscribed, effectiveTier, hasFeature, refreshSubscription, setSubscription, trialPass, aiQuota, refreshAIQuota]);
 
   return (
     <SubscriptionContext.Provider value={value}>

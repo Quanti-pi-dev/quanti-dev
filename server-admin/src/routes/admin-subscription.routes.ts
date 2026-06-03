@@ -34,6 +34,7 @@ const createPlanSchema = z.object({
     max_subjects_per_exam: z.number().int().default(-1),  // -1 = unlimited
     max_level: z.number().int().default(-1),              // -1 = all levels; 1-6 = cap
     ai_explanations: z.boolean(),
+    ai_requests_per_day: z.number().int().default(-1),    // -1 = unlimited, 0 = no access
     offline_access: z.boolean(),
     priority_support: z.boolean(),
     advanced_analytics: z.boolean(),
@@ -390,6 +391,35 @@ export async function adminSubscriptionRoutes(fastify: FastifyInstance): Promise
     }
     return reply.send({ success: true, data: { id: updatedUser.id, role: updatedUser.role }, timestamp: new Date().toISOString() });
   });
+
+  // ─── Hard delete user & all data (admin) ──────────────
+  fastify.delete('/users/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    try {
+      await authService.deleteUserAndData(id);
+      return reply.send({
+        success: true,
+        message: 'User and all associated data permanently deleted',
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err: unknown) {
+      const e = err as { code?: string; message?: string };
+      if (e.code === 'USER_NOT_FOUND') {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'User not found' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+      request.log.error({ err, userId: id }, 'Admin hard-delete failed');
+      return reply.status(500).send({
+        success: false,
+        error: { code: 'DELETION_FAILED', message: e.message ?? 'Failed to delete user' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+  });
+
 
   // ─── Coupons CRUD ───────────────────────────────────────
   fastify.get('/coupons', async (_req, reply) => {

@@ -1,7 +1,7 @@
 // ─── useAI Hooks ─────────────────────────────────────────────
 // React Query hooks for AI insights, recommendations, and live card explanations.
 
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchInsights,
   fetchRecommendations,
@@ -11,6 +11,7 @@ import {
   type Recommendation as RecommendationType,
   type TargetedFeedbackResponse,
 } from '../services/api-contracts';
+import { AI_QUOTA_KEY } from './useAIQuota';
 
 // ─── Re-exports for consumers ────────────────────────────────
 
@@ -69,8 +70,13 @@ export function useInsights(enabled = true) {
  * redundant API calls when the user re-opens the deep dive on the same card.
  */
 export function useExplainCard() {
+  const queryClient = useQueryClient();
   return useMutation<string, Error, string>({
     mutationFn: (cardId: string) => fetchExplainCard(cardId),
+    onSuccess: () => {
+      // Refresh quota count so the UI reflects the new usage
+      void queryClient.invalidateQueries({ queryKey: AI_QUOTA_KEY });
+    },
   });
 }
 
@@ -86,8 +92,12 @@ export function useExplainCard() {
  *   const feedback = await explainWrong.mutateAsync({ cardId, selectedOptionId });
  */
 export function useExplainWrong() {
+  const queryClient = useQueryClient();
   return useMutation<TargetedFeedbackResponse | null, Error, { cardId: string; selectedOptionId: string }>({
     mutationFn: ({ cardId, selectedOptionId }) => fetchExplainWrong(cardId, selectedOptionId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: AI_QUOTA_KEY });
+    },
   });
 }
 

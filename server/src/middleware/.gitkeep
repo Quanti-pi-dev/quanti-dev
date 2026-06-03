@@ -1,2 +1,0 @@
-# Middleware
-Fastify hooks and plugins: JWT validation, RBAC, request logging, error handling.

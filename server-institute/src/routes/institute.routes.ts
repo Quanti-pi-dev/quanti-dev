@@ -117,6 +117,86 @@ export async function instituteMgmtRoutes(fastify: FastifyInstance): Promise<voi
     },
   );
 
+  // ── DELETE /institutes/:instituteId/members/:userId/purge — Hard delete user & data
+  // :userId MUST be the Firebase UID of the target member (matches what the
+  // student detail page passes in the URL and what members/page.tsx surfaces
+  // via the member list's firebaseUid field).
+  //
+  // Guards:
+  //   - Target must be an active member of this institute.
+  //   - Cannot purge institute_admin accounts.
+  fastify.delete<{ Params: { instituteId: string; userId: string } }>(
+    '/institutes/:instituteId/members/:userId/purge',
+    { preHandler: [requireInstituteRole('institute_admin')] },
+    async (request, reply) => {
+      const { instituteId, userId } = request.params;
+      // userId here is the Firebase UID sent by the client.
+
+      // Guard 1: Resolve membership by Firebase UID (handles both student detail
+      //          page and members list page consistently).
+      const memberships = await instituteRepository.findMembershipsByFirebaseUid(userId);
+      const membership = memberships.find(m => m.instituteId === instituteId);
+      if (!membership) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'User is not a member of this institute' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Guard 2: Prevent purging other institute admins
+      if (membership.role === 'institute_admin') {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Cannot delete institute admin accounts via this endpoint' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Resolve the PG UUID — deleteUserAndData expects the users.id UUID.
+      const pgUserId = membership.userId;
+
+      // Release institute seat before purge so the counter stays accurate
+      // even if the user row is gone by the time releaseSeat would run.
+      try {
+        const activeSub = await instituteRepository.findActiveSubscription(instituteId);
+        if (activeSub) {
+          await instituteRepository.releaseSeat(activeSub.id);
+        }
+      } catch (err) {
+        // Non-fatal: log and continue. Seat count can be manually corrected.
+        request.log.warn({ err, instituteId }, 'Failed to release institute seat — non-fatal');
+      }
+
+      // Purge Firebase, MongoDB, Redis, PostgreSQL in one call
+      try {
+        await authService.deleteUserAndData(pgUserId);
+        await instituteService.invalidateMembershipCache(pgUserId);
+        return reply.send({
+          success: true,
+          message: 'User and all associated data permanently deleted',
+          timestamp: new Date().toISOString(),
+        });
+      } catch (err: unknown) {
+        const e = err as { code?: string; message?: string };
+        if (e.code === 'USER_NOT_FOUND') {
+          return reply.status(404).send({
+            success: false,
+            error: { code: 'NOT_FOUND', message: 'User not found' },
+            timestamp: new Date().toISOString(),
+          });
+        }
+        request.log.error({ err, userId, pgUserId, instituteId }, 'Institute admin hard-purge failed');
+        return reply.status(500).send({
+          success: false,
+          error: { code: 'PURGE_FAILED', message: e.message ?? 'Failed to purge user data' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+    },
+  );
+
+
   // ── GET /institutes/:instituteId/join-codes — List join codes ─
   fastify.get<{ Params: { instituteId: string } }>(
     '/institutes/:instituteId/join-codes',

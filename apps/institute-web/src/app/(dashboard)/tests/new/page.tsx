@@ -6,8 +6,7 @@ import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Trash2, Save, Eye, ChevronDown, Sparkles, Loader2, X } from 'lucide-react';
 import Link from 'next/link';
-import { Latex } from '@/components/latex';
-import { ImagePicker } from '@/components/ImagePicker';
+import { FlashcardEditor, type FlashcardEditorData } from '@/components/FlashcardEditor';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -85,26 +84,6 @@ export default function NewTestPage() {
 
   const updateQ = (idx: number, patch: Partial<QuestionDraft>) =>
     setQuestions(qs => qs.map((q, i) => i === idx ? { ...q, ...patch } : q));
-
-  const updateOpt = (qIdx: number, oIdx: number, text: string) =>
-    setQuestions(qs => qs.map((q, i) => i !== qIdx ? q : {
-      ...q, options: q.options.map((o, j) => j === oIdx ? { ...o, text } : o),
-    }));
-
-  const updateOptImage = (qIdx: number, oIdx: number, imageUrl: string | null) =>
-    setQuestions(qs => qs.map((q, i) => i !== qIdx ? q : {
-      ...q, options: q.options.map((o, j) => j === oIdx ? { ...o, imageUrl } : o),
-    }));
-
-  const addOption = (qIdx: number) =>
-    setQuestions(qs => qs.map((q, i) => i !== qIdx ? q : {
-      ...q, options: [...q.options, makeOption()],
-    }));
-
-  const removeOption = (qIdx: number, oIdx: number) =>
-    setQuestions(qs => qs.map((q, i) => i !== qIdx ? q : {
-      ...q, options: q.options.filter((_, j) => j !== oIdx),
-    }));
 
   const removeQ = (idx: number) => setQuestions(qs => qs.filter((_, i) => i !== idx));
 
@@ -350,161 +329,27 @@ export default function NewTestPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Form Inputs (Left) */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-surface-300)' }}>Question Text *</label>
-                  <textarea value={q.text} onChange={e => updateQ(qIdx, { text: e.target.value })}
-                    placeholder="Enter your question…"
-                    rows={3} className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-gray-600 outline-none resize-none"
-                    style={inputStyle} />
-                </div>
-
-                <ImagePicker
-                  value={q.imageUrl}
-                  onChange={url => updateQ(qIdx, { imageUrl: url })}
-                  instituteId={instituteId!}
-                  label="Question Image (optional)"
-                  compact
-                />
-
-                <div className="space-y-2">
-                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-surface-300)' }}>Options & Correct Answer *</label>
-                  {q.options.map((opt, oIdx) => (
-                    <div key={opt.id} className="rounded-lg p-2" style={{ background: q.correctAnswerId === opt.id ? 'rgba(99,102,241,0.06)' : 'transparent', border: q.correctAnswerId === opt.id ? '1px solid rgba(99,102,241,0.12)' : '1px solid transparent' }}>
-                      <div className="flex items-center gap-3">
-                        <button onClick={() => updateQ(qIdx, { correctAnswerId: opt.id })}
-                          className="w-5 h-5 rounded-full border-2 shrink-0 transition-all duration-150 flex items-center justify-center"
-                          style={{ borderColor: q.correctAnswerId === opt.id ? '#6366f1' : 'var(--color-surface-600)', background: q.correctAnswerId === opt.id ? '#6366f1' : 'transparent' }}>
-                          {q.correctAnswerId === opt.id && <span className="w-2 h-2 rounded-full bg-white" />}
-                        </button>
-                        <input value={opt.text} onChange={e => updateOpt(qIdx, oIdx, e.target.value)}
-                          placeholder={`Option ${String.fromCharCode(65 + oIdx)}`}
-                          className="flex-1 px-3 py-2 rounded-lg text-sm text-white placeholder-gray-600 outline-none"
-                          style={{
-                            background: q.correctAnswerId === opt.id ? 'rgba(99,102,241,0.1)' : 'var(--color-surface-800)',
-                            border: `1px solid ${q.correctAnswerId === opt.id ? 'rgba(99,102,241,0.4)' : 'var(--color-surface-600)'}`,
-                          }} />
-                        {q.options.length > 2 && (
-                          <button onClick={() => removeOption(qIdx, oIdx)} className="p-1 hover:text-red-400 transition-colors"
-                            style={{ color: 'var(--color-surface-500)' }}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                      <div className="ml-8 mt-1.5">
-                        <ImagePicker
-                          value={opt.imageUrl ?? null}
-                          onChange={url => updateOptImage(qIdx, oIdx, url)}
-                          instituteId={instituteId!}
-                          label={`Option ${String.fromCharCode(65 + oIdx)} Image`}
-                          compact
-                        />
-                      </div>
-                    </div>
-                  ))}
-
-                  {q.options.length < 5 && (
-                    <button onClick={() => addOption(qIdx)}
-                      className="text-xs flex items-center gap-1.5 transition-colors hover:text-indigo-400 pt-1"
-                      style={{ color: 'var(--color-surface-400)' }}>
-                      <Plus className="w-3.5 h-3.5" /> Add option
-                    </button>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-surface-300)' }}>Explanation (optional)</label>
-                  <input value={q.explanation} onChange={e => updateQ(qIdx, { explanation: e.target.value })}
-                    placeholder="Explanation (shown after submit)…"
-                    className="w-full px-3 py-2 rounded-lg text-xs text-white placeholder-gray-600 outline-none"
-                    style={{ background: 'var(--color-surface-900)', border: '1px solid var(--color-surface-700)' }} />
-                  <div className="mt-1.5">
-                    <ImagePicker
-                      value={q.explanationImageUrl}
-                      onChange={url => updateQ(qIdx, { explanationImageUrl: url })}
-                      instituteId={instituteId!}
-                      label="Explanation Image (optional)"
-                      compact
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Live Preview (Right) */}
-              <div className="flex flex-col border-t md:border-t-0 md:border-l border-zinc-800 pt-5 md:pt-0 md:pl-6">
-                <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-3">Live Question Preview</span>
-                <div className="flex-1 flex flex-col justify-center">
-                  <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-5 shadow-lg min-h-[220px] flex flex-col justify-between">
-                    <div>
-                      {/* Question Text */}
-                      {q.text.trim() ? (
-                        <div className="text-sm text-white font-medium leading-relaxed">
-                          <Latex text={q.text} />
-                        </div>
-                      ) : (
-                        <p className="text-sm text-zinc-600 italic">No question text entered yet…</p>
-                      )}
-
-                      {/* Image preview */}
-                      {q.imageUrl && (
-                        <img src={q.imageUrl} alt="Question" className="mt-2 rounded-lg border border-zinc-800 max-h-24 object-contain" />
-                      )}
-
-                      {/* Topic tag pill */}
-                      {q.topicSlug && (
-                        <span className="inline-block mt-2 text-[10px] px-2 py-0.5 rounded-full"
-                          style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#a5b4fc' }}>
-                          {selectedSubject?.topics.find(t => t.slug === q.topicSlug)?.displayName ?? q.topicSlug}
-                        </span>
-                      )}
-
-                      {/* Options */}
-                      <div className="space-y-2 mt-4">
-                        {q.options.map((opt, oIdx) => (
-                          <div
-                            key={opt.id}
-                            className={`px-3 py-2 rounded-lg text-xs transition-colors duration-200 ${
-                              opt.id === q.correctAnswerId
-                                ? 'bg-emerald-950/60 border border-emerald-800/60 text-emerald-300'
-                                : 'bg-zinc-900 border border-zinc-800/50 text-zinc-500'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className="text-xs font-bold w-5 text-center shrink-0"
-                                style={{ color: opt.id === q.correctAnswerId ? '#4ade80' : 'var(--color-surface-500)' }}>
-                                {String.fromCharCode(65 + oIdx)}
-                              </span>
-                              <span className="truncate flex-1">
-                                {opt.text.trim() ? (
-                                  <Latex text={opt.text} />
-                                ) : (
-                                  <span className="text-zinc-700 italic">Empty option…</span>
-                                )}
-                              </span>
-                            </div>
-                            {opt.imageUrl && (
-                              <img src={opt.imageUrl} alt={`Option ${String.fromCharCode(65 + oIdx)}`} className="mt-1 ml-8 rounded max-h-16 object-contain" />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Explanation */}
-                    {(q.explanation.trim() || q.explanationImageUrl) && (
-                      <div className="mt-3 text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-3">
-                        {q.explanation.trim() && <><span>💡 </span><Latex text={q.explanation} /></>}
-                        {q.explanationImageUrl && (
-                          <img src={q.explanationImageUrl} alt="Explanation" className="mt-1 rounded max-h-20 object-contain" />
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+            {/* FlashcardEditor — preview-first, click-to-edit */}
+            <FlashcardEditor
+              instituteId={instituteId!}
+              maxOptions={5}
+              data={{
+                text: q.text,
+                options: q.options,
+                correctAnswerId: q.correctAnswerId,
+                explanation: q.explanation,
+                imageUrl: q.imageUrl,
+                explanationImageUrl: q.explanationImageUrl,
+              }}
+              onChange={(d: FlashcardEditorData) => updateQ(qIdx, {
+                text: d.text,
+                options: d.options,
+                correctAnswerId: d.correctAnswerId,
+                explanation: d.explanation,
+                imageUrl: d.imageUrl,
+                explanationImageUrl: d.explanationImageUrl,
+              })}
+            />
           </div>
         ))}
 

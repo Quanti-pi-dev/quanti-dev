@@ -6,12 +6,31 @@ import { requireAuth } from '../middleware/rbac.js';
 import { recommendationService } from '@kd/db';
 import { geminiGenerate } from '@kd/db';
 import { generateTargetedFeedback } from '@kd/db';
+import { getAIQuotaLimit, getAIQuotaStatus, checkAndIncrementAIQuota } from '@kd/db';
 import { getMongoDb } from '@kd/db';
 import { ObjectId } from 'mongodb';
 import type { Flashcard } from '@kd/shared';
 
 export async function aiRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook('preHandler', requireAuth());
+
+  // ─── GET /ai/quota ───────────────────────────────────────
+  // Returns the current day's AI usage and limit for this user.
+  fastify.get('/quota', async (request: FastifyRequest, reply: FastifyReply) => {
+    const userId = request.user!.id;
+    const limit = await getAIQuotaLimit(userId);
+    const status = await getAIQuotaStatus(userId, limit);
+
+    return reply.send({
+      success: true,
+      data: {
+        used: status.used,
+        limit: status.limit,
+        resetAt: status.resetAt.toISOString(),
+        isExhausted: limit !== -1 && status.used >= limit,
+      },
+    });
+  });
 
   // ─── GET /ai/recommendations ─────────────────────────────
   // Returns personalized deck recommendations based on accuracy + recency.
@@ -48,6 +67,7 @@ export async function aiRoutes(fastify: FastifyInstance): Promise<void> {
   //   3. Call Gemini with a focused tutor system prompt
   //   4. Return the explanation (client caches it locally per session)
   fastify.post('/explain', async (request: FastifyRequest, reply: FastifyReply) => {
+    const userId = request.user!.id;
     const { cardId } = request.body as { cardId?: string };
 
     if (!cardId || typeof cardId !== 'string') {
@@ -98,6 +118,23 @@ export async function aiRoutes(fastify: FastifyInstance): Promise<void> {
     ].filter(Boolean).join('\n');
 
     try {
+      // ── Quota gate ──────────────────────────────────────────
+      const limit = await getAIQuotaLimit(userId);
+      const quota = await checkAndIncrementAIQuota(userId, limit);
+
+      if (!quota.allowed) {
+        return reply.status(429).send({
+          success: false,
+          code: 'AI_QUOTA_EXCEEDED',
+          message: "You've used all your AI requests for today. Come back tomorrow!",
+          data: {
+            used: quota.used,
+            limit: quota.limit,
+            resetAt: quota.resetAt.toISOString(),
+          },
+        });
+      }
+
       const explanation = await geminiGenerate({
         featureConfigKey: 'ai_model_explanation',
         systemPrompt: EXPLAIN_SYSTEM_PROMPT,
@@ -110,7 +147,7 @@ export async function aiRoutes(fastify: FastifyInstance): Promise<void> {
         success: true,
         data: { explanation: explanation.trim(), source: 'gemini' },
       });
-    } catch (err) {
+    } catch (err: unknown) {
       // Gemini unavailable (quota, network, etc.) — return seed explanation as fallback
       fastify.log.warn({ err, cardId }, 'Gemini explain failed — falling back to seed explanation');
 
@@ -136,6 +173,7 @@ export async function aiRoutes(fastify: FastifyInstance): Promise<void> {
   // This is the Socratic educator — it doesn't just say "X is right",
   // it says "you chose Y because you likely confused A with B".
   fastify.post('/explain-wrong', async (request: FastifyRequest, reply: FastifyReply) => {
+    const userId = request.user!.id;
     const { cardId, selectedOptionId } = request.body as {
       cardId?: string;
       selectedOptionId?: string;
@@ -176,6 +214,24 @@ export async function aiRoutes(fastify: FastifyInstance): Promise<void> {
     };
 
     const isCorrect = selectedOptionId === card.correctAnswerId;
+
+    // ── Quota gate (wrong answers also count against daily cap) ──
+    const limit = await getAIQuotaLimit(userId);
+    const quota = await checkAndIncrementAIQuota(userId, limit);
+
+    if (!quota.allowed) {
+      return reply.status(429).send({
+        success: false,
+        code: 'AI_QUOTA_EXCEEDED',
+        message: "You've used all your AI requests for today. Come back tomorrow!",
+        data: {
+          used: quota.used,
+          limit: quota.limit,
+          resetAt: quota.resetAt.toISOString(),
+        },
+      });
+    }
+
     const feedback = await generateTargetedFeedback(card, selectedOptionId, isCorrect);
 
     if (!feedback) {

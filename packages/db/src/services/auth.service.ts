@@ -2,7 +2,7 @@
 // Business logic for authentication operations.
 // Integrates with Firebase Admin SDK for user management.
 
-import { getRedisClient } from '../clients/database.js';
+import { getRedisClient, getMongoDb } from '../clients/database.js';
 import { getFirebaseAdmin } from '../lib/firebase-admin.js';
 import { userRepository } from '../repositories/user.repository.js';
 import { instituteRepository } from '../repositories/institute.repository.js';
@@ -320,6 +320,70 @@ class AuthService {
       log.error({ err, firebaseUid }, 'Failed to sync role claim');
     }
   }
+
+  // ─── Hard delete user & all data ─────────────────────────
+  // Permanently removes:
+  //   1. Firebase Authentication record
+  //   2. All MongoDB user-scoped documents (6 collections)
+  //   3. Redis AI quota key for today
+  //   4. All PostgreSQL rows via a single transaction
+  //
+  // Accepts the PostgreSQL UUID (id). Resolves firebase_uid internally.
+  // Tolerates firebase auth/user-not-found so orphaned DB rows can still
+  // be cleaned when the Firebase record was already removed manually.
+  async deleteUserAndData(id: string): Promise<void> {
+    // 1. Resolve Firebase UID from PG
+    const firebaseUid = await userRepository.getFirebaseUid(id);
+    if (!firebaseUid) {
+      throw Object.assign(new Error('User not found'), { code: 'USER_NOT_FOUND' });
+    }
+
+    // 2. Delete Firebase Authentication account
+    const admin = getFirebaseAdmin();
+    try {
+      await admin.auth().deleteUser(firebaseUid);
+      log.info({ firebaseUid, id }, 'Firebase account deleted');
+    } catch (err: unknown) {
+      const firebaseErr = err as { code?: string };
+      if (firebaseErr.code !== 'auth/user-not-found') {
+        // Unexpected error — abort before touching data
+        throw err;
+      }
+      log.warn({ firebaseUid }, 'Firebase account already absent — continuing with DB purge');
+    }
+
+    // 3. Delete all MongoDB user documents (keyed by firebase_uid string)
+    const MONGO_USER_COLLECTIONS = [
+      'analytics_events',
+      'card_annotations',
+      'user_decks',
+      'user_deck_cards',
+      'custom_tests',
+      'custom_test_submissions',
+    ] as const;
+
+    const mongoDb = getMongoDb();
+    await Promise.all(
+      MONGO_USER_COLLECTIONS.map((col) =>
+        mongoDb.collection(col).deleteMany({ user_id: firebaseUid }),
+      ),
+    );
+    log.info({ firebaseUid }, 'MongoDB user data purged');
+
+    // 4. Evict Redis AI quota key for today (best-effort)
+    try {
+      const redis = getRedisClient();
+      const today = new Date().toISOString().split('T')[0]!;
+      await redis.del(`ai:quota:${id}:${today}`);
+    } catch (err) {
+      log.warn({ err, id }, 'Failed to evict Redis quota key — non-fatal');
+    }
+
+    // 5. Delete all PostgreSQL rows in a single transaction
+    await userRepository.deleteUserTransact(id, firebaseUid);
+    log.info({ firebaseUid, id }, 'User hard-deleted successfully');
+  }
 }
 
 export const authService = new AuthService();
+

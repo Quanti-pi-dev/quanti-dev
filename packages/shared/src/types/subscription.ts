@@ -12,6 +12,7 @@ export interface PlanFeatures {
   max_subjects_per_exam: number; // -1 = unlimited; 0 = no access
   max_level: number;           // 1=Emerging only … 4=all levels; -1 = unlimited
   ai_explanations: boolean;
+  ai_requests_per_day: number; // -1 = unlimited, 0 = no access
   offline_access: boolean;
   priority_support: boolean;
   advanced_analytics: boolean;
@@ -34,6 +35,12 @@ export interface Plan {
   createdAt: string;
   /** Razorpay Plans API ID — populated on first paid checkout, null for free/trial plans. */
   razorpayPlanId?: string | null;
+  /**
+   * Server-computed per-user field, always present in /plans responses.
+   * true  = user has never had a trial for this tier and is eligible.
+   * false = user has already consumed their trial — FreeTrialCard is hidden.
+   */
+  trialEligible?: boolean;
 }
 
 // ─── Subscriptions ──────────────────────────────────────────

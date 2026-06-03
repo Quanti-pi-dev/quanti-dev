@@ -305,7 +305,7 @@ class InstituteRepository {
     const where = `WHERE ${conditions.join(' AND ')}`;
     const [rows, count] = await Promise.all([
       this.pool.query(
-        `SELECT im.id, im.role, im.student_uid, im.is_active, im.joined_at,
+        `SELECT im.id, im.firebase_uid, im.role, im.student_uid, im.is_active, im.joined_at,
                 u.display_name, u.avatar_url, u.email, u.enrollment_id
          FROM institute_members im
          JOIN users u ON u.id = im.user_id
@@ -320,6 +320,7 @@ class InstituteRepository {
     return {
       data: rows.rows.map((row: Record<string, unknown>) => ({
         id: row['id'] as string,
+        firebaseUid: row['firebase_uid'] as string,
         role: row['role'] as InstituteMemberRole,
         studentUid: (row['student_uid'] as string | null) ?? null,
         displayName: row['display_name'] as string,

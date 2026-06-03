@@ -7,7 +7,6 @@ COPY package.json package-lock.json ./
 # Copy all package.json files for workspaces to install dependencies
 COPY packages/shared/package.json packages/shared/
 COPY packages/db/package.json packages/db/
-COPY server/package.json server/
 COPY server-user/package.json server-user/
 COPY server-admin/package.json server-admin/
 
@@ -20,9 +19,7 @@ WORKDIR /app
 # Copy source code
 COPY tsconfig.base.json tsconfig.json ./
 COPY packages/ packages/
-COPY server/ server/
 COPY server-user/ server-user/
-COPY server-admin/ server-admin/
 
 # Build shared packages and the user server
 RUN npm run build --workspace=@kd/shared
@@ -38,13 +35,12 @@ COPY --from=builder /app/package.json ./
 COPY --from=builder /app/package-lock.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/server ./server
 COPY --from=builder /app/server-user ./server-user
 
 # Add a startup script to handle migrations before starting the server
 RUN echo '#!/bin/sh' > /app/start.sh && \
-    echo 'npm --workspace=@kd/server exec -- tsx db/scripts/migrate.ts && \' >> /app/start.sh && \
-    echo 'npm --workspace=@kd/server exec -- tsx db/scripts/create-mongo-indexes.ts && \' >> /app/start.sh && \
+    echo 'npm --workspace=@kd/db run db:migrate && \' >> /app/start.sh && \
+    echo 'npm --workspace=@kd/db run db:indexes && \' >> /app/start.sh && \
     echo 'npm run start --workspace=@kd/server-user' >> /app/start.sh && \
     chmod +x /app/start.sh
 

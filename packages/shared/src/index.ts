@@ -11,3 +11,4 @@ export * from './types/analytics.js';
 export * from './types/learning-intelligence.js';
 export * from './types/knowledge-model.js';
 export * from './types/institute.js';
+export * from './types/ai-quota.js';

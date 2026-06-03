@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { api } from '@/lib/api';
-import { Users, Search, Shield, GraduationCap, BookOpen, UserMinus } from 'lucide-react';
+import { Users, Search, Shield, GraduationCap, BookOpen, UserMinus, Trash2 } from 'lucide-react';
 
 interface Member {
   id: string;
+  firebaseUid: string;
   role: 'student' | 'educator' | 'examiner' | 'institute_admin';
   studentUid: string | null;
   displayName: string;
@@ -53,6 +54,28 @@ export default function MembersPage() {
       await loadMembers();
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? 'Remove failed';
+      alert(msg);
+    } finally {
+      setRemoving(null);
+    }
+  };
+
+  const handleHardPurge = async (member: Member) => {
+    const input = window.prompt(
+      `⚠️ PERMANENT DELETION\n\nThis will delete "${member.displayName}" and ALL their data (study history, subscriptions, Firebase account, analytics).\n\nType their email to confirm: ${member.email}`,
+    );
+    if (input === null) return; // cancelled
+    if (input !== member.email) {
+      alert('Email did not match. Aborted.');
+      return;
+    }
+    setRemoving(member.id);
+    try {
+      // Purge route expects Firebase UID so it can resolve membership & PG UUID
+      await api.delete(`/api/inst/v1/institutes/${instituteId}/members/${member.firebaseUid}/purge`);
+      await loadMembers();
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? 'Purge failed';
       alert(msg);
     } finally {
       setRemoving(null);
@@ -126,10 +149,10 @@ export default function MembersPage() {
       ) : (
         <>
           {staff.length > 0 && (
-            <MemberSection title="Staff" members={staff} onRemove={handleRemove} removing={removing} />
+            <MemberSection title="Staff" members={staff} onRemove={handleRemove} onPurge={handleHardPurge} removing={removing} />
           )}
           {students.length > 0 && (
-            <MemberSection title="Students" members={students} onRemove={handleRemove} removing={removing} />
+            <MemberSection title="Students" members={students} onRemove={handleRemove} onPurge={handleHardPurge} removing={removing} />
           )}
           {filtered.length === 0 && (
             <div className="glass p-10 text-center">
@@ -143,10 +166,11 @@ export default function MembersPage() {
   );
 }
 
-function MemberSection({ title, members, onRemove, removing }: {
+function MemberSection({ title, members, onRemove, onPurge, removing }: {
   title: string;
   members: Member[];
   onRemove: (m: Member) => void;
+  onPurge: (m: Member) => void;
   removing: string | null;
 }) {
   return (
@@ -187,17 +211,28 @@ function MemberSection({ title, members, onRemove, removing }: {
               <div className="text-xs shrink-0" style={{ color: 'var(--color-surface-400)' }}>
                 {new Date(m.joinedAt).toLocaleDateString()}
               </div>
-              {/* Remove button — only for non-admin members */}
+              {/* Actions — only for non-admin members */}
               {m.role !== 'institute_admin' && (
-                <button
-                  onClick={() => onRemove(m)}
-                  disabled={removing === m.id}
-                  title="Remove from institute"
-                  className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all disabled:opacity-50 shrink-0"
-                  style={{ color: 'var(--color-surface-500)', background: 'var(--color-surface-800)' }}
-                >
-                  <UserMinus className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => onRemove(m)}
+                    disabled={removing === m.id}
+                    title="Remove from institute"
+                    className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:text-amber-400 transition-all disabled:opacity-50"
+                    style={{ color: 'var(--color-surface-500)', background: 'var(--color-surface-800)' }}
+                  >
+                    <UserMinus className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => onPurge(m)}
+                    disabled={removing === m.id}
+                    title="Permanently delete user & all data"
+                    className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all disabled:opacity-50"
+                    style={{ color: 'var(--color-surface-600)', background: 'var(--color-surface-800)' }}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               )}
             </div>
           );

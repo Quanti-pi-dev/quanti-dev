@@ -132,7 +132,7 @@ class ExamSubjectRepository {
     return this.toExamSubject(doc);
   }
 
-  /** Create a new exam-subject mapping. */
+  /** Create a new exam-subject mapping. Alias: addSubjectToExam. */
   async create(examId: string, subjectId: string, order?: number): Promise<ExamSubject> {
     const now = new Date();
     const count = order ?? await this.col.countDocuments({ examId: new ObjectId(examId) });
@@ -151,12 +151,22 @@ class ExamSubjectRepository {
     };
   }
 
-  /** Remove a mapping. */
+  /** Add a subject to an exam mapping. Canonical alias for create(). */
+  async addSubjectToExam(examId: string, subjectId: string, order?: number): Promise<ExamSubject> {
+    return this.create(examId, subjectId, order);
+  }
+
+  /** Remove a mapping. Alias: removeSubjectFromExam. */
   async remove(examId: string, subjectId: string): Promise<void> {
     await this.col.deleteOne({
       examId: new ObjectId(examId),
       subjectId: new ObjectId(subjectId),
     });
+  }
+
+  /** Remove a subject from an exam mapping. Canonical alias for remove(). */
+  async removeSubjectFromExam(examId: string, subjectId: string): Promise<void> {
+    return this.remove(examId, subjectId);
   }
 
   /** Reorder a mapping. */

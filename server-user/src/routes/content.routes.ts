@@ -10,8 +10,8 @@ import { deckRepository } from '@kd/db';
 import { flashcardRepository } from '@kd/db';
 import { subjectRepository } from '@kd/db';
 import { topicRepository } from '@kd/db';
-// questionRepository remains in legacy content.repository for now (Phase 7 cleanup)
 import { questionRepository } from '@kd/db';
+
 import { gamificationRepository } from '@kd/db';
 import { selectAdaptiveOrder } from '@kd/db';
 import type { PaginationQuery, SubjectLevel } from '@kd/shared';

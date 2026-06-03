@@ -22,6 +22,7 @@ import { useToast } from '@/components/toast';
 import { ArrowLeft, Plus, Pencil, Trash2, Upload, X, ChevronRight, Sparkles, Loader2 } from 'lucide-react';
 import { Latex } from '@/components/latex';
 import { ImagePicker } from '@/components/image-picker';
+import { FlashcardEditor, type FlashcardData } from '@/components/flashcard-editor';
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -80,6 +81,7 @@ const INPUT = 'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 te
 const LABEL = 'block text-xs font-medium text-zinc-400 mb-1.5';
 
 // ─── Card Modal (create / edit) ───────────────────────────────
+// Uses the shared FlashcardEditor with "preview-first, click-to-edit" UX.
 
 function CardModal({
   deckId,
@@ -100,29 +102,31 @@ function CardModal({
     { id: 'D', text: '', imageUrl: null },
   ];
 
-  const [question, setQuestion]         = useState(card?.question ?? '');
-  const [options, setOptions]           = useState<Option[]>(card?.options?.map(o => ({ ...o, imageUrl: o.imageUrl ?? null })) ?? defaultOptions);
-  const [correctAnswerId, setCorrect]   = useState(card?.correctAnswerId ?? 'A');
-  const [explanation, setExplanation]   = useState(card?.explanation ?? '');
-  const [imageUrl, setImageUrl]         = useState<string | null>(card?.imageUrl ?? null);
-  const [explanationImageUrl, setExplanationImageUrl] = useState<string | null>(card?.explanationImageUrl ?? null);
-  const [saving, setSaving]             = useState(false);
-  const [error, setError]               = useState('');
+  const [cardData, setCardData] = useState<FlashcardData>({
+    question:            card?.question ?? '',
+    options:             card?.options?.map(o => ({ ...o, imageUrl: o.imageUrl ?? null })) ?? defaultOptions,
+    correctAnswerId:     card?.correctAnswerId ?? 'A',
+    explanation:         card?.explanation ?? '',
+    imageUrl:            card?.imageUrl ?? null,
+    explanationImageUrl: card?.explanationImageUrl ?? null,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
 
-  const setOptionText = (idx: number, text: string) =>
-    setOptions(opts => opts.map((o, i) => i === idx ? { ...o, text } : o));
-
-  const setOptionImage = (idx: number, url: string | null) =>
-    setOptions(opts => opts.map((o, i) => i === idx ? { ...o, imageUrl: url } : o));
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!question.trim() || options.some(o => !o.text.trim())) {
+  const handleSubmit = async () => {
+    if (!cardData.question.trim() || cardData.options.some(o => !o.text.trim())) {
       setError('Question and all option texts are required.');
       return;
     }
     setSaving(true); setError('');
-    const payload = { question, options, correctAnswerId, explanation: explanation || null, imageUrl: imageUrl || null, explanationImageUrl: explanationImageUrl || null };
+    const payload = {
+      question:            cardData.question,
+      options:             cardData.options,
+      correctAnswerId:     cardData.correctAnswerId,
+      explanation:         cardData.explanation || null,
+      imageUrl:            cardData.imageUrl || null,
+      explanationImageUrl: cardData.explanationImageUrl || null,
+    };
     try {
       if (isEdit) {
         await adminApi.put(`/api/admin/flashcards/${card!.id}`, payload);
@@ -142,136 +146,22 @@ function CardModal({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm py-8"
     >
-      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-5xl p-6 shadow-2xl mx-4">
+      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-xl p-6 shadow-2xl mx-4">
         <div className="flex items-center justify-between mb-5 border-b border-zinc-800 pb-3">
           <h2 className="text-base font-semibold text-white">{isEdit ? 'Edit Flashcard' : 'New Flashcard'}</h2>
           <button onClick={onClose} className="text-zinc-500 hover:text-white transition"><X size={16} /></button>
         </div>
         {error && <ErrorBanner message={error} />}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-          {/* Left Column: Editor Inputs */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className={LABEL}>Question *</label>
-              <textarea value={question} onChange={e => setQuestion(e.target.value)} rows={3} placeholder="Enter question text…" className={INPUT} />
-            </div>
+        <FlashcardEditor data={cardData} onChange={setCardData} />
 
-            <div>
-              <ImagePicker value={imageUrl} onChange={setImageUrl} label="Question Image (optional)" compact />
-            </div>
-
-            <div>
-              <label className={LABEL}>Answer Options *</label>
-              <div className="space-y-3">
-                {options.map((opt, idx) => (
-                  <div key={opt.id} className="rounded-lg p-2.5" style={{ background: correctAnswerId === opt.id ? 'rgba(139,92,246,0.06)' : 'transparent', border: correctAnswerId === opt.id ? '1px solid rgba(139,92,246,0.15)' : '1px solid transparent' }}>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-zinc-400 w-5 shrink-0">{opt.id}</span>
-                      <input
-                        value={opt.text}
-                        onChange={e => setOptionText(idx, e.target.value)}
-                        placeholder={`Option ${opt.id}`}
-                        className={INPUT}
-                      />
-                      <input
-                        type="radio"
-                        name="correct"
-                        value={opt.id}
-                        checked={correctAnswerId === opt.id}
-                        onChange={() => setCorrect(opt.id)}
-                        className="accent-violet-500 shrink-0 w-4 h-4 cursor-pointer"
-                        title="Mark as correct"
-                      />
-                    </div>
-                    <div className="ml-7 mt-1.5">
-                      <ImagePicker value={opt.imageUrl ?? null} onChange={url => setOptionImage(idx, url)} label={`Option ${opt.id} Image`} compact />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs text-zinc-600 mt-1">Select the radio button next to the correct answer.</p>
-            </div>
-
-            <div>
-              <label className={LABEL}>Explanation (optional)</label>
-              <textarea value={explanation} onChange={e => setExplanation(e.target.value)} rows={2} placeholder="Why is this the correct answer?" className={INPUT} />
-              <div className="mt-1.5">
-                <ImagePicker value={explanationImageUrl} onChange={setExplanationImageUrl} label="Explanation Image (optional)" compact />
-              </div>
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <button type="button" onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 text-sm hover:text-white transition">
-                Cancel
-              </button>
-              <button type="submit" disabled={saving} className="flex-1 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition disabled:opacity-50">
-                {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Card'}
-              </button>
-            </div>
-          </form>
-
-          {/* Right Column: Live Card Preview */}
-          <div className="flex flex-col border-t md:border-t-0 md:border-l border-zinc-800 pt-6 md:pt-0 md:pl-6">
-            <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-3">Live Card Preview</span>
-            <div className="flex-1 flex flex-col justify-center">
-              <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-5 shadow-lg min-h-[220px] flex flex-col justify-between">
-                <div>
-                  {/* Question */}
-                  {question.trim() ? (
-                    <div className="text-sm text-white font-medium leading-relaxed">
-                      <Latex text={question} />
-                    </div>
-                  ) : (
-                    <p className="text-sm text-zinc-600 italic">No question text entered yet…</p>
-                  )}
-
-                  {/* Image preview */}
-                  {imageUrl && (
-                    <img src={imageUrl} alt="Question" className="mt-2 rounded-lg border border-zinc-800 max-h-32 object-contain" />
-                  )}
-
-                  {/* Options */}
-                  <div className="grid grid-cols-2 gap-1.5 mt-4">
-                    {options.map(opt => (
-                      <div
-                        key={opt.id}
-                        className={`px-3 py-1.5 rounded-lg text-xs transition-colors duration-200 ${
-                          opt.id === correctAnswerId
-                            ? 'bg-emerald-950/60 border border-emerald-800/60 text-emerald-300'
-                            : 'bg-zinc-900 border border-zinc-800/50 text-zinc-500'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold shrink-0">{opt.id}.</span>
-                          <span className="truncate">
-                            {opt.text.trim() ? (
-                              <Latex text={opt.text} />
-                            ) : (
-                              <span className="text-zinc-700 italic">Empty…</span>
-                            )}
-                          </span>
-                        </div>
-                        {opt.imageUrl && (
-                          <img src={opt.imageUrl} alt={`Option ${opt.id}`} className="mt-1 rounded max-h-16 object-contain" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Explanation */}
-                {(explanation.trim() || explanationImageUrl) && (
-                  <div className="mt-3 text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-3">
-                    {explanation.trim() && <Latex text={explanation} />}
-                    {explanationImageUrl && (
-                      <img src={explanationImageUrl} alt="Explanation" className="mt-1 rounded max-h-20 object-contain" />
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+        <div className="flex gap-3 pt-5 mt-2 border-t border-zinc-800">
+          <button type="button" onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 text-sm hover:text-white transition">
+            Cancel
+          </button>
+          <button onClick={handleSubmit} disabled={saving} className="flex-1 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition disabled:opacity-50">
+            {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Card'}
+          </button>
         </div>
       </div>
     </div>

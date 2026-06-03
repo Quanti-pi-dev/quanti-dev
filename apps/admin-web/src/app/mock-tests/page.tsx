@@ -14,14 +14,14 @@
 //                         (skippable with "Use All Subjects")
 //   3. Settings         — title, time limit, card count, sort order, active
 
-import { useEffect, useState, useCallback, useId } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api';
 import { PageShell, Badge, Spinner, ErrorBanner } from '@/components/page-shell';
 import { DataTable } from '@/components/data-table';
 import { ConfirmModal } from '@/components/confirm-modal';
 import { useToast } from '@/components/toast';
 import { Latex } from '@/components/latex';
-import { ImagePicker } from '@/components/image-picker';
+import { FlashcardEditor, type FlashcardData } from '@/components/flashcard-editor';
 import {
   Plus, Pencil, Trash2, X, ToggleLeft, ToggleRight,
   ChevronLeft, ChevronRight, Check, BookOpen, Layers, Settings2,
@@ -72,18 +72,7 @@ interface SubjectOption {
 
 const INPUT = 'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500 transition';
 const LABEL = 'block text-xs font-medium text-zinc-400 mb-1.5';
-const PREVIEW_LABEL = 'text-[10px] text-zinc-600 mb-0.5';
 
-/** Live LaTeX preview shown under a textarea when the text contains $ */
-function LatexPreview({ text }: { text: string }) {
-  if (!text || !text.includes('$')) return null;
-  return (
-    <div className="mt-1.5 px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800">
-      <p className={PREVIEW_LABEL}>Preview</p>
-      <Latex text={text} className="text-sm text-zinc-300" />
-    </div>
-  );
-}
 
 function apiError(err: unknown) {
   return (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? 'Unknown error';
@@ -558,8 +547,7 @@ function MockTestWizard({
 }
 
 // ─── Custom Question Editor Modal ────────────────────────────
-
-const OPTION_IDS = ['A', 'B', 'C', 'D', 'E', 'F'];
+// Uses the shared FlashcardEditor with "preview-first, click-to-edit" UX.
 
 function QuestionEditorModal({
   test,
@@ -569,14 +557,13 @@ function QuestionEditorModal({
   onClose: () => void;
 }) {
   const { toast } = useToast();
-  const uid = useId();
 
   // list of questions already saved on this mock test
   const [questions, setQuestions] = useState<CustomQuestion[]>([]);
   const [listLoading, setListLoading] = useState(true);
 
-  // inline form
-  const blank = (): Omit<CustomQuestion, '_id'> => ({
+  // inline form — now uses FlashcardData shape
+  const blank = (): FlashcardData => ({
     question: '',
     options: [
       { id: 'A', text: '', imageUrl: null },
@@ -589,7 +576,7 @@ function QuestionEditorModal({
     imageUrl: null,
     explanationImageUrl: null,
   });
-  const [form, setForm] = useState(blank());
+  const [form, setForm] = useState<FlashcardData>(blank());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
@@ -607,34 +594,6 @@ function QuestionEditorModal({
   }, [test._id]);
 
   useEffect(() => { fetchQuestions(); }, [fetchQuestions]);
-
-  // option helpers
-  const setOptionText = (idx: number, val: string) =>
-    setForm(p => {
-      const opts = [...p.options];
-      opts[idx] = { ...opts[idx], text: val };
-      return { ...p, options: opts };
-    });
-
-  const setOptionImage = (idx: number, url: string | null) =>
-    setForm(p => {
-      const opts = [...p.options];
-      opts[idx] = { ...opts[idx], imageUrl: url };
-      return { ...p, options: opts };
-    });
-
-  const addOption = () =>
-    setForm(p => ({
-      ...p,
-      options: [...p.options, { id: OPTION_IDS[p.options.length] ?? String(p.options.length + 1), text: '', imageUrl: null }],
-    }));
-
-  const removeOption = (idx: number) =>
-    setForm(p => ({
-      ...p,
-      options: p.options.filter((_, i) => i !== idx),
-      correctAnswerId: p.options[idx]?.id === p.correctAnswerId ? p.options[0]?.id ?? '' : p.correctAnswerId,
-    }));
 
   // start editing an existing question
   const startEdit = (q: CustomQuestion) => {
@@ -781,7 +740,7 @@ function QuestionEditorModal({
             </div>
           )}
 
-          {/* ── Question form ── */}
+          {/* ── Question form — now using shared FlashcardEditor ── */}
           <div className="bg-zinc-800/40 border border-zinc-700/60 rounded-xl p-4 space-y-4">
             <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
               {editingId ? 'Edit Question' : 'New Question'}
@@ -789,111 +748,12 @@ function QuestionEditorModal({
 
             {formError && <ErrorBanner message={formError} />}
 
-            {/* Question text */}
-            <div>
-              <label htmlFor={`${uid}-q`} className={LABEL}>
-                Question <span className="text-zinc-600 font-normal">(supports LaTeX: $E=mc^2$)</span>
-              </label>
-              <textarea
-                id={`${uid}-q`}
-                rows={3}
-                value={form.question}
-                onChange={e => setForm(p => ({ ...p, question: e.target.value }))}
-                placeholder="Type question here. Use $…$ for inline math, $$…$$ for display math."
-                className={INPUT}
-              />
-              <LatexPreview text={form.question} />
-            </div>
-
-            {/* Question image */}
-            <ImagePicker
-              value={form.imageUrl}
-              onChange={url => setForm(p => ({ ...p, imageUrl: url }))}
-              label="Question Image (optional)"
-              compact
+            <FlashcardEditor
+              data={form}
+              onChange={setForm}
+              maxOptions={6}
+              variableOptions
             />
-
-            {/* Options */}
-            <div>
-              <label className={LABEL}>Options <span className="text-zinc-600 font-normal">(click ● to mark correct)</span></label>
-              <div className="space-y-2">
-                {form.options.map((opt, i) => (
-                  <div key={opt.id} className="flex items-start gap-2">
-                    <button
-                      onClick={() => setForm(p => ({ ...p, correctAnswerId: opt.id }))}
-                      title="Mark as correct answer"
-                      className={`mt-2 shrink-0 transition ${
-                        opt.id === form.correctAnswerId ? 'text-emerald-400' : 'text-zinc-600 hover:text-zinc-400'
-                      }`}
-                    >
-                      {opt.id === form.correctAnswerId
-                        ? <CircleCheck size={16} />
-                        : <Circle size={16} />}
-                    </button>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-zinc-500 w-4 shrink-0">{opt.id}.</span>
-                        <input
-                          value={opt.text}
-                          onChange={e => setOptionText(i, e.target.value)}
-                          placeholder={`Option ${opt.id}`}
-                          className={INPUT}
-                        />
-                        {form.options.length > 2 && (
-                          <button
-                            onClick={() => removeOption(i)}
-                            className="text-zinc-600 hover:text-red-400 transition shrink-0"
-                          >
-                            <X size={13} />
-                          </button>
-                        )}
-                      </div>
-                      <LatexPreview text={opt.text} />
-                      <div className="ml-4">
-                        <ImagePicker
-                          value={opt.imageUrl ?? null}
-                          onChange={url => setOptionImage(i, url)}
-                          label={`Option ${opt.id} Image`}
-                          compact
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {form.options.length < 6 && (
-                <button
-                  onClick={addOption}
-                  className="mt-2 text-xs text-violet-400 hover:text-violet-300 transition flex items-center gap-1"
-                >
-                  <Plus size={12} /> Add Option
-                </button>
-              )}
-            </div>
-
-            {/* Explanation */}
-            <div>
-              <label htmlFor={`${uid}-exp`} className={LABEL}>
-                Explanation <span className="text-zinc-600 font-normal">(optional, shown after answer)</span>
-              </label>
-              <textarea
-                id={`${uid}-exp`}
-                rows={2}
-                value={form.explanation}
-                onChange={e => setForm(p => ({ ...p, explanation: e.target.value }))}
-                placeholder="Optional explanation. Supports LaTeX."
-                className={INPUT}
-              />
-              <LatexPreview text={form.explanation} />
-              <div className="mt-1.5">
-                <ImagePicker
-                  value={form.explanationImageUrl}
-                  onChange={url => setForm(p => ({ ...p, explanationImageUrl: url }))}
-                  label="Explanation Image (optional)"
-                  compact
-                />
-              </div>
-            </div>
 
             {/* Form actions */}
             <div className="flex items-center gap-2 pt-1">

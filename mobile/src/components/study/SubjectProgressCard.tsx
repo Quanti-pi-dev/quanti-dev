@@ -61,12 +61,19 @@ function ProgressRing({
 export interface SubjectProgressCardProps {
   /** Subject name e.g. "Quantitative Aptitude" */
   subjectName: string;
-  /** Exam name e.g. "CAT 2025" */
+  /** Exam name e.g. "CAT 2025". Undefined when subject not yet started. */
   examName?: string;
   /** 0-3 index (0=Emerging … 3=Master) */
   levelIndex: number;
   /** Correct answers used to derive mastery 0–1 ring fill */
   correctAnswers: number;
+  /**
+   * Whether the user has started this subject.
+   * Passed explicitly from the parent as the single source of truth
+   * (Fix 3B: avoids the card re-deriving it from correctAnswers alone,
+   * which disagrees when the user has sessions but 0 correct answers).
+   */
+  isStarted: boolean;
   /** Index in the palette for accent color */
   accentIndex: number;
   /** Navigation callback */
@@ -82,6 +89,7 @@ export const SubjectProgressCard = memo(function SubjectProgressCard({
   examName,
   levelIndex,
   correctAnswers,
+  isStarted,
   accentIndex,
   onPress,
   animDelay = 0,
@@ -93,7 +101,7 @@ export const SubjectProgressCard = memo(function SubjectProgressCard({
   // Canonical mastery computation from shared utility
   const mastery = getMasteryDisplayInfo(correctAnswers, levelIndex);
   const { label: levelLabel, badge, progress: masteryProgress, pct, educator } = mastery;
-  const isStarted = correctAnswers > 0;
+  // isStarted is supplied by the parent — do NOT re-derive from correctAnswers here.
 
   // ── Entrance animation ────────────────────────────────────
   const translateX = useSharedValue(30);

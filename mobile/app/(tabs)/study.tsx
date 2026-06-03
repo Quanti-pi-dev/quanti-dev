@@ -69,6 +69,9 @@ function DailyChestBanner() {
     mutationFn: () => apiPost<ChestReward>('/gamify/daily-chest'),
     onSuccess: (data) => {
       setReward(data);
+      // Invalidate AFTER reward state is set so the banner stays mounted
+      // while displaying the opened reward. Without this guard the banner
+      // would unmount immediately once availableToday refetches as false.
       void queryClient.invalidateQueries({ queryKey: ['daily-chest-status'] });
       void queryClient.invalidateQueries({ queryKey: ['gamification'] });
     },
@@ -91,7 +94,11 @@ function DailyChestBanner() {
     transform: [{ rotate: `${rot.value}deg` }],
   }));
 
-  if (statusLoading || !status?.availableToday) return null;
+  // Fix 1B: Keep the banner mounted while `reward` is non-null so the user
+  // can read their reward message. The query will return availableToday:false
+  // immediately after invalidation — gating only on that would unmount the
+  // component before the opened state is ever seen.
+  if (statusLoading || (!status?.availableToday && !reward)) return null;
 
   const RARITY_GRADIENT: Record<string, [string, string]> = {
     legendary: ['#F59E0B', '#EF4444'],
@@ -415,6 +422,9 @@ export default function StudyScreen() {
           examName: progress?.examName ?? '',
           levelIndex: progress?.levelIndex ?? 0,
           correctAnswers: progress?.correctAnswers ?? 0,
+          // Fix 3B: isStarted is the single source of truth, passed explicitly
+          // to SubjectProgressCard so the card doesn't re-derive it from
+          // correctAnswers (which disagrees when correctAnswers === 0).
           isStarted: !!progress,
         });
       }
@@ -457,7 +467,16 @@ export default function StudyScreen() {
   const greetingWord = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const greeting = `${greetingWord}, ${firstName}`;
 
-  const recentDecks = useMemo(() => (recentSessions ?? []).slice(0, 5), [recentSessions]);
+  // Fix 3C: Deduplicate by deckId before slicing. The backend may return
+  // multiple sessions for the same deck (e.g. user studied it 3 times today).
+  const recentDecks = useMemo(() => {
+    const seen = new Set<string>();
+    return (recentSessions ?? []).filter((s) => {
+      if (seen.has(s.deckId)) return false;
+      seen.add(s.deckId);
+      return true;
+    }).slice(0, 5);
+  }, [recentSessions]);
   const recs = useMemo(() => (recommendations ?? []).slice(0, 8), [recommendations]);
   const discoverDecks = useMemo(
     () => decksPages?.pages.flatMap((p) => p.data) ?? [],
@@ -477,13 +496,16 @@ export default function StudyScreen() {
       queryClient.invalidateQueries({ queryKey: ['gamification'] }),
       queryClient.invalidateQueries({ queryKey: ['ai'] }),
       queryClient.invalidateQueries({ queryKey: ['decks'] }),
+      // Fix 2C: also refresh chest status and subject list
+      queryClient.invalidateQueries({ queryKey: ['daily-chest-status'] }),
+      queryClient.invalidateQueries({ queryKey: ['personalized-subjects'] }),
     ]);
     setRefreshing(false);
   }, [queryClient]);
 
   // ── Navigation helpers ────────────────────────────────────
   function handleDeckPress(deckId: string) {
-    router.push(`/flashcards/${deckId}` as never);
+    router.push({ pathname: '/flashcards/[id]', params: { id: deckId } });
   }
 
   return (
@@ -560,7 +582,7 @@ export default function StudyScreen() {
               subtitle={hasSubjects ? 'Tap a subject to study' : undefined}
               icon="book-outline"
               action={hasSubjects ? 'Manage →' : undefined}
-              onAction={hasSubjects ? () => router.push('/explore-exams' as never) : undefined}
+              onAction={hasSubjects ? () => router.push('/explore-exams') : undefined}
             />
           </View>
 
@@ -570,7 +592,7 @@ export default function StudyScreen() {
             </View>
           ) : !hasSubjects ? (
             <TouchableOpacity
-              onPress={() => router.push('/explore-exams' as never)}
+              onPress={() => router.push('/explore-exams')}
               activeOpacity={0.8}
               style={{
                 marginHorizontal: spacing.xl,
@@ -627,15 +649,29 @@ export default function StudyScreen() {
                 <SubjectProgressCard
                   key={`${s.examId}-${s.subjectId}`}
                   subjectName={s.subjectName}
-                  examName={s.isStarted ? s.examName : 'Not started'}
+                  // Fix 3A: Pass undefined when subject not started so the card
+                  // doesn't render the literal string "Not started" in the exam
+                  // name slot. The card handles undefined examName gracefully.
+                  examName={s.isStarted ? s.examName : undefined}
                   levelIndex={s.levelIndex}
                   correctAnswers={s.correctAnswers}
+                  // Fix 3B: Pass explicit isStarted so the card doesn't
+                  // independently re-derive it from correctAnswers (which
+                  // disagrees when correctAnswers === 0).
+                  isStarted={s.isStarted}
                   accentIndex={i}
-                  onPress={() =>
-                    router.push(
-                      `/exams/${s.examId}/subjects/${s.subjectId}/levels?title=${encodeURIComponent(s.subjectName)}` as never,
-                    )
-                  }
+                  onPress={() => {
+                    // Fix 1A: Guard against empty examId to prevent the route
+                    // /exams//subjects/<id>/levels which Expo Router can't resolve.
+                    if (!s.examId) {
+                      router.push('/explore-exams');
+                      return;
+                    }
+                    router.push({
+                      pathname: '/exams/[examId]/subjects/[subjectId]/levels',
+                      params: { examId: s.examId, subjectId: s.subjectId, title: s.subjectName },
+                    });
+                  }}
                   animDelay={i * 60}
                 />
               ))}
@@ -699,28 +735,49 @@ export default function StudyScreen() {
                   backgroundColor: '#6366F108',
                   borderRadius: radius.xl,
                   padding: spacing.lg,
-                  flexDirection: 'row',
-                  alignItems: 'center',
                   gap: spacing.md,
                   borderWidth: 1,
                   borderColor: '#6366F120',
                 }}
               >
-                <View
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                  <View
+                    style={{
+                      width: 44, height: 44, borderRadius: radius.full,
+                      backgroundColor: '#6366F118',
+                      alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="sparkles" size={22} color="#6366F1" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Typography variant="label" color="#6366F1">Study more to unlock AI picks</Typography>
+                    <Typography variant="caption" color={theme.textTertiary}>
+                      Complete a few sessions and we'll recommend the best decks for you.
+                    </Typography>
+                  </View>
+                </View>
+                {/* Fix 2D: Add CTA so the user isn't left with a dead-end banner */}
+                <TouchableOpacity
+                  onPress={() => router.push('/explore-decks')}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
                   style={{
-                    width: 44, height: 44, borderRadius: radius.full,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
                     backgroundColor: '#6366F118',
-                    alignItems: 'center', justifyContent: 'center',
+                    borderRadius: radius.lg,
+                    paddingVertical: spacing.sm,
+                    borderWidth: 1,
+                    borderColor: '#6366F130',
                   }}
                 >
-                  <Ionicons name="sparkles" size={22} color="#6366F1" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Typography variant="label" color="#6366F1">Study more to unlock AI picks</Typography>
-                  <Typography variant="caption" color={theme.textTertiary}>
-                    Complete a few sessions and we'll recommend the best decks for you.
-                  </Typography>
-                </View>
+                  <Ionicons name="compass-outline" size={14} color="#6366F1" />
+                  <Typography variant="captionBold" color="#6366F1">Browse Decks</Typography>
+                  <Ionicons name="arrow-forward" size={12} color="#6366F1" />
+                </TouchableOpacity>
               </View>
             </View>
           ) : (
@@ -848,7 +905,7 @@ export default function StudyScreen() {
               subtitle="Popular flashcard decks"
               icon="compass-outline"
               action="See all →"
-              onAction={() => router.push('/explore-decks' as never)}
+              onAction={() => router.push('/explore-decks')}
             />
           </View>
 

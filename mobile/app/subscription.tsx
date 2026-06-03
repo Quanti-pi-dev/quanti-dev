@@ -1,11 +1,14 @@
 // ─── SubscriptionScreen ───────────────────────────────────────
-// Plans pricing page: toggle cycle, view plans, enter coupon, checkout.
-// All built from decomposed components — this screen is pure composition.
+// Plans pricing page — redesigned by CEO request:
+//   • Horizontal scrollable carousel for side-by-side plan comparison
+//   • Dedicated Free Trial card (position 0, separate from Basic)
+//   • Each card's CTA directly fires checkout (no broken 2-step flow)
+//   • Coupon input appears below carousel after any plan button pressed
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, ScrollView, TouchableOpacity,
-  ActivityIndicator, RefreshControl,
+  ActivityIndicator, RefreshControl, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -20,7 +23,8 @@ import { useGlobalUI } from '../src/contexts/GlobalUIContext';
 import { spacing, radius } from '../src/theme/tokens';
 import { Typography } from '../src/components/ui/Typography';
 import { PricingToggle } from '../src/components/subscription/PricingToggle';
-import { PlanCard } from '../src/components/subscription/PlanCard';
+import { PlanCard, CARD_WIDTH } from '../src/components/subscription/PlanCard';
+import { FreeTrialCard } from '../src/components/subscription/FreeTrialCard';
 import { CouponInput } from '../src/components/subscription/CouponInput';
 import { CurrentSubscriptionBanner } from '../src/components/subscription/CurrentSubscriptionBanner';
 import { useSubscription } from '../src/contexts/SubscriptionContext';
@@ -36,9 +40,13 @@ import { useConfig } from '../src/contexts/ConfigContext';
 import type { Plan, CouponValidationResult } from '@kd/shared';
 import type { BillingCycle } from '@kd/shared';
 
+const CARD_GAP = spacing.lg;
+const SCREEN_W = Dimensions.get('window').width;
+// Left edge padding so first card is centred and user can see peek of next card
+const CAROUSEL_PADDING = (SCREEN_W - CARD_WIDTH) / 2;
+
 // ─── Sub-components (local, private to screen) ────────────────
 
-/** Sticky header with back button and title. Shows 'Not Now' skip when in onboarding context. */
 function ScreenHeader({ onBack, onSkip }: { onBack: () => void; onSkip?: () => void }) {
   const { theme } = useTheme();
   const subscriptionHeadline = useConfig('subscription_headline', 'Upgrade Your Learning');
@@ -86,7 +94,6 @@ function ScreenHeader({ onBack, onSkip }: { onBack: () => void; onSkip?: () => v
   );
 }
 
-/** Guarantees row at the bottom */
 function GuaranteesRow() {
   const { theme } = useTheme();
   const items = [
@@ -109,7 +116,6 @@ function GuaranteesRow() {
   );
 }
 
-/** Empty / error state */
 function EmptyState({ onRetry }: { onRetry: () => void }) {
   const { theme } = useTheme();
   return (
@@ -137,40 +143,28 @@ function EmptyState({ onRetry }: { onRetry: () => void }) {
 }
 
 // ─── Checkout error parser ────────────────────────────────────
-// Razorpay SDK errors come in multiple shapes:
-//  1. { code: 2 }                         — user cancelled
-//  2. { code: 0, description: "..." }     — SDK failure
-//  3. { error: { code, description, reason, step } } — API error (the screenshot bug)
-//  4. Standard Error objects from our own API layer
 
 function parseCheckoutError(err: unknown): string {
   if (typeof err === 'object' && err !== null) {
     const e = err as Record<string, unknown>;
-
-    // Nested Razorpay API error — the shape that was leaking raw JSON
     if (typeof e.error === 'object' && e.error !== null) {
       const inner = e.error as Record<string, unknown>;
       const reason = inner.reason as string | undefined;
       const step = inner.step as string | undefined;
-
       if (reason === 'payment_error' || step === 'payment_authentication') {
         return 'Payment could not be processed. Please try a different payment method.';
       }
       if (reason === 'payment_declined') {
         return 'Your payment was declined. Please check your card details or try another method.';
       }
-      // Use description only if it's a real string (not the literal "undefined")
       if (typeof inner.description === 'string' && inner.description !== 'undefined' && inner.description.length > 0) {
         return inner.description;
       }
     }
-
-    // Flat SDK error shape
     if (typeof e.description === 'string' && e.description.length > 0) {
       return e.description;
     }
   }
-
   if (err instanceof Error) return err.message;
   return 'Something went wrong. Please try again.';
 }
@@ -185,7 +179,6 @@ export default function SubscriptionScreen() {
   const { showAlert } = useGlobalUI();
   const { subscription, isSubscribed, refreshSubscription, setSubscription } = useSubscription();
 
-  // Navigate to completion screen (onboarding) or back (normal)
   const navigateAfterAction = () => {
     if (isFromOnboarding) {
       router.replace('/(onboarding)/complete' as never);
@@ -204,10 +197,13 @@ export default function SubscriptionScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [checkingOut, setCheckingOut] = useState<string | null>(null);
   const [couponResult, setCouponResult] = useState<CouponValidationResult | null>(null);
-  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  // The plan the user has pressed CTA on (for coupon section)
+  const [pendingPlan, setPendingPlan] = useState<Plan | null>(null);
   const [successOverlay, setSuccessOverlay] = useState<{
     title: string; subtitle: string; buttonText: string;
   } | null>(null);
+
+  const couponSectionRef = useRef<ScrollView>(null);
 
   // ─── Load plans ──────────────────────────────────────────
   const loadPlans = useCallback(async () => {
@@ -231,33 +227,32 @@ export default function SubscriptionScreen() {
 
   // ─── Filter plans by cycle ────────────────────────────────
   const visiblePlans = plans.filter((p) => p.billingCycle === cycle);
-
-  // Tier order: Basic (1), Pro (2), Master (3)
   const sorted = [...visiblePlans].sort((a, b) => a.tier - b.tier);
-
-  // ── Only show plans that are an upgrade from the user's current tier ──
-  // Never suggest a lower or equal plan — always sell up.
   const currentTier = subscription?.plan?.tier ?? 0;
   const upgradablePlans = sorted.filter((p) => p.tier > currentTier);
   const isOnHighestPlan = isSubscribed && upgradablePlans.length === 0;
 
-  // ─── Plan selection (no checkout yet) ─────────────────────
-  function handlePlanTap(plan: Plan) {
-    setSelectedPlan((prev) => prev?.id === plan.id ? null : plan);
-    setCouponResult(null);
-  }
+  // Separate the trial plan (any plan with trialDays > 0, usually Basic)
+  // from the rest — trial gets its own dedicated card.
+  // Backend must return trialEligible===true; anything else hides the card.
+  const trialPlan = upgradablePlans.find(
+    (p) => p.trialDays > 0 && p.trialEligible === true,
+  ) ?? null;
+  // Paid plans are ALL upgradable plans (including the one with trial — they can still
+  // choose to pay directly; they just also have the standalone trial card).
+  const paidPlans = upgradablePlans;
 
-  // ─── Checkout (only after explicit confirm) ───────────────
-  async function handleCheckout() {
-    if (!selectedPlan) return;
-    const plan = selectedPlan;
+  // ─── Core checkout runner ─────────────────────────────────
+  // skipTrial=true  → always a paid checkout (from regular PlanCard)
+  // skipTrial=false → trial eligible (from FreeTrialCard only)
+  async function runCheckout(plan: Plan, withCoupon: boolean, skipTrial: boolean) {
     setCheckingOut(plan.id);
+    const couponId = withCoupon && couponResult?.valid ? couponResult.couponId : undefined;
 
     try {
-      const result = await initiateCheckout(plan.id, couponResult?.valid ? couponResult.couponId : undefined);
+      const result = await initiateCheckout(plan.id, couponId, skipTrial);
       const isTrial = result.trialDays > 0;
 
-      // ── Open Razorpay checkout (trial = mandate auth, paid = charge) ──
       if (!result.keyId) {
         throw new Error('Checkout response is missing payment key. Please try again.');
       }
@@ -279,7 +274,6 @@ export default function SubscriptionScreen() {
 
       const paymentResult = await RazorpayCheckout.open(razorpayOptions);
 
-      // ── Verify with retry ─────────────────────────────────
       const verifyPayload = isSubscriptionMode
         ? {
             razorpayOrderId: result.razorpaySubscriptionId!,
@@ -303,7 +297,7 @@ export default function SubscriptionScreen() {
               title: isTrial ? 'Trial Setup Pending' : 'Payment Received',
               message: isTrial
                 ? 'Your trial is being activated. It will appear shortly — please restart the app if needed.'
-                : 'Your payment was successful but activation is taking a moment. Your subscription will appear shortly — please restart the app if needed.',
+                : 'Your payment was successful but activation is taking a moment. Please restart the app if needed.',
               type: 'info',
               buttons: [{ text: 'OK', onPress: navigateAfterAction }],
             });
@@ -315,12 +309,10 @@ export default function SubscriptionScreen() {
 
       setSubscription(activatedSummary!);
 
-      // ── Success overlay adapts to trial vs paid ──
       if (isTrial) {
         const chargeDate = new Date();
         chargeDate.setDate(chargeDate.getDate() + result.trialDays);
         const chargeDateStr = chargeDate.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
-
         setSuccessOverlay({
           title: 'Trial Started!',
           subtitle: `Your ${result.trialDays}-day free trial of ${plan.displayName} is active. You won't be charged until ${chargeDateStr}.`,
@@ -332,7 +324,7 @@ export default function SubscriptionScreen() {
           subtitle: isSubscriptionMode
             ? `You're now on ${plan.displayName}. Auto-renews ${cycle === 'monthly' ? 'monthly' : 'weekly'} — cancel anytime.`
             : `You're now on ${plan.displayName}. Happy learning!`,
-          buttonText: 'Let\'s Go!',
+          buttonText: "Let's Go!",
         });
       }
     } catch (err: unknown) {
@@ -348,6 +340,29 @@ export default function SubscriptionScreen() {
     }
   }
 
+  // Card CTA handlers
+  function handlePlanCardPress(plan: Plan) {
+    // If there's a pending plan already and coupon is applied, go direct
+    if (pendingPlan?.id === plan.id && couponResult?.valid) {
+      runCheckout(plan, true, true); // skipTrial=true — user chose the paid card
+      return;
+    }
+    // First press: set pending so coupon section appears below
+    setPendingPlan(plan);
+    setCouponResult(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }
+
+  function handleTrialCardPress(plan: Plan) {
+    // Free trial card — skipTrial=false so the backend applies the trial mandate
+    runCheckout(plan, false, false);
+  }
+
+  function handleConfirmCheckout() {
+    if (!pendingPlan) return;
+    runCheckout(pendingPlan, true, true); // skipTrial=true — always paid from confirm button
+  }
+
   // ─── Render ──────────────────────────────────────────────
 
   if (loading) {
@@ -358,7 +373,6 @@ export default function SubscriptionScreen() {
       </SafeAreaView>
     );
   }
-
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
@@ -372,25 +386,25 @@ export default function SubscriptionScreen() {
         {/* ── Header (gradient) ── */}
         <ScreenHeader onBack={() => router.back()} onSkip={isFromOnboarding ? handleSkipOnboarding : undefined} />
 
-        <View style={{ paddingHorizontal: spacing.xl, marginTop: -spacing.lg, gap: spacing.xl }}>
+        <View style={{ marginTop: -spacing.lg, gap: spacing.xl }}>
           {/* ── Active subscription banner ── */}
           {isSubscribed && subscription && (
-            <Animated.View entering={FadeInDown.delay(50).duration(350)}>
+            <Animated.View entering={FadeInDown.delay(50).duration(350)} style={{ paddingHorizontal: spacing.xl }}>
               <CurrentSubscriptionBanner subscription={subscription} />
             </Animated.View>
           )}
 
           {/* ── Cycle toggle ── */}
           <Animated.View entering={FadeInDown.delay(100).duration(350)} style={{ alignItems: 'center' }}>
-            <PricingToggle value={cycle} onChange={setCycle} />
+            <PricingToggle value={cycle} onChange={(c) => { setCycle(c); setPendingPlan(null); setCouponResult(null); }} />
           </Animated.View>
 
-          {/* ── Plan cards ── */}
+          {/* ── Plan cards — horizontal carousel ── */}
           {isOnHighestPlan ? (
-            /* ── "You're on our best plan" — nothing left to upsell ── */
             <Animated.View
               entering={FadeInDown.delay(150).duration(400)}
               style={{
+                marginHorizontal: spacing.xl,
                 backgroundColor: theme.card,
                 borderRadius: radius['2xl'],
                 borderWidth: 1.5,
@@ -432,76 +446,117 @@ export default function SubscriptionScreen() {
                 <Typography variant="label" color="#FFFFFF">Back to Learning</Typography>
               </TouchableOpacity>
             </Animated.View>
-          ) : upgradablePlans.length === 0 ? (
+          ) : paidPlans.length === 0 ? (
             <EmptyState onRetry={loadPlans} />
           ) : (
-            <View style={{ gap: spacing.lg }}>
-              {upgradablePlans.map((plan, i) => {
-                const isPopular = Number(plan.tier) === 3 || plan.displayName.includes('Master');
-
-                return (
-                  <Animated.View
-                    key={plan.id}
-                    entering={FadeInDown.delay(150 + i * 80).duration(400)}
-                  >
-                    <PlanCard
-                      plan={plan}
-                      isPopular={isPopular}
-                      isCurrentPlan={false}
-                      isSelected={selectedPlan?.id === plan.id}
-                      onSelect={handlePlanTap}
-                    />
-                    {checkingOut === plan.id && (
-                      <View
-                        style={{
-                          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                          alignItems: 'center', justifyContent: 'center',
-                          backgroundColor: theme.background + '99',
-                          borderRadius: radius['2xl'],
-                        }}
-                      >
-                        <ActivityIndicator color={theme.primary} />
-                      </View>
-                    )}
-                  </Animated.View>
-                );
-              })}
-            </View>
-          )}
-
-          {/* ── Checkout section: coupon + confirm (appears after plan selected) ── */}
-          {!isOnHighestPlan && selectedPlan && !checkingOut && (
-            <Animated.View entering={FadeInDown.duration(350)} style={{ gap: spacing.lg }}>
-              {/* Coupon input */}
-              <View>
-                <Typography variant="label" color={theme.textSecondary} style={{ marginBottom: spacing.xs }}>
-                  Have a coupon?
+            <>
+              {/* ── Scroll hint label ── */}
+              <Animated.View
+                entering={FadeInDown.delay(120).duration(300)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: CAROUSEL_PADDING }}
+              >
+                <Ionicons name="swap-horizontal-outline" size={14} color={theme.textTertiary} />
+                <Typography variant="caption" color={theme.textTertiary}>
+                  Swipe to compare plans
                 </Typography>
-                <CouponInput planId={selectedPlan.id} onValidated={setCouponResult} />
-              </View>
+              </Animated.View>
 
-              {/* Confirm button */}
-              <TouchableOpacity onPress={handleCheckout} activeOpacity={0.85}>
-                <LinearGradient
-                  colors={['#6366F1', '#3B82F6']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={{ borderRadius: radius.lg, paddingVertical: spacing.md, alignItems: 'center' }}
+              {/* ── Horizontal plan carousel ── */}
+              <Animated.View entering={FadeInDown.delay(160).duration(400)}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  decelerationRate="fast"
+                  snapToInterval={CARD_WIDTH + CARD_GAP}
+                  snapToAlignment="start"
+                  contentContainerStyle={{
+                    paddingHorizontal: CAROUSEL_PADDING,
+                    gap: CARD_GAP,
+                    paddingVertical: spacing.sm, // allow shadow/glow to show
+                  }}
                 >
-                  <Typography variant="label" color="#FFFFFF">
-                    {selectedPlan.trialDays > 0 && !(couponResult?.valid)
-                      ? `Start ${selectedPlan.trialDays}-Day Free Trial`
-                      : `Pay ${formatPrice(couponResult?.valid ? couponResult.finalPricePaise : selectedPlan.pricePaise)}${formatCycle(selectedPlan.billingCycle)}`}
-                  </Typography>
-                </LinearGradient>
-              </TouchableOpacity>
+                  {/* Free Trial card — always position 0 when a trial plan exists */}
+                  {trialPlan && (
+                    <FreeTrialCard
+                      trialPlan={trialPlan}
+                      isCheckingOut={checkingOut === trialPlan.id}
+                      onStartTrial={handleTrialCardPress}
+                    />
+                  )}
 
-              {selectedPlan.trialDays > 0 && !(couponResult?.valid) && (
-                <Typography variant="caption" color={theme.textTertiary} align="center">
-                  {selectedPlan.trialDays}-day free trial · Then {formatPrice(selectedPlan.pricePaise)}{formatCycle(selectedPlan.billingCycle)} · Cancel anytime
-                </Typography>
+                  {/* Paid plan cards */}
+                  {paidPlans.map((plan) => {
+                    const isPopular = Number(plan.tier) === 3 || plan.displayName.includes('Master');
+                    return (
+                      <PlanCard
+                        key={plan.id}
+                        plan={plan}
+                        isPopular={isPopular}
+                        isCurrentPlan={false}
+                        isCheckingOut={checkingOut === plan.id}
+                        onCheckout={handlePlanCardPress}
+                      />
+                    );
+                  })}
+                </ScrollView>
+              </Animated.View>
+
+              {/* ── Coupon + confirm (appears when a paid plan CTA is pressed) ── */}
+              {pendingPlan && !checkingOut && (
+                <Animated.View
+                  entering={FadeInDown.duration(350)}
+                  style={{ paddingHorizontal: spacing.xl, gap: spacing.lg }}
+                >
+                  {/* Section label */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                    <View style={{ flex: 1, height: 1, backgroundColor: theme.divider }} />
+                    <Typography variant="caption" color={theme.textTertiary}>
+                      Confirming {pendingPlan.displayName}
+                    </Typography>
+                    <View style={{ flex: 1, height: 1, backgroundColor: theme.divider }} />
+                  </View>
+
+                  {/* Coupon */}
+                  <View>
+                    <Typography variant="label" color={theme.textSecondary} style={{ marginBottom: spacing.xs }}>
+                      Have a coupon?
+                    </Typography>
+                    <CouponInput planId={pendingPlan.id} onValidated={setCouponResult} />
+                  </View>
+
+                  {/* Confirm button */}
+                  <TouchableOpacity onPress={handleConfirmCheckout} activeOpacity={0.85}>
+                    <LinearGradient
+                      colors={['#6366F1', '#3B82F6']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={{ borderRadius: radius.lg, paddingVertical: spacing.md, alignItems: 'center' }}
+                    >
+                      <Typography variant="label" color="#FFFFFF">
+                        {pendingPlan.trialDays > 0 && !(couponResult?.valid)
+                          ? `Start ${pendingPlan.trialDays}-Day Free Trial`
+                          : `Pay ${formatPrice(couponResult?.valid ? couponResult.finalPricePaise : pendingPlan.pricePaise)}${formatCycle(pendingPlan.billingCycle)}`}
+                      </Typography>
+                    </LinearGradient>
+                  </TouchableOpacity>
+
+                  {pendingPlan.trialDays > 0 && !(couponResult?.valid) && (
+                    <Typography variant="caption" color={theme.textTertiary} align="center">
+                      {pendingPlan.trialDays}-day free trial · Then {formatPrice(pendingPlan.pricePaise)}{formatCycle(pendingPlan.billingCycle)} · Cancel anytime
+                    </Typography>
+                  )}
+
+                  {/* Dismiss pending */}
+                  <TouchableOpacity
+                    onPress={() => { setPendingPlan(null); setCouponResult(null); }}
+                    style={{ alignItems: 'center', paddingVertical: spacing.xs }}
+                    activeOpacity={0.6}
+                  >
+                    <Typography variant="caption" color={theme.textTertiary}>← Pick a different plan</Typography>
+                  </TouchableOpacity>
+                </Animated.View>
               )}
-            </Animated.View>
+            </>
           )}
 
           {/* ── Guarantees ── */}

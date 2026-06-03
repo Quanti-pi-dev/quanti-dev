@@ -138,6 +138,7 @@ class SubscriptionService {
     userId: string,
     planId: string,
     couponCode?: string,
+    skipTrial: boolean = false,
   ): Promise<{
     orderId: string;
     razorpaySubscriptionId?: string;
@@ -162,7 +163,7 @@ class SubscriptionService {
     }
 
     try {
-      return await this.executeCheckout(userId, planId, couponCode);
+      return await this.executeCheckout(userId, planId, couponCode, skipTrial);
     } finally {
       // Always release the lock
       await getRedisClient().del(lockKey);
@@ -174,6 +175,7 @@ class SubscriptionService {
     userId: string,
     planId: string,
     couponCode?: string,
+    skipTrial: boolean = false,
   ): Promise<{
     orderId: string;
     razorpaySubscriptionId?: string;
@@ -200,8 +202,10 @@ class SubscriptionService {
     }
 
     // 3. Check trial eligibility
+    //    skipTrial=true means the user explicitly chose a paid plan card — never give a trial.
+    //    Coupons also disable trial (CFO policy: coupon = immediate paid conversion).
     const hasHadTrial = await subscriptionRepository.hasHadTrialForTier(userId, plan.tier);
-    const eligibleForTrial = plan.trialDays > 0 && !hasHadTrial;
+    const eligibleForTrial = plan.trialDays > 0 && !hasHadTrial && !skipTrial;
 
     // 4. Validate coupon (if provided)
     let discountPaise = 0;
@@ -225,8 +229,6 @@ class SubscriptionService {
     }
 
     // 5. Determine trial days for this checkout
-    // Trial-eligible users get a deferred-billing Razorpay mandate (start_at = now + trialDays).
-    // Coupons disable trial (CFO policy: coupon = immediate paid conversion).
     const effectiveTrialDays = (eligibleForTrial && !couponCode) ? plan.trialDays : 0;
 
     return this.createPaidSubscription(userId, plan, finalPricePaise, discountPaise, couponId, couponCode, effectiveTrialDays);

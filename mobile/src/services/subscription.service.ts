@@ -41,8 +41,9 @@ export interface CheckoutResult {
 export async function initiateCheckout(
   planId: string,
   couponCode?: string,
+  skipTrial: boolean = false,
 ): Promise<CheckoutResult> {
-  const { data } = await api.post('/subscriptions/checkout', { planId, couponCode });
+  const { data } = await api.post('/subscriptions/checkout', { planId, couponCode, skipTrial });
   return data?.data as CheckoutResult;
 }
 

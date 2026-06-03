@@ -32,15 +32,9 @@ export type { AIGenerateParams, AIProvider } from './lib/ai-client.js';
 
 // ─── Repositories ────────────────────────────────────────────
 export { userRepository } from './repositories/user.repository.js';
-export {
-  examRepository,
-  deckRepository as contentDeckRepository,
-  flashcardRepository as contentFlashcardRepository,
-  questionRepository,
-  subjectRepository as contentSubjectRepository,
-  examSubjectRepository,
-  topicRepository as contentTopicRepository,
-} from './repositories/content.repository.js';
+export { examRepository } from './repositories/exam.repository.js';
+export { questionRepository } from './repositories/question.repository.js';
+export { examSubjectRepository } from './repositories/subject.repository.js';
 export { subjectRepository } from './repositories/subject.repository.js';
 export { topicRepository } from './repositories/topic.repository.js';
 export { deckRepository } from './repositories/deck.repository.js';
@@ -122,6 +116,12 @@ export {
   updateCorrectRate,
 } from './services/irt.js';
 export { generateTargetedFeedback } from './services/targeted-feedback.service.js';
+export {
+  getAIQuotaLimit,
+  getAIQuotaStatus,
+  checkAndIncrementAIQuota,
+} from './services/ai-quota.service.js';
+export type { QuotaCheckResult } from './services/ai-quota.service.js';
 export { generateFlashcards } from './services/flashcard-gen.service.js';
 export type { FlashcardGenerationRequest, FlashcardGenerationResult, GeneratedFlashcard } from './services/flashcard-gen.service.js';
 export { generateQuizQuestions } from './services/quiz-gen.service.js';

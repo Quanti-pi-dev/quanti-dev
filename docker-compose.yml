@@ -33,7 +33,9 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
       - FREELLMAPI_API_KEY=${FREELLMAPI_API_KEY}
-      - FREELLMAPI_URL=${FREELLMAPI_URL:-http://127.0.0.1:3001/v1}
+      - FREELLMAPI_URL=${FREELLMAPI_URL:-http://host.docker.internal:3001/v1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./firebase-service-account.json:/app/firebase-service-account.json:ro
 
@@ -64,11 +66,13 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
       - FREELLMAPI_API_KEY=${FREELLMAPI_API_KEY}
-      - FREELLMAPI_URL=${FREELLMAPI_URL}
+      - FREELLMAPI_URL=${FREELLMAPI_URL:-http://host.docker.internal:3001/v1}
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
       - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
       - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET}
       - RESEND_API_KEY=${RESEND_API_KEY}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./firebase-service-account.json:/app/firebase-service-account.json:ro
 
@@ -99,10 +103,12 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
       - FREELLMAPI_API_KEY=${FREELLMAPI_API_KEY}
-      - FREELLMAPI_URL=${FREELLMAPI_URL}
+      - FREELLMAPI_URL=${FREELLMAPI_URL:-http://host.docker.internal:3001/v1}
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
       - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
       - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET}
       - RESEND_API_KEY=${RESEND_API_KEY}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./firebase-service-account.json:/app/firebase-service-account.json:ro
