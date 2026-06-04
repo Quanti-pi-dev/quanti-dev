@@ -105,8 +105,8 @@ jobs:
             echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
 
             # Pull and start ONLY the user-api
-            docker compose -f docker-compose.instance1.yml pull user-api
-            docker compose -f docker-compose.instance1.yml up -d --remove-orphans user-api
+            docker compose -f deploy/docker-compose.instance1.yml pull user-api
+            docker compose -f deploy/docker-compose.instance1.yml up -d --remove-orphans user-api
 
             # Prune dangling images to recover disk space
             docker image prune -af
@@ -145,8 +145,8 @@ jobs:
             echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
 
             # Pull and start admin-api, institute-api, and self-hosted redis
-            docker compose -f docker-compose.instance2.yml pull admin-api institute-api redis
-            docker compose -f docker-compose.instance2.yml up -d --remove-orphans admin-api institute-api redis
+            docker compose -f deploy/docker-compose.instance2.yml pull admin-api institute-api redis
+            docker compose -f deploy/docker-compose.instance2.yml up -d --remove-orphans admin-api institute-api redis
 
             # Prune dangling images to recover disk space
             docker image prune -af
