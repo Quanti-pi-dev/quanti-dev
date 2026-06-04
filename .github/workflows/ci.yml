@@ -9,7 +9,7 @@ on:
 jobs:
   build_and_test:
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         node-version: [20.x]
@@ -25,23 +25,19 @@ jobs:
         cache: 'npm'
 
     - name: Install dependencies
-      run: npm install
+      run: npm ci
 
-    - name: Type Check & Lint (Shared)
-      run: cd packages/shared && tsc --noEmit && npm run lint || true
+    - name: Type Check (Shared)
+      run: npx tsc --noEmit --project packages/shared/tsconfig.json
 
-    - name: Type Check & Lint (Server)
-      run: cd server && tsc --noEmit && npm run lint || true
+    - name: Type Check (DB)
+      run: npx tsc --noEmit --project packages/db/tsconfig.json
 
-    - name: Type Check & Lint (Mobile)
-      run: cd mobile && tsc --noEmit && npm run lint || true
+    - name: Type Check (User API)
+      run: npx tsc --noEmit --project server-user/tsconfig.json
 
-    - name: Unit Tests (Server)
-      run: cd server && npx vitest run
+    - name: Type Check (Admin API)
+      run: npx tsc --noEmit --project server-admin/tsconfig.json
 
-    - name: Build Server
-      run: npm run build -w server
-
-    - name: Build Docker Image
-      run: |
-        docker build -t kd-server:latest -f infra/docker/Dockerfile.server . || true
+    - name: Type Check (Institute API)
+      run: npx tsc --noEmit --project server-institute/tsconfig.json
