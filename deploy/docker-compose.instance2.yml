@@ -1,44 +1,43 @@
+# ============================================================
+# Docker Compose — OCI Instance 2 (Admin + Institute + Redis)
+# Low-traffic admin/institute APIs + self-hosted Redis.
+# Cron jobs run here to free Instance 1's CPU for user requests.
+# ============================================================
 
 services:
-  user-api:
-    build:
-      context: .
-      dockerfile: Dockerfile.user
-    image: ghcr.io/quanti-pi-dev/quanti-dev/user-api:latest
-    container_name: quanti-pi-user-api
+  # ─── Self-Hosted Redis ─────────────────────────────────────
+  # Replaces Upstash (10K cmds/day limit) with unlimited local Redis.
+  # Memory: 200MB max. Persistence: AOF + RDB snapshots.
+  # Accessible by Instance 1 via VCN private IP on port 6379.
+  #
+  # Security: port 6379 is NOT in the OCI Security List.
+  # Access is restricted via the DOCKER-USER iptables chain (because Docker bypasses INPUT):
+  #   sudo iptables -I DOCKER-USER -p tcp --dport 6379 -j DROP
+  #   sudo iptables -I DOCKER-USER -p tcp -s 10.0.0.0/16 --dport 6379 -j RETURN
+  #   sudo netfilter-persistent save
+  redis:
+    image: redis:7-alpine
+    container_name: quanti-pi-redis
     restart: always
+    command: >
+      redis-server
+        --maxmemory 200mb
+        --maxmemory-policy allkeys-lru
+        --save 60 1000
+        --appendonly yes
+        --bind 0.0.0.0
+        --protected-mode no
     ports:
-      - "10000:10000"
-    environment:
-      - NODE_ENV=production
-      - NODE_OPTIONS=--max-old-space-size=250
-      - PORT=10000
-      - POSTGRES_URL=${POSTGRES_URL}
-      - MONGO_URL=${MONGO_URL}
-      - REDIS_URL=${REDIS_URL}
-      - CORS_ORIGIN=${CORS_ORIGIN}
-      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
-      - FIREBASE_SERVICE_ACCOUNT_PATH=/app/firebase-service-account.json
-      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
-      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
-      - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET}
-      - R2_ENDPOINT=${R2_ENDPOINT}
-      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
-      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
-      - R2_BUCKET=${R2_BUCKET}
-      - CDN_BASE_URL=${CDN_BASE_URL}
-      - RESEND_API_KEY=${RESEND_API_KEY}
-      - FCM_SERVICE_ACCOUNT_PATH=/app/firebase-service-account.json
-      - NOTIFICATIONS_ENABLED=${NOTIFICATIONS_ENABLED:-true}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
-      - FREELLMAPI_API_KEY=${FREELLMAPI_API_KEY}
-      - FREELLMAPI_URL=${FREELLMAPI_URL:-http://host.docker.internal:3001/v1}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "6379:6379"
     volumes:
-      - ./firebase-service-account.json:/app/firebase-service-account.json:ro
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
+  # ─── Admin API ─────────────────────────────────────────────
   admin-api:
     build:
       context: .
@@ -46,15 +45,19 @@ services:
     image: ghcr.io/quanti-pi-dev/quanti-dev/admin-api:latest
     container_name: quanti-pi-admin-api
     restart: always
+    depends_on:
+      redis:
+        condition: service_healthy
     ports:
       - "10001:10001"
     environment:
       - NODE_ENV=production
-      - NODE_OPTIONS=--max-old-space-size=250
+      - NODE_OPTIONS=--max-old-space-size=200
       - PORT=10001
+      - ENABLE_CRON_JOBS=true
       - POSTGRES_URL=${POSTGRES_URL}
       - MONGO_URL=${MONGO_URL}
-      - REDIS_URL=${REDIS_URL}
+      - REDIS_URL=redis://redis:6379
       - ADMIN_WEB_ORIGIN=${ADMIN_WEB_ORIGIN}
       - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
       - FIREBASE_SERVICE_ACCOUNT_PATH=/app/firebase-service-account.json
@@ -76,6 +79,7 @@ services:
     volumes:
       - ./firebase-service-account.json:/app/firebase-service-account.json:ro
 
+  # ─── Institute API ─────────────────────────────────────────
   institute-api:
     build:
       context: .
@@ -83,15 +87,19 @@ services:
     image: ghcr.io/quanti-pi-dev/quanti-dev/institute-api:latest
     container_name: quanti-pi-institute-api
     restart: always
+    depends_on:
+      redis:
+        condition: service_healthy
     ports:
       - "10002:10002"
     environment:
       - NODE_ENV=production
-      - NODE_OPTIONS=--max-old-space-size=250
+      - NODE_OPTIONS=--max-old-space-size=200
       - PORT=10002
+      - ENABLE_CRON_JOBS=true
       - POSTGRES_URL=${POSTGRES_URL}
       - MONGO_URL=${MONGO_URL}
-      - REDIS_URL=${REDIS_URL}
+      - REDIS_URL=redis://redis:6379
       - INSTITUTE_WEB_ORIGIN=${INSTITUTE_WEB_ORIGIN}
       - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
       - FIREBASE_SERVICE_ACCOUNT_PATH=/app/firebase-service-account.json
@@ -112,3 +120,6 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./firebase-service-account.json:/app/firebase-service-account.json:ro
+
+volumes:
+  redis-data:

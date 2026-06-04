@@ -3,6 +3,7 @@
 // Pattern: singleton class, identical to gamification.repository.ts.
 
 import { getPostgresPool } from '../clients/database.js';
+import { getCachedUid, setCachedUid } from '../lib/uid-cache.js';
 import type {
   Challenge,
   ChallengeStatus,
@@ -447,13 +448,21 @@ class ChallengeRepository {
   }
 
   // ─── Helper: resolve firebase_uid → PG UUID ───────────────
+  // Uses an in-process cache (uid-cache.ts) to avoid hitting PG
+  // on every request. The mapping is immutable — safe to cache.
 
   async resolveUserId(firebaseUid: string): Promise<string | null> {
+    // Check in-process cache first (zero I/O)
+    const cached = getCachedUid(firebaseUid);
+    if (cached) return cached;
+
     const result = await this.pg.query(
       `SELECT id FROM users WHERE firebase_uid = $1`,
       [firebaseUid],
     );
-    return result.rows[0]?.id ?? null;
+    const id = (result.rows[0]?.id as string) ?? null;
+    if (id) setCachedUid(firebaseUid, id);
+    return id;
   }
 
   async resolveUserDisplayName(userId: string): Promise<string> {

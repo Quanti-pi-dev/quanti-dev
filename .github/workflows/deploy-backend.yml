@@ -14,7 +14,8 @@ on:
       - 'Dockerfile.user'
       - 'Dockerfile.admin'
       - 'Dockerfile.institute'
-      - 'docker-compose.yml'
+      - 'deploy/docker-compose.instance1.yml'
+      - 'deploy/docker-compose.instance2.yml'
 
 env:
   REGISTRY: ghcr.io
@@ -87,7 +88,7 @@ jobs:
           host:     ${{ secrets.OCI_HOST_USER }}
           username: ${{ secrets.OCI_USERNAME }}
           key:      ${{ secrets.OCI_SSH_KEY_USER }}
-          source:   "docker-compose.yml"
+          source:   "deploy/docker-compose.instance1.yml"
           target:   "quanti-pi"
 
       - name: Deploy User API via SSH
@@ -104,8 +105,8 @@ jobs:
             echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
 
             # Pull and start ONLY the user-api
-            docker compose pull user-api
-            docker compose up -d --remove-orphans user-api
+            docker compose -f docker-compose.instance1.yml pull user-api
+            docker compose -f docker-compose.instance1.yml up -d --remove-orphans user-api
 
             # Prune dangling images to recover disk space
             docker image prune -af
@@ -127,7 +128,7 @@ jobs:
           host:     ${{ secrets.OCI_HOST_ADMIN }}
           username: ${{ secrets.OCI_USERNAME }}
           key:      ${{ secrets.OCI_SSH_KEY_ADMIN }}
-          source:   "docker-compose.yml"
+          source:   "deploy/docker-compose.instance2.yml"
           target:   "quanti-pi"
 
       - name: Deploy Admin & Institute APIs via SSH
@@ -143,9 +144,9 @@ jobs:
             # Authenticate with GHCR using a dedicated PAT
             echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
 
-            # Pull and start ONLY admin-api and institute-api
-            docker compose pull admin-api institute-api
-            docker compose up -d --remove-orphans admin-api institute-api
+            # Pull and start admin-api, institute-api, and self-hosted redis
+            docker compose -f docker-compose.instance2.yml pull admin-api institute-api redis
+            docker compose -f docker-compose.instance2.yml up -d --remove-orphans admin-api institute-api redis
 
             # Prune dangling images to recover disk space
             docker image prune -af

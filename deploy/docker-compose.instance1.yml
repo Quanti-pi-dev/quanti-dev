@@ -1,0 +1,46 @@
+# ============================================================
+# Docker Compose — OCI Instance 1 (User API)
+# Student-facing API only. No cron jobs, no Redis.
+# Connects to Redis on Instance 2 via VCN private network.
+# ============================================================
+
+services:
+  user-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.user
+    image: ghcr.io/quanti-pi-dev/quanti-dev/user-api:latest
+    container_name: quanti-pi-user-api
+    restart: always
+    ports:
+      - "10000:10000"
+    environment:
+      - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=250
+      - PORT=10000
+      - ENABLE_CRON_JOBS=false
+      - POSTGRES_URL=${POSTGRES_URL}
+      - MONGO_URL=${MONGO_URL}
+      - REDIS_URL=${REDIS_URL}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - FIREBASE_SERVICE_ACCOUNT_PATH=/app/firebase-service-account.json
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
+      - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET}
+      - R2_ENDPOINT=${R2_ENDPOINT}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - R2_BUCKET=${R2_BUCKET}
+      - CDN_BASE_URL=${CDN_BASE_URL}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - FCM_SERVICE_ACCOUNT_PATH=/app/firebase-service-account.json
+      - NOTIFICATIONS_ENABLED=${NOTIFICATIONS_ENABLED:-true}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      - FREELLMAPI_API_KEY=${FREELLMAPI_API_KEY}
+      - FREELLMAPI_URL=${FREELLMAPI_URL:-http://host.docker.internal:3001/v1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./firebase-service-account.json:/app/firebase-service-account.json:ro

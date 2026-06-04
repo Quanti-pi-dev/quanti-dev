@@ -61,7 +61,14 @@ const server = Fastify({
 async function registerPlugins() {
   await server.register(cors, { origin: config.cors.origin, credentials: true });
   await server.register(helmet, { contentSecurityPolicy: false });
-  await server.register(rateLimit, { max: 100, timeWindow: '1 minute' });
+  await server.register(rateLimit, {
+    max: 100,
+    timeWindow: '1 minute',
+    // Use authenticated user ID when available, fall back to IP.
+    // Prevents false 429s when hundreds of students share a NAT IP
+    // at coaching centers/institutions.
+    keyGenerator: (request) => (request as any).user?.id || request.ip,
+  });
   await server.register(sensible);
   await server.register(errorHandlerPlugin);
   await server.register(authPlugin);
@@ -264,7 +271,15 @@ async function start() {
     })();
     await server.listen({ port: config.port, host: config.host });
     server.log.info(`🚀  User API listening on http://${config.host}:${config.port}  [${config.env}]`);
-    startCronJobs();
+    // Start cron jobs only if enabled (allows separating API from workers)
+    // Instance 1 (user-api): ENABLE_CRON_JOBS=false (API-only, max CPU for requests)
+    // Instance 2 (admin-api): ENABLE_CRON_JOBS=true  (runs background jobs)
+    const cronEnabled = process.env['ENABLE_CRON_JOBS'] !== 'false';
+    if (cronEnabled) {
+      startCronJobs();
+    } else {
+      server.log.info('Cron jobs disabled (ENABLE_CRON_JOBS=false)');
+    }
   } catch (err) {
     server.log.fatal({ err }, 'FATAL STARTUP ERROR — exiting');
     process.exit(1);

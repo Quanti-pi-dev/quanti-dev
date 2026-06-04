@@ -125,7 +125,12 @@ async function start() {
     const port = Number(process.env['PORT'] ?? 3002);
     await server.listen({ port, host: config.host });
     server.log.info(`🏫  Institute API listening on http://${config.host}:${port}  [${config.env}]`);
-    startCronJobs();
+    const cronEnabled = process.env['ENABLE_CRON_JOBS'] !== 'false';
+    if (cronEnabled) {
+      startCronJobs();
+    } else {
+      server.log.info('Institute cron jobs disabled (ENABLE_CRON_JOBS=false)');
+    }
   } catch (err) {
     server.log.fatal({ err }, 'FATAL STARTUP ERROR — exiting');
     process.exit(1);
