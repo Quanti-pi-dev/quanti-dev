@@ -131,6 +131,66 @@ jobs:
           source:   "deploy/docker-compose.instance2.yml"
           target:   "quanti-pi"
 
+      - name: Write .env on Admin/Institute VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.OCI_HOST_ADMIN }}
+          username: ${{ secrets.OCI_USERNAME }}
+          key:      ${{ secrets.OCI_SSH_KEY_ADMIN }}
+          envs: |
+            POSTGRES_URL,MONGO_URL,REDIS_URL,
+            CORS_ORIGIN,ADMIN_WEB_ORIGIN,INSTITUTE_WEB_ORIGIN,
+            FIREBASE_PROJECT_ID,
+            R2_ENDPOINT,R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY,R2_BUCKET,CDN_BASE_URL,
+            GEMINI_API_KEY,NVIDIA_API_KEY,FREELLMAPI_API_KEY,FREELLMAPI_URL,
+            RAZORPAY_KEY_ID,RAZORPAY_KEY_SECRET,RAZORPAY_WEBHOOK_SECRET,
+            RESEND_API_KEY
+          script: |
+            cd ~/quanti-pi
+            cat > .env <<'EOF'
+            POSTGRES_URL=$POSTGRES_URL
+            MONGO_URL=$MONGO_URL
+            REDIS_URL=$REDIS_URL
+            CORS_ORIGIN=$CORS_ORIGIN
+            ADMIN_WEB_ORIGIN=$ADMIN_WEB_ORIGIN
+            INSTITUTE_WEB_ORIGIN=$INSTITUTE_WEB_ORIGIN
+            FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID
+            R2_ENDPOINT=$R2_ENDPOINT
+            R2_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID
+            R2_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY
+            R2_BUCKET=$R2_BUCKET
+            CDN_BASE_URL=$CDN_BASE_URL
+            GEMINI_API_KEY=$GEMINI_API_KEY
+            NVIDIA_API_KEY=$NVIDIA_API_KEY
+            FREELLMAPI_API_KEY=$FREELLMAPI_API_KEY
+            FREELLMAPI_URL=$FREELLMAPI_URL
+            RAZORPAY_KEY_ID=$RAZORPAY_KEY_ID
+            RAZORPAY_KEY_SECRET=$RAZORPAY_KEY_SECRET
+            RAZORPAY_WEBHOOK_SECRET=$RAZORPAY_WEBHOOK_SECRET
+            RESEND_API_KEY=$RESEND_API_KEY
+            EOF
+        env:
+          POSTGRES_URL:              ${{ secrets.POSTGRES_URL }}
+          MONGO_URL:                 ${{ secrets.MONGO_URL }}
+          REDIS_URL:                 redis://redis:6379
+          CORS_ORIGIN:               https://quantipi.in
+          ADMIN_WEB_ORIGIN:          https://admin.quantipi.in
+          INSTITUTE_WEB_ORIGIN:      https://institute.quantipi.in
+          FIREBASE_PROJECT_ID:       ${{ secrets.FIREBASE_PROJECT_ID }}
+          R2_ENDPOINT:               ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID:          ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY:      ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET:                 ${{ secrets.R2_BUCKET }}
+          CDN_BASE_URL:              ${{ secrets.CDN_BASE_URL }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          NVIDIA_API_KEY:            ${{ secrets.NVIDIA_API_KEY }}
+          FREELLMAPI_API_KEY:        ${{ secrets.FREELLMAPI_API_KEY }}
+          FREELLMAPI_URL:            ${{ secrets.FREELLMAPI_URL }}
+          RAZORPAY_KEY_ID:           ${{ secrets.RAZORPAY_KEY_ID }}
+          RAZORPAY_KEY_SECRET:       ${{ secrets.RAZORPAY_KEY_SECRET }}
+          RAZORPAY_WEBHOOK_SECRET:   ${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
+          RESEND_API_KEY:            ${{ secrets.RESEND_API_KEY }}
+
       - name: Deploy Admin & Institute APIs via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
