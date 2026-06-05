@@ -1,13 +1,11 @@
 # ============================================================
 # Docker Compose — OCI Instance 2 (Admin + Institute + Redis)
-# Low-traffic admin/institute APIs + self-hosted Redis.
-# Cron jobs run here to free Instance 1's CPU for user requests.
 # ============================================================
+
+name: quanti-pi
 
 services:
   # ─── Self-Hosted Redis ─────────────────────────────────────
-  # Replaces Upstash (10K cmds/day limit) with unlimited local Redis.
-  # Memory: 200MB max. Persistence: AOF + RDB snapshots.
   # Accessible by Instance 1 via VCN private IP on port 6379.
   #
   # Security: port 6379 is NOT in the OCI Security List.
@@ -32,7 +30,7 @@ services:
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 5s
       retries: 5

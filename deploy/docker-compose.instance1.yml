@@ -1,8 +1,8 @@
 # ============================================================
 # Docker Compose — OCI Instance 1 (User API)
-# Student-facing API only. No cron jobs, no Redis.
-# Connects to Redis on Instance 2 via VCN private network.
 # ============================================================
+
+name: quanti-pi
 
 services:
   user-api:
