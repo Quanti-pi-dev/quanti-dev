@@ -232,14 +232,14 @@ export function LearningVelocityCard({ data }: LearningVelocityCardProps) {
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               <VelocityStat
                 label="Cards/Day"
-                value={String(data.cardsPerDay)}
+                value={data.cardsPerDay > 0 ? String(data.cardsPerDay) : '—'}
                 delta={data.cardsPerDayDelta}
                 icon="📚"
                 color="#6366F1"
               />
               <VelocityStat
                 label="Accuracy"
-                value={`${data.accuracy7d}%`}
+                value={data.accuracy7d > 0 ? `${data.accuracy7d}%` : '—'}
                 delta={data.accuracyDelta}
                 icon="🎯"
                 color="#10B981"
@@ -248,8 +248,14 @@ export function LearningVelocityCard({ data }: LearningVelocityCardProps) {
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               <VelocityStat
                 label="Avg Speed"
-                value={data.avgSpeedMs < 1000 ? `${data.avgSpeedMs}ms` : `${(data.avgSpeedMs / 1000).toFixed(1)}s`}
-                delta={data.speedDelta}
+                value={
+                  data.avgSpeedMs <= 0
+                    ? '—'
+                    : data.avgSpeedMs < 1000
+                      ? `${data.avgSpeedMs}ms`
+                      : `${(data.avgSpeedMs / 1000).toFixed(1)}s`
+                }
+                delta={data.avgSpeedMs > 0 ? data.speedDelta : 0}
                 icon="⏱️"
                 color="#0EA5E9"
                 invertDelta

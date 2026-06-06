@@ -614,7 +614,18 @@ export default function StudyScreen() {
               subtitle={hasSubjects ? 'Tap a subject to study' : undefined}
               icon="book-outline"
               action={hasSubjects ? 'Manage →' : undefined}
-              onAction={hasSubjects ? () => router.push('/explore-exams') : undefined}
+              onAction={hasSubjects
+                ? () => {
+                    if (primaryExamId) {
+                      router.push({
+                        pathname: '/exams/[examId]/subjects',
+                        params: { examId: primaryExamId, title: 'My Subjects' },
+                      });
+                    } else {
+                      router.push('/explore-exams');
+                    }
+                  }
+                : undefined}
             />
           </View>
 

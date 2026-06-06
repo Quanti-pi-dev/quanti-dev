@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  createContext, useContext, useEffect, useState, ReactNode,
+  createContext, useContext, useEffect, useRef, useState, ReactNode,
 } from 'react';
 import {
   User, onAuthStateChanged, signInWithEmailAndPassword, signOut,
@@ -33,8 +33,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading]         = useState(true);
   const [instituteRole, setRole]      = useState<InstituteRole | null>(null);
   const [instituteId, setInstituteId] = useState<string | null>(null);
-  const router   = useRouter();
-  const pathname = usePathname();
+  const router        = useRouter();
+  const pathname      = usePathname();
+  // Keep a ref so the stable onAuthStateChanged callback can read the
+  // *current* pathname without being a dependency (which caused the loop).
+  const pathnameRef   = useRef(pathname);
+  useEffect(() => { pathnameRef.current = pathname; }, [pathname]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -51,18 +55,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(firebaseUser);
           setRole(role as InstituteRole);
           setInstituteId(iid ?? null);
-          if (pathname === '/login') router.push('/');
+          if (pathnameRef.current === '/login') router.push('/');
         }
       } else {
         setUser(null);
         setRole(null);
         setInstituteId(null);
-        if (pathname !== '/login') router.push('/login');
+        if (pathnameRef.current !== '/login') router.push('/login');
       }
       setLoading(false);
     });
     return unsub;
-  }, [pathname, router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]); // intentionally omit pathname – use pathnameRef instead
 
   const login = async (email: string, password: string) => {
     await signInWithEmailAndPassword(auth, email, password);

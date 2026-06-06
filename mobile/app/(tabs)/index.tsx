@@ -28,10 +28,8 @@ import { ExamCard } from '../../src/components/ExamCard';
 import { ActivityItem } from '../../src/components/ActivityItem';
 import { StudyInsightsCard } from '../../src/components/StudyInsightsCard';
 import { TutorBriefCard } from '../../src/components/TutorBriefCard';
-import { KnowledgeHealthCompact } from '../../src/components/KnowledgeHealthCompact';
-import { ExamReadinessGauge } from '../../src/components/ExamReadinessGauge';
 import { TopicDecayAlert } from '../../src/components/TopicDecayAlert';
-import { TutorBriefSkeleton, KnowledgeHealthSkeleton, ExamReadinessSkeleton } from '../../src/components/TutorSkeletons';
+import { TutorBriefSkeleton } from '../../src/components/TutorSkeletons';
 import { TutorEmptyState } from '../../src/components/TutorEmptyState';
 import { TargetSubjectCard, SUBJECT_ACCENT_PALETTE, getSubjectIcon } from '../../src/components/TargetSubjectCard';
 import { UpNextHeroCard } from '../../src/components/UpNextHeroCard';
@@ -418,22 +416,7 @@ export default function HomeScreen() {
             <TopicDecayAlert forecasts={learningProfile.topicForecasts} />
           )}
 
-          {/* ━━━ Knowledge Health Compact ━━━ */}
-          {isLPLoading ? (
-            <KnowledgeHealthSkeleton />
-          ) : hasStudyData && learningProfile.knowledgeHealth.length > 0 ? (
-            <KnowledgeHealthCompact
-              knowledgeHealth={learningProfile.knowledgeHealth}
-              totalOverdue={learningProfile.totalOverdueCards}
-            />
-          ) : null}
 
-          {/* ━━━ Exam Readiness Gauge ━━━ */}
-          {isLPLoading ? (
-            <ExamReadinessSkeleton />
-          ) : hasStudyData ? (
-            <ExamReadinessGauge data={learningProfile.examReadiness} />
-          ) : null}
 
           {/* ══════════════════════════════════════════════════════
               PERSONALIZED SECTIONS — only shown if onboarded

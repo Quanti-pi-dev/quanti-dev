@@ -458,7 +458,7 @@ export default function InstituteHomeScreen() {
                 Not enrolled yet
               </Typography>
               <Typography variant="body" color={theme.textSecondary} style={{ textAlign: 'center', lineHeight: 22 }}>
-                Ask your educator for a join code to access{'\\n'}institute tests and activities
+                Ask your educator for a join code to access{'\n'}institute tests and activities
               </Typography>
             </View>
             <TouchableOpacity

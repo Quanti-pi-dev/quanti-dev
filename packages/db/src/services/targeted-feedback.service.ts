@@ -64,12 +64,19 @@ export async function generateTargetedFeedback(
     });
 
     // Parse the response (structured text, not JSON for readability)
+    const memoryTrick = extractSection(response, 'Memory Trick');
+    const reviewConcept = extractSection(response, 'Review');
+
+    // Strip the labelled sections from the explanation body so they
+    // don't appear both inline and in their dedicated UI cards.
+    const explanation = stripSections(response, ['Memory Trick', 'Review']).trim();
+
     return {
       selectedOptionText: selectedOption.text,
       misconception,
-      explanation: response.trim(),
-      memoryTrick: extractSection(response, 'Memory Trick'),
-      reviewConcept: extractSection(response, 'Review'),
+      explanation,
+      memoryTrick,
+      reviewConcept,
     };
   } catch (err) {
     log.warn({ err }, 'Targeted feedback generation failed');
@@ -148,4 +155,15 @@ function extractSection(text: string, label: string): string | undefined {
   const regex = new RegExp(`${label}:?\\s*(.+?)(?:\\n|$)`, 'i');
   const match = text.match(regex);
   return match?.[1]?.trim() || undefined;
+}
+
+/** Remove labelled sections (e.g. "Memory Trick: …") from the body text. */
+function stripSections(text: string, labels: string[]): string {
+  let result = text;
+  for (const label of labels) {
+    // Remove the label line and any immediately following blank line
+    result = result.replace(new RegExp(`\\n?${label}:?[^\\n]*`, 'gi'), '');
+  }
+  // Collapse multiple consecutive blank lines into one
+  return result.replace(/\n{3,}/g, '\n\n');
 }

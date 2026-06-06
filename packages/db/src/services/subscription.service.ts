@@ -333,27 +333,18 @@ class SubscriptionService {
       razorpaySubscriptionId,
     });
 
-    const eventType = isTrial ? 'trial_started' : 'created';
-    await subscriptionRepository.logEvent(sub.id, userId, eventType, null, isTrial ? 'trialing' : 'active', {
+    // Log event with 'pending' status — sub is not yet active until verifyAndActivate()
+    await subscriptionRepository.logEvent(sub.id, userId, 'created', null, 'pending', {
       plan_slug: plan.slug,
       razorpay_subscription_id: razorpaySubscriptionId,
       razorpay_plan_id: razorpayPlanId,
       trial_days: trialDays,
     });
 
-    // Fire-and-forget analytics
-    if (isTrial) {
-      void analyticsService.trackTrialStarted(userId, plan.slug, trialDays);
-      const user = await userRepository.findByFirebaseUid(userId).catch(() => null);
-      if (user) {
-        void notificationService.handleEvent({
-          type: 'trial_started', userId, email: user.email,
-          planName: plan.displayName, trialDays,
-        });
-      }
-    } else {
-      void analyticsService.trackCheckoutInitiated(userId, plan.slug, finalPricePaise, couponCode);
-    }
+    // Fire-and-forget analytics for checkout initiation only.
+    // NOTE: trial_started notification is intentionally NOT sent here — it fires
+    // in verifyAndActivate() only after the user completes payment.
+    void analyticsService.trackCheckoutInitiated(userId, plan.slug, isTrial ? 0 : finalPricePaise, couponCode);
 
     return {
       orderId: razorpaySubscriptionId,
@@ -446,15 +437,28 @@ class SubscriptionService {
     const plan = await planRepository.findById(sub.planId).catch(() => null);
     const user = await userRepository.findByFirebaseUid(userId).catch(() => null);
     if (plan && user) {
+      const notificationEvent = isTrialMandate
+        ? notificationService.handleEvent({
+            type: 'trial_started', userId, email: user.email,
+            planName: plan.displayName, trialDays: sub.trialEnd
+              ? Math.ceil((new Date(sub.trialEnd).getTime() - Date.now()) / 86_400_000)
+              : 0,
+          })
+        : notificationService.handleEvent({
+            type: 'subscription_activated', userId, email: user.email, planName: plan.displayName,
+          });
+
       void Promise.allSettled([
         analyticsService.trackPaymentSucceeded(userId, plan.slug, payment.amountPaise, razorpayPaymentId),
         analyticsService.trackSubscriptionActivated(userId, plan.slug, plan.billingCycle),
-        notificationService.handleEvent({
-          type: 'subscription_activated', userId, email: user.email, planName: plan.displayName,
-        }),
+        isTrialMandate
+          ? analyticsService.trackTrialStarted(userId, plan.slug,
+              sub.trialEnd ? Math.ceil((new Date(sub.trialEnd).getTime() - Date.now()) / 86_400_000) : 0)
+          : Promise.resolve(),
+        notificationEvent,
       ]);
 
-      if (user.email && !user.email.includes('@placeholder.')) {
+      if (!isTrialMandate && user.email && !user.email.includes('@placeholder.')) {
         emailService.sendSubscriptionUpgradeEmail(user.email, user.displayName, plan.displayName).catch(() => {});
       }
     }

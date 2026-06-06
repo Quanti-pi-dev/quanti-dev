@@ -5,7 +5,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fetchMySubscription } from '../services/subscription.service';
+import { fetchMySubscription, loadPendingVerifyQueue, verifyPayment, dequeuePendingVerify } from '../services/subscription.service';
 import { api } from '../services/api';
 import type { SubscriptionSummary, AIQuotaStatus } from '@kd/shared';
 
@@ -133,6 +133,21 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       setSubscription(data);
       setTrialPass(pass);
       setAIQuota(quota);
+
+      // ── Drain pending-verify queue ───────────────────────────────
+      // Retries any Razorpay payment that was captured but whose verifyPayment
+      // call never reached the server (app killed, network drop, etc.).
+      // The verify endpoint is idempotent, so this is always safe to call.
+      const queue = await loadPendingVerifyQueue();
+      for (const pending of queue) {
+        try {
+          const activated = await verifyPayment(pending);
+          setSubscription(activated);
+          await dequeuePendingVerify(pending.razorpayPaymentId);
+        } catch {
+          // Still unreachable — leave in queue for the next open
+        }
+      }
     } catch {
       // Network failure or timeout — keep existing state
     } finally {

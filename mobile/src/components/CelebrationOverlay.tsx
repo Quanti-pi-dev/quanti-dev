@@ -396,6 +396,9 @@ export function CelebrationOverlay() {
   const [stepIndex, setStepIndex] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Modal background opacity — declared unconditionally (Rules of Hooks)
+  const bgOpacity = useSharedValue(0);
+
   const { data } = useQuery({
     queryKey: ['pending-celebration'],
     queryFn: fetchPendingCelebration,
@@ -445,16 +448,19 @@ export function CelebrationOverlay() {
     };
   }, [visible, sequence, stepIndex, dismiss]);
 
+  // Reset background opacity each time the overlay becomes visible
+  useEffect(() => {
+    if (visible) {
+      bgOpacity.value = withTiming(1, { duration: 250 });
+    } else {
+      bgOpacity.value = 0;
+    }
+  }, [visible, bgOpacity]);
+  const bgStyle = useAnimatedStyle(() => ({ opacity: bgOpacity.value }));
+
   if (!visible || !sequence) return null;
 
   const currentStep = sequence.steps[stepIndex];
-
-  // Modal background opacity
-  const bgOpacity = useSharedValue(0);
-  useEffect(() => {
-    bgOpacity.value = withTiming(1, { duration: 250 });
-  }, []);
-  const bgStyle = useAnimatedStyle(() => ({ opacity: bgOpacity.value }));
 
   return (
     <Modal

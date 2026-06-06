@@ -1,6 +1,7 @@
 // ─── Subscription API Service ─────────────────────────────────
 
 import { api } from './api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Plan, SubscriptionSummary, CouponValidationResult } from '@kd/shared';
 
 // ─── Plans ────────────────────────────────────────────────────
@@ -58,6 +59,60 @@ export interface PaymentVerification {
 export async function verifyPayment(payload: PaymentVerification): Promise<SubscriptionSummary> {
   const { data } = await api.post('/subscriptions/verify', payload);
   return data?.data as SubscriptionSummary;
+}
+
+// ─── Pending-Verify Queue ─────────────────────────────────────
+// When the optimistic overlay is shown, the Razorpay signature payload is
+// written here BEFORE the background verify attempt fires. If the verify call
+// fails all retries (server down, app killed mid-request), this entry survives
+// in AsyncStorage and is drained on the next app open — so no Razorpay-captured
+// payment ever goes permanently unactivated in our database.
+//
+// The /subscriptions/verify endpoint is fully idempotent (returns the current
+// summary if already captured), so re-sending a payload is always safe.
+
+const PENDING_VERIFY_KEY = 'sub:pending_verify';
+
+export interface PendingVerification extends PaymentVerification {
+  capturedAt: string; // ISO timestamp — for diagnostics
+}
+
+/** Persist a verify payload to the durable queue. Call immediately after Razorpay resolves. */
+export async function enqueuePendingVerify(payload: PaymentVerification): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(PENDING_VERIFY_KEY);
+    const queue: PendingVerification[] = raw ? JSON.parse(raw) : [];
+    // Deduplicate by paymentId — safe to call multiple times
+    if (!queue.some((p) => p.razorpayPaymentId === payload.razorpayPaymentId)) {
+      queue.push({ ...payload, capturedAt: new Date().toISOString() });
+      await AsyncStorage.setItem(PENDING_VERIFY_KEY, JSON.stringify(queue));
+    }
+  } catch {
+    // Non-fatal — worst case the recovery entry isn't persisted
+  }
+}
+
+/** Remove a successfully-verified entry from the queue. */
+export async function dequeuePendingVerify(razorpayPaymentId: string): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(PENDING_VERIFY_KEY);
+    if (!raw) return;
+    const queue: PendingVerification[] = JSON.parse(raw);
+    const filtered = queue.filter((p) => p.razorpayPaymentId !== razorpayPaymentId);
+    await AsyncStorage.setItem(PENDING_VERIFY_KEY, JSON.stringify(filtered));
+  } catch {
+    // Non-fatal
+  }
+}
+
+/** Read the full pending-verify queue (called on app open to drain stale entries). */
+export async function loadPendingVerifyQueue(): Promise<PendingVerification[]> {
+  try {
+    const raw = await AsyncStorage.getItem(PENDING_VERIFY_KEY);
+    return raw ? (JSON.parse(raw) as PendingVerification[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 // ─── Cancel / Reactivate ──────────────────────────────────────

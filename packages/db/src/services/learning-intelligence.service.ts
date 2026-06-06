@@ -194,22 +194,22 @@ async function loadConceptMastery(userId: string): Promise<ConceptMasteryData[]>
   }
 }
 
-/** Load IRT student ability θ. */
-async function loadStudentAbilityTheta(userId: string): Promise<number> {
+/** Load IRT student ability θ. Returns null if there is not enough data. */
+async function loadStudentAbilityTheta(userId: string): Promise<number | null> {
   const redis = getRedisClient();
   try {
     const data = await redis.hgetall(`student_ability:${userId}`);
+    const total = parseInt(data['total'] ?? '0', 10);
+    // Require at least 20 responses before IRT estimate is meaningful
+    if (total < 20) return null;
     if (data['theta']) return parseFloat(data['theta']);
     const correct = parseInt(data['correct'] ?? '0', 10);
-    const total = parseInt(data['total'] ?? '0', 10);
-    if (total >= 5) {
-      const p = Math.max(0.01, Math.min(0.99, correct / total));
-      return Math.max(-3, Math.min(3, Math.log(p / (1 - p))));
-    }
+    const p = Math.max(0.01, Math.min(0.99, correct / total));
+    return Math.max(-3, Math.min(3, Math.log(p / (1 - p))));
   } catch (err) {
     log.warn({ err }, 'Failed to load student ability');
   }
-  return 0; // average ability
+  return null; // no data — student is brand new
 }
 
 /** Load error journal — concepts the student repeatedly gets wrong. */
@@ -313,8 +313,9 @@ async function computeConsistencyScore(userId: string): Promise<number> {
       [userId],
     );
     const activeDays = parseInt(result.rows[0]?.active_days ?? '0', 10);
-    // 14 days window: 10+ days = 100, 7 days = 70, 3 days = 30, 0 = 0
-    return Math.min(100, Math.round((activeDays / 10) * 100));
+    // Target: 7 active days in a 14-day window = 100% consistency.
+    // 1 day = 14%, 3 days = 43%, 5 days = 71%, 7+ days = 100%.
+    return Math.min(100, Math.round((activeDays / 7) * 100));
   } catch {
     return 0;
   }
@@ -710,11 +711,12 @@ function enrichWithIntelligence(
 async function buildLearningVelocity(userId: string): Promise<LearningVelocity> {
   const pg = getPostgresPool();
 
-  // Get last 28 days of session data, grouped by week — include active days count
+  // Get last 28 days of session data grouped by ISO week start (Monday).
+  // NOTE: EXTRACT(WEEK) is UNSAFE for 4-week spans — it resets at year
+  // boundaries (week 52 → week 1), causing mis-grouping. Use DATE_TRUNC instead.
   const result = await pg.query(
     `SELECT
-       EXTRACT(WEEK FROM started_at) AS week_num,
-       MIN(started_at::date)::text AS week_start,
+       DATE_TRUNC('week', started_at)::date AS week_start,
        COUNT(*) AS sessions,
        COUNT(DISTINCT started_at::date) AS active_days,
        SUM(cards_studied) AS cards,
@@ -723,12 +725,12 @@ async function buildLearningVelocity(userId: string): Promise<LearningVelocity> 
      FROM study_sessions
      WHERE user_id = (SELECT id FROM users WHERE firebase_uid = $1)
        AND started_at >= NOW() - INTERVAL '28 days'
-     GROUP BY week_num
-     ORDER BY week_num`,
+     GROUP BY DATE_TRUNC('week', started_at)
+     ORDER BY week_start`,
     [userId],
   );
 
-  const weeks = result.rows as { week_num: number; week_start: string; sessions: string; cards: string; active_days: string; accuracy: string; avg_speed: string }[];
+  const weeks = result.rows as { week_start: string; sessions: string; cards: string; active_days: string; accuracy: string; avg_speed: string }[];
 
   // Build weekly trend — use active days for honest cardsPerDay
   const weeklyTrend = weeks.map(w => {
@@ -843,11 +845,15 @@ function buildTopicForecasts(health: SubjectMemoryState[]): TopicForecast[] {
 
 // ─── Exam Readiness ──────────────────────────────────────────
 
+// Minimum total attempts before we trust a BKT mastery reading at face value.
+// Below this, mastery is discounted proportionally.
+const BKT_MIN_CREDIBLE_ATTEMPTS = 30;
+
 function buildExamReadiness(
   health: SubjectMemoryState[],
   velocity: LearningVelocity,
   syllabus: SyllabusSubject[],
-  studentTheta: number,
+  studentTheta: number | null,
   consistencyScore: number,
   conceptMasteryAll: ConceptMasteryData[],
 ): ExamReadiness {
@@ -874,7 +880,21 @@ function buildExamReadiness(
     studiedTopicCount += studied.length;
 
     for (const t of studied) {
-      masterySum += t.conceptMastery;
+      // ── BKT Credibility Discount ──
+      // A student who answered 8 questions has a statistically unreliable mastery reading.
+      // We trust BKT fully only after BKT_MIN_CREDIBLE_ATTEMPTS (30) responses.
+      // Below that, the score is scaled by sqrt(attempts / 30) so:
+      //   8 attempts  → 52% credibility  (mastery × 0.52)
+      //   15 attempts → 71% credibility
+      //   30 attempts → 100% credibility
+      const topicAttempts = conceptMasteryAll
+        .filter(c => c.tag.includes(t.topicSlug))
+        .reduce((sum, c) => sum + c.totalAttempts, 0);
+      const credibility = topicAttempts > 0
+        ? Math.min(1, Math.sqrt(topicAttempts / BKT_MIN_CREDIBLE_ATTEMPTS))
+        : Math.min(1, Math.sqrt(t.totalCards / BKT_MIN_CREDIBLE_ATTEMPTS));
+
+      masterySum += t.conceptMastery * credibility;
       masteryCount++;
       depthSum += t.depthScore;
       depthCount++;
@@ -892,32 +912,46 @@ function buildExamReadiness(
     }
   }
 
-  // Signal 1: Concept Mastery (35%) — do they understand the material?
+  // Coverage factor (0–1): fraction of syllabus the student has actually seen.
+  const coverageFactor = Math.min(1, studiedTopicCount / totalTopicsInExam);
+
+  // Signal 1: Concept Mastery — credibility-adjusted BKT average across studied topics.
   const conceptMasteryScore = masteryCount > 0 ? Math.round(masterySum / masteryCount) : 0;
 
-  // Signal 2: Depth Score (25%) — have they practiced hard questions?
+  // Signal 2: Depth Score — weighted level progression.
   const depthScoreAvg = depthCount > 0 ? Math.round(depthSum / depthCount) : 0;
 
-  // Signal 3: Coverage (20%) — have they seen enough topics?
-  const coverageFactor = Math.min(1, studiedTopicCount / totalTopicsInExam);
-  const coverageScore = Math.round(coverageFactor * 100);
+  // Signal 3: Consistency — active study days in 14-day window.
+  // (already computed externally)
 
-  // Signal 4: Consistency (10%) — are they studying regularly?
-  // Already computed by computeConsistencyScore()
+  // Signal 4: Ability Match — IRT θ → 0-100.
+  // null means no meaningful data (< 20 responses). Score 0, not 50.
+  // θ = -3 → 0, θ = 0 → 50, θ = +3 → 100  — BUT only applied when data exists.
+  const abilityScore = studentTheta !== null
+    ? Math.round(Math.min(100, Math.max(0, (studentTheta + 3) / 6 * 100)))
+    : 0;
 
-  // Signal 5: Ability Match (10%) — can they handle exam difficulty?
-  // θ ranges from -3 (weak) to +3 (strong). Map to 0-100.
-  // θ = 0 (average) → 50, θ = 1.5 → 85, θ = -1.5 → 15
-  const abilityScore = Math.round(Math.min(100, Math.max(0, (studentTheta + 3) / 6 * 100)));
-
-  // ── Weighted overall score ──
-  const overallScore = Math.round(
-    0.35 * conceptMasteryScore +
-    0.25 * depthScoreAvg +
-    0.20 * coverageScore +
+  // ── Raw signal composite (no coverage yet) ──
+  // Weights across the 4 real signals (excluding coverage which is the multiplier):
+  //   Mastery 50%, Depth 30%, Consistency 10%, Ability 10%
+  const rawSignal = Math.round(
+    0.50 * conceptMasteryScore +
+    0.30 * depthScoreAvg +
     0.10 * consistencyScore +
     0.10 * abilityScore
   );
+
+  // ── Coverage as multiplicative gate ──
+  // Coverage is NOT a flat additive term. It is a hard multiplier using sqrt to soften:
+  //   1  topic / 50 = 2%  → multiplier = sqrt(0.02) = 0.14 → max score ~14
+  //   5  topics / 50 = 10% → multiplier = sqrt(0.10) = 0.32 → max score ~32
+  //   10 topics / 50 = 20% → multiplier = sqrt(0.20) = 0.45 → max score ~45
+  //   25 topics / 50 = 50% → multiplier = sqrt(0.50) = 0.71 → max score ~71
+  //   50 topics / 50 = 100% → multiplier = 1.0            → max score = rawSignal
+  // This prevents a brand-new student from ever hitting a high readiness score
+  // no matter how well they answered the few cards they've seen.
+  const coverageMultiplier = Math.sqrt(coverageFactor);
+  const overallScore = Math.round(rawSignal * coverageMultiplier);
 
   // ── Weak concepts extraction ──
   const weakConcepts = conceptMasteryAll
@@ -949,7 +983,7 @@ function buildExamReadiness(
     coverageFactor: Math.round(coverageFactor * 100) / 100,
     consistencyScore,
     abilityScore,
-    studentAbility: Math.round(studentTheta * 100) / 100,
+    studentAbility: studentTheta !== null ? Math.round(studentTheta * 100) / 100 : 0,
     studiedTopics: studiedTopicCount,
     totalTopicsInExam,
     strongAreas: strong,
@@ -961,85 +995,230 @@ function buildExamReadiness(
 }
 
 // ─── Study Plan ──────────────────────────────────────────────
+//
+// Tutor-grade planner. Goals:
+//   • At least 2 subjects per day (like a real tutor would assign)
+//   • At least 30 min of meaningful work per subject
+//   • Minimum 15–20 cards per session (no more 4-card micro-sessions)
+//   • Total daily target: 60–90 minutes across subjects
+//   • Proactively injects new topics when nothing is overdue
+//
+// Card-per-minute assumption: ~1.5 min / card (realistic for NEET/JEE style Q&A)
+
+const MINS_PER_CARD = 1.5;
+const MIN_CARDS_PER_SESSION = 20;   // Never show a session with fewer than 20 cards
+const TARGET_MINS_PER_SUBJECT = 30; // Tutor target: 30 min per subject per day
+const TARGET_SUBJECTS_PER_DAY = 2;  // Always spread across ≥ 2 subjects
+const MIN_TOTAL_MINS = 60;          // Overall daily floor
 
 function buildStudyPlan(
   health: SubjectMemoryState[],
   forecasts: TopicForecast[],
   _userId: string,
 ): DailyStudyPlan {
-  const sessions: PlannedStudySession[] = [];
   const today = new Date().toISOString().split('T')[0]!;
 
-  // Priority 1: Overdue cards (critical urgency)
+  // ── Helper: cards needed to fill a target minutes quota ─────
+  function cardsForMinutes(minutes: number): number {
+    return Math.max(MIN_CARDS_PER_SESSION, Math.round(minutes / MINS_PER_CARD));
+  }
+
+  // ── Step 1: bucket candidates by subject ────────────────────
+  // For each subject, collect topics in priority order:
+  //   a) overdue  b) high-risk declining  c) review-soon  d) stable  e) new_topic
+  interface TopicCandidate {
+    topic: TopicMemoryState;
+    reason: 'overdue' | 'declining' | 'reinforcement' | 'new_topic';
+    difficulty: 'challenging' | 'moderate' | 'easy_review';
+    rawCards: number; // cards sourced from urgency data (may be tiny)
+  }
+
+  const highRiskSlugs = new Set(
+    forecasts.filter(f => f.riskLevel === 'high').map(f => f.topicSlug),
+  );
+
+  // Produce a ranked candidate list per subject
+  const subjectCandidates = new Map<string, TopicCandidate[]>();
+
   for (const subject of health) {
+    const candidates: TopicCandidate[] = [];
+
     for (const topic of subject.topics) {
+      if (topic.urgency === 'not-started') {
+        // New topic — great for proactive expansion
+        if (topic.totalCardsAvailable > 0) {
+          candidates.push({
+            topic, reason: 'new_topic',
+            difficulty: 'moderate',
+            rawCards: topic.totalCardsAvailable,
+          });
+        }
+        continue;
+      }
+
       if (topic.cardsOverdue > 0) {
-        sessions.push({
-          topicSlug: topic.topicSlug,
-          topicName: topic.topicName,
-          subjectId: topic.subjectId,
-          subjectName: topic.subjectName,
-          reason: 'overdue',
-          cardCount: topic.cardsOverdue,
-          estimatedMinutes: Math.ceil(topic.cardsOverdue * 0.5),
-          priority: sessions.length + 1,
+        candidates.push({
+          topic, reason: 'overdue',
           difficulty: topic.retentionEstimate < 50 ? 'challenging' : 'moderate',
+          rawCards: topic.cardsOverdue,
         });
-      }
-    }
-  }
-
-  // Priority 2: Declining topics from forecasts
-  for (const forecast of forecasts) {
-    if (forecast.riskLevel === 'high' && !sessions.find(s => s.topicSlug === forecast.topicSlug)) {
-      const topic = health.flatMap(s => s.topics).find(t => t.topicSlug === forecast.topicSlug);
-      if (topic) {
-        sessions.push({
-          topicSlug: topic.topicSlug,
-          topicName: topic.topicName,
-          subjectId: topic.subjectId,
-          subjectName: topic.subjectName,
-          reason: 'declining',
-          cardCount: forecast.recommendedReviewCards || 5,
-          estimatedMinutes: Math.ceil((forecast.recommendedReviewCards || 5) * 0.5),
-          priority: sessions.length + 1,
+      } else if (highRiskSlugs.has(topic.topicSlug)) {
+        const forecast = forecasts.find(f => f.topicSlug === topic.topicSlug);
+        candidates.push({
+          topic, reason: 'declining',
           difficulty: 'moderate',
+          rawCards: forecast?.recommendedReviewCards || topic.totalCards,
         });
-      }
-    }
-  }
-
-  // Priority 3: Due-soon reinforcement
-  for (const subject of health) {
-    for (const topic of subject.topics) {
-      if (topic.cardsDueSoon > 0 && !sessions.find(s => s.topicSlug === topic.topicSlug)) {
-        sessions.push({
-          topicSlug: topic.topicSlug,
-          topicName: topic.topicName,
-          subjectId: topic.subjectId,
-          subjectName: topic.subjectName,
-          reason: 'reinforcement',
-          cardCount: topic.cardsDueSoon,
-          estimatedMinutes: Math.ceil(topic.cardsDueSoon * 0.4),
-          priority: sessions.length + 1,
+      } else if (topic.cardsDueSoon > 0) {
+        candidates.push({
+          topic, reason: 'reinforcement',
           difficulty: 'easy_review',
+          rawCards: topic.cardsDueSoon,
+        });
+      } else if (topic.urgency === 'stable' || topic.urgency === 'mastered') {
+        // Still worth reviewing to deepen mastery
+        candidates.push({
+          topic, reason: 'reinforcement',
+          difficulty: 'easy_review',
+          rawCards: topic.totalCards,
         });
       }
     }
+
+    // Sort: overdue → declining → reinforcement → new_topic
+    const reasonOrder: Record<string, number> = {
+      overdue: 0, declining: 1, reinforcement: 2, new_topic: 3,
+    };
+    candidates.sort((a, b) => (reasonOrder[a.reason] ?? 9) - (reasonOrder[b.reason] ?? 9));
+
+    if (candidates.length > 0) {
+      subjectCandidates.set(subject.subjectId, candidates);
+    }
   }
 
-  // Cap at 5 sessions for focus
-  const capped = sessions.slice(0, 5);
-  const totalMinutes = capped.reduce((s, sess) => s + sess.estimatedMinutes, 0);
+  // ── Step 2: Pick sessions — ensure ≥ TARGET_SUBJECTS_PER_DAY ──
+  const sessions: PlannedStudySession[] = [];
+  const usedTopics = new Set<string>();
 
-  // Generate insight
+  // Sort subjects: those with overdue work first
+  const subjectIds = [...subjectCandidates.keys()].sort((a, b) => {
+    const aOverdue = health.find(s => s.subjectId === a)?.totalOverdue ?? 0;
+    const bOverdue = health.find(s => s.subjectId === b)?.totalOverdue ?? 0;
+    return bOverdue - aOverdue;
+  });
+
+  // For each subject, pick the top candidate and pad cards up to 30-min worth
+  for (const subjectId of subjectIds) {
+    const candidates = subjectCandidates.get(subjectId) ?? [];
+    const subject = health.find(s => s.subjectId === subjectId)!;
+
+    // Gather sessions for this subject: pick top candidates until ≥ 30 min
+    let subjectMinutes = 0;
+    let subjectSessions = 0;
+
+    for (const candidate of candidates) {
+      if (usedTopics.has(candidate.topic.topicSlug)) continue;
+
+      // Calculate how many cards to assign to this topic
+      const remaining = Math.max(0, TARGET_MINS_PER_SUBJECT - subjectMinutes);
+      const baseCards = candidate.rawCards;
+      // Pad: always use at least MIN_CARDS_PER_SESSION, and enough to hit 30 min target
+      const paddedCards = Math.max(
+        MIN_CARDS_PER_SESSION,
+        baseCards,
+        subjectSessions === 0 ? cardsForMinutes(Math.min(remaining, TARGET_MINS_PER_SUBJECT)) : MIN_CARDS_PER_SESSION,
+      );
+      // Don't exceed available cards
+      const available = candidate.topic.totalCardsAvailable > 0
+        ? candidate.topic.totalCardsAvailable
+        : Math.max(paddedCards, 50); // assume plenty if not in syllabus
+      const finalCards = Math.min(paddedCards, available);
+      const estMins = Math.round(finalCards * MINS_PER_CARD);
+
+      sessions.push({
+        topicSlug: candidate.topic.topicSlug,
+        topicName: candidate.topic.topicName,
+        subjectId: candidate.topic.subjectId,
+        subjectName: candidate.topic.subjectName,
+        reason: candidate.reason,
+        cardCount: finalCards,
+        estimatedMinutes: estMins,
+        priority: sessions.length + 1,
+        difficulty: candidate.difficulty,
+      });
+
+      usedTopics.add(candidate.topic.topicSlug);
+      subjectMinutes += estMins;
+      subjectSessions++;
+
+      // One topic per subject is usually enough for 30 min; add a 2nd if still short
+      if (subjectMinutes >= TARGET_MINS_PER_SUBJECT) break;
+    }
+  }
+
+  // ── Step 3: If we have fewer than TARGET_SUBJECTS_PER_DAY subjects,
+  //           inject the best new_topic from under-represented subjects ──
+  const subjectsRepresented = new Set(sessions.map(s => s.subjectId));
+  if (subjectsRepresented.size < TARGET_SUBJECTS_PER_DAY) {
+    for (const subjectId of subjectIds) {
+      if (subjectsRepresented.has(subjectId)) continue;
+      const candidates = subjectCandidates.get(subjectId) ?? [];
+      const best = candidates.find(c => !usedTopics.has(c.topic.topicSlug));
+      if (!best) continue;
+
+      const finalCards = Math.max(MIN_CARDS_PER_SESSION, cardsForMinutes(TARGET_MINS_PER_SUBJECT));
+      const available = best.topic.totalCardsAvailable > 0 ? best.topic.totalCardsAvailable : finalCards;
+      sessions.push({
+        topicSlug: best.topic.topicSlug,
+        topicName: best.topic.topicName,
+        subjectId: best.topic.subjectId,
+        subjectName: best.topic.subjectName,
+        reason: best.reason,
+        cardCount: Math.min(finalCards, available),
+        estimatedMinutes: Math.round(Math.min(finalCards, available) * MINS_PER_CARD),
+        priority: sessions.length + 1,
+        difficulty: best.difficulty,
+      });
+      usedTopics.add(best.topic.topicSlug);
+      subjectsRepresented.add(subjectId);
+
+      if (subjectsRepresented.size >= TARGET_SUBJECTS_PER_DAY) break;
+    }
+  }
+
+  // ── Step 4: Cap at 6 sessions (2–3 per subject × 2 subjects) ──
+  const capped = sessions.slice(0, 6);
+
+  // ── Step 5: Re-assign priority numbers ─────────────────────
+  capped.forEach((s, i) => { s.priority = i + 1; });
+
+  // ── Step 6: Ensure total is at least MIN_TOTAL_MINS ─────────
+  // If the plan is still too light (student has very few cards in the system),
+  // bump up the first session's card count to fill the gap.
+  let totalMinutes = capped.reduce((sum, s) => sum + s.estimatedMinutes, 0);
+  if (totalMinutes < MIN_TOTAL_MINS && capped.length > 0) {
+    const deficit = MIN_TOTAL_MINS - totalMinutes;
+    const deficitCards = Math.round(deficit / MINS_PER_CARD);
+    capped[0]!.cardCount += deficitCards;
+    capped[0]!.estimatedMinutes += deficit;
+    totalMinutes = MIN_TOTAL_MINS;
+  }
+
+  // ── Insight copy ─────────────────────────────────────────────
+  const overdueCount = capped.filter(s => s.reason === 'overdue').length;
+  const subjectNames = [...new Set(capped.map(s => s.subjectName))];
+  const subjectList = subjectNames.length > 1
+    ? `${subjectNames.slice(0, -1).join(', ')} and ${subjectNames.at(-1)}`
+    : (subjectNames[0] ?? 'your subject');
+
   let insight = 'Start studying to build your learning profile!';
   if (capped.length > 0) {
-    const overdueCount = capped.filter(s => s.reason === 'overdue').length;
     if (overdueCount > 0) {
-      insight = `You have ${overdueCount} topic${overdueCount > 1 ? 's' : ''} with overdue cards. Reviewing them today will significantly boost your retention.`;
+      insight = `${overdueCount} topic${overdueCount > 1 ? 's' : ''} with overdue cards need your attention today. Cover ${subjectList} for a full revision session.`;
+    } else if (capped.some(s => s.reason === 'new_topic')) {
+      insight = `Good time to expand your syllabus! Today's plan covers ${subjectList} — mix of fresh topics and reinforcement.`;
     } else {
-      insight = `Your knowledge is in good shape. Today's plan focuses on reinforcement to keep your retention high.`;
+      insight = `Today's plan covers ${subjectList}. Your tutor recommends at least ${Math.round(totalMinutes / subjectNames.length)} min per subject for solid retention.`;
     }
   }
 

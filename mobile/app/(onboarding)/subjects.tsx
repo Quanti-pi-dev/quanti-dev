@@ -115,8 +115,8 @@ function SubjectCard({
     <Animated.View
       entering={FadeInUp.delay(200 + index * 80).duration(400).springify()}
       layout={LinearTransition.springify()}
-      style={animatedStyle}
     >
+      <Animated.View style={animatedStyle}>
       <TouchableOpacity
         onPress={onPress}
         onLongPress={onPreview}
@@ -228,6 +228,7 @@ function SubjectCard({
           <Ionicons name="eye-outline" size={14} color={theme.textTertiary} />
         </TouchableOpacity>
       </TouchableOpacity>
+      </Animated.View>
     </Animated.View>
   );
 }

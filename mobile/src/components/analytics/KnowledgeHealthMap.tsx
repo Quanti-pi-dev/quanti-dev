@@ -186,12 +186,14 @@ function SubjectHealthSection({
   onToggle: () => void;
 }) {
   const { theme } = useTheme();
-  const mastery = getMasteryLabel(subject.retentionEstimate);
+  // Use BKT mastery as primary signal if available, otherwise fall back to SM-2 retention
+  const primaryScore = subject.conceptMastery || subject.retentionEstimate;
+  const mastery = getMasteryLabel(primaryScore);
 
   const retentionColor =
-    subject.retentionEstimate >= 80 ? '#10B981' :
-    subject.retentionEstimate >= 60 ? '#F59E0B' :
-    subject.retentionEstimate >= 40 ? '#F97316' : '#EF4444';
+    primaryScore >= 80 ? '#10B981' :
+    primaryScore >= 60 ? '#F59E0B' :
+    primaryScore >= 40 ? '#F97316' : '#EF4444';
 
   return (
     <View style={{ gap: spacing.sm }}>
@@ -258,10 +260,10 @@ function SubjectHealthSection({
         </View>
       </Pressable>
 
-      {/* Subject-level progress bar */}
+      {/* Subject-level progress bar — BKT mastery primary, retention fallback */}
       <View style={{ paddingHorizontal: spacing.sm }}>
         <ProgressBar
-          progress={subject.retentionEstimate / 100}
+          progress={(subject.conceptMastery || subject.retentionEstimate) / 100}
           height={5}
           color={retentionColor}
         />
@@ -305,7 +307,7 @@ function SubjectHealthSection({
       {isExpanded && (
         <View style={{ gap: spacing.xs, marginTop: spacing.xs }}>
           {subject.topics.map((topic) => (
-            <TopicHealthRow key={topic.topicSlug} topic={topic} />
+            <TopicHealthRow key={`${subject.subjectId}:${topic.topicSlug}`} topic={topic} />
           ))}
         </View>
       )}

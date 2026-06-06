@@ -74,11 +74,13 @@ export function NextMilestoneCard({ examReadiness, knowledgeHealth }: Props) {
   }
 
   const emoji = getMilestoneEmoji(target);
-  const progress = current / target;
+  const progress = Math.min(1, Math.max(0, current / target));
   const gap = target - current;
 
-  // Find weakest subject for actionable tip
-  const sorted = [...knowledgeHealth].sort((a, b) => a.conceptMastery - b.conceptMastery);
+  // Find weakest subject that has actually been studied
+  const sorted = [...knowledgeHealth]
+    .filter(s => s.studiedTopics > 0)  // exclude entirely untouched subjects
+    .sort((a, b) => (a.conceptMastery || a.retentionEstimate) - (b.conceptMastery || b.retentionEstimate));
   const weakest = sorted[0];
   const tip = getActionTip(current, target, weakest);
 

@@ -32,6 +32,8 @@ import {
   fetchPlans,
   initiateCheckout,
   verifyPayment,
+  enqueuePendingVerify,
+  dequeuePendingVerify,
   formatPrice,
   formatCycle,
 } from '../src/services/subscription.service';
@@ -205,6 +207,11 @@ export default function SubscriptionScreen() {
 
   const couponSectionRef = useRef<ScrollView>(null);
 
+  // ─── Prefetched checkout cache ────────────────────────────
+  // Key: `${planId}:${couponId ?? ''}:${skipTrial}`, value: Promise or resolved CheckoutResult
+  type CheckoutResult = Awaited<ReturnType<typeof initiateCheckout>>;
+  const prefetchCache = useRef<Map<string, Promise<CheckoutResult>>>(new Map());
+
   // ─── Load plans ──────────────────────────────────────────
   const loadPlans = useCallback(async () => {
     try {
@@ -219,6 +226,21 @@ export default function SubscriptionScreen() {
   }, []);
 
   useEffect(() => { loadPlans(); }, [loadPlans]);
+
+  // ─── Prefetch helper ──────────────────────────────────────
+  // Fires the checkout API call and caches the Promise so it can be awaited instantly.
+  const prefetchCheckout = useCallback((
+    planId: string,
+    couponId?: string,
+    skipTrial: boolean = false,
+  ) => {
+    const key = `${planId}:${couponId ?? ''}:${skipTrial}`;
+    if (prefetchCache.current.has(key)) return; // already in-flight or resolved
+    const promise = initiateCheckout(planId, couponId, skipTrial);
+    prefetchCache.current.set(key, promise);
+    // If it errors, remove from cache so we retry fresh
+    promise.catch(() => prefetchCache.current.delete(key));
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -242,15 +264,31 @@ export default function SubscriptionScreen() {
   // choose to pay directly; they just also have the standalone trial card).
   const paidPlans = upgradablePlans;
 
+  // Prefetch the free trial checkout as soon as we know the plan — most users land here first.
+  useEffect(() => {
+    if (trialPlan) prefetchCheckout(trialPlan.id, undefined, false);
+  }, [trialPlan, prefetchCheckout]);
+
+  // Prefetch paid plan checkout for the first visible plan (most likely to be purchased).
+  useEffect(() => {
+    if (paidPlans[0]) prefetchCheckout(paidPlans[0].id, undefined, true);
+  }, [paidPlans, prefetchCheckout]);
+
   // ─── Core checkout runner ─────────────────────────────────
   // skipTrial=true  → always a paid checkout (from regular PlanCard)
   // skipTrial=false → trial eligible (from FreeTrialCard only)
   async function runCheckout(plan: Plan, withCoupon: boolean, skipTrial: boolean) {
     setCheckingOut(plan.id);
     const couponId = withCoupon && couponResult?.valid ? couponResult.couponId : undefined;
+    const cacheKey = `${plan.id}:${couponId ?? ''}:${skipTrial}`;
 
     try {
-      const result = await initiateCheckout(plan.id, couponId, skipTrial);
+      // ── Use prefetched result if available, otherwise fetch now ──
+      const cachedPromise = prefetchCache.current.get(cacheKey);
+      const result = await (cachedPromise ?? initiateCheckout(plan.id, couponId, skipTrial));
+      // Invalidate cache entry so next checkout gets a fresh order
+      prefetchCache.current.delete(cacheKey);
+
       const isTrial = result.trialDays > 0;
 
       if (!result.keyId) {
@@ -274,41 +312,7 @@ export default function SubscriptionScreen() {
 
       const paymentResult = await RazorpayCheckout.open(razorpayOptions);
 
-      const verifyPayload = isSubscriptionMode
-        ? {
-            razorpayOrderId: result.razorpaySubscriptionId!,
-            razorpayPaymentId: (paymentResult as { razorpay_payment_id: string }).razorpay_payment_id,
-            razorpaySignature: (paymentResult as { razorpay_signature: string }).razorpay_signature,
-          }
-        : {
-            razorpayOrderId: (paymentResult as { razorpay_order_id: string }).razorpay_order_id,
-            razorpayPaymentId: (paymentResult as { razorpay_payment_id: string }).razorpay_payment_id,
-            razorpaySignature: (paymentResult as { razorpay_signature: string }).razorpay_signature,
-          };
-
-      let activatedSummary;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          activatedSummary = await verifyPayment(verifyPayload);
-          break;
-        } catch (verifyErr) {
-          if (attempt === 2) {
-            showAlert({
-              title: isTrial ? 'Trial Setup Pending' : 'Payment Received',
-              message: isTrial
-                ? 'Your trial is being activated. It will appear shortly — please restart the app if needed.'
-                : 'Your payment was successful but activation is taking a moment. Please restart the app if needed.',
-              type: 'info',
-              buttons: [{ text: 'OK', onPress: navigateAfterAction }],
-            });
-            return;
-          }
-          await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
-        }
-      }
-
-      setSubscription(activatedSummary!);
-
+      // ── Optimistic success: show overlay immediately, verify in background ──
       if (isTrial) {
         const chargeDate = new Date();
         chargeDate.setDate(chargeDate.getDate() + result.trialDays);
@@ -327,15 +331,52 @@ export default function SubscriptionScreen() {
           buttonText: "Let's Go!",
         });
       }
+      setCheckingOut(null);
+
+      // ── Durable verify: persist payload BEFORE background verify fires ──
+      // If the app is killed or the network drops after Razorpay resolves but
+      // before our server confirms, the queue entry survives in AsyncStorage
+      // and is drained by SubscriptionContext on the next app open.
+      const verifyPayload = isSubscriptionMode
+        ? {
+            razorpayOrderId: result.razorpaySubscriptionId!,
+            razorpayPaymentId: (paymentResult as { razorpay_payment_id: string }).razorpay_payment_id,
+            razorpaySignature: (paymentResult as { razorpay_signature: string }).razorpay_signature,
+          }
+        : {
+            razorpayOrderId: (paymentResult as { razorpay_order_id: string }).razorpay_order_id,
+            razorpayPaymentId: (paymentResult as { razorpay_payment_id: string }).razorpay_payment_id,
+            razorpaySignature: (paymentResult as { razorpay_signature: string }).razorpay_signature,
+          };
+
+      await enqueuePendingVerify(verifyPayload);
+
+      void (async () => {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const activatedSummary = await verifyPayment(verifyPayload);
+            setSubscription(activatedSummary);
+            // Confirmed by backend — safe to remove from queue
+            await dequeuePendingVerify(verifyPayload.razorpayPaymentId);
+            return;
+          } catch {
+            if (attempt < 2) await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+          }
+        }
+        // All retries exhausted — entry stays in queue for recovery on next app open
+      })();
+
     } catch (err: unknown) {
-      if ((err as { code?: number }).code === 2) return;
+      if ((err as { code?: number }).code === 2) {
+        setCheckingOut(null);
+        return;
+      }
       showAlert({
         title: 'Checkout Failed',
         message: parseCheckoutError(err),
         type: 'info',
         buttons: [{ text: 'OK' }],
       });
-    } finally {
       setCheckingOut(null);
     }
   }
@@ -347,14 +388,19 @@ export default function SubscriptionScreen() {
       runCheckout(plan, true, true); // skipTrial=true — user chose the paid card
       return;
     }
-    // First press: set pending so coupon section appears below
+    // First press: set pending so coupon section appears below.
+    // Simultaneously prefetch the checkout in the background so when the user
+    // hits Confirm the Razorpay order is already ready.
     setPendingPlan(plan);
     setCouponResult(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    prefetchCheckout(plan.id, undefined, true);
   }
 
   function handleTrialCardPress(plan: Plan) {
     // Free trial card — skipTrial=false so the backend applies the trial mandate
+    // Prefetch should already be warm from mount, but ensure it's started.
+    prefetchCheckout(plan.id, undefined, false);
     runCheckout(plan, false, false);
   }
 

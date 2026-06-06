@@ -13,11 +13,9 @@ import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Card } from '../../src/components/ui/Card';
 import { Typography } from '../../src/components/ui/Typography';
-import { StatTile } from '../../src/components/StatTile';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useGlobalUI } from '../../src/contexts/GlobalUIContext';
 import { useCoinBalance, useUserBadges } from '../../src/hooks/useGamification';
-import { useProgressSummary, useStudyStreak } from '../../src/hooks/useProgress';
 import { usePushNotifications } from '../../src/hooks/usePushNotifications';
 import { api } from '../../src/services/api';
 import type { UserBadge } from '@kd/shared';
@@ -25,7 +23,6 @@ import type { UserBadge } from '@kd/shared';
 import {
   ProfileHeader,
   SubscriptionCard,
-  CoinWalletCard,
   BadgeShowcase,
   SettingsSection,
   EditProfileModal,
@@ -43,8 +40,6 @@ export default function ProfileScreen() {
   const { showAlert, showToast } = useGlobalUI();
   const { registerForPushNotifications } = usePushNotifications();
   const { data: coinData } = useCoinBalance();
-  const { data: progressData } = useProgressSummary();
-  const { data: streakData } = useStudyStreak();
   const { data: userBadges } = useUserBadges();
 
   const name = user?.displayName ?? user?.email?.split('@')[0] ?? 'Student';
@@ -52,12 +47,6 @@ export default function ProfileScreen() {
   const enrollmentId = user?.enrollmentId ?? '';
   const avatarUri = user?.avatarUrl ?? null;
   const coins = coinData?.balance ?? 0;
-
-  // ─── Derived stats ──────────────────────────────────────────
-  const solved = String(progressData?.totalCardsCompleted ?? 0);
-  const accuracy = progressData?.overallAccuracy != null
-    ? `${Math.round(progressData.overallAccuracy)}%` : '—';
-  const streak = streakData?.currentStreak ?? 0;
 
   // ─── Earned badges ─────────────────────────────────────────
   const earnedBadges = useMemo<EarnedBadge[]>(() =>
@@ -109,20 +98,28 @@ export default function ProfileScreen() {
 
         <SubscriptionCard />
 
-        {/* Stats row */}
-        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-          <StatTile label="Solved" value={solved} color={theme.statSolved} />
-          <StatTile label="Accuracy" value={accuracy} color={theme.statAccuracy} />
-          <StatTile label="Streak" value={`${streak}d`} color={theme.statStreak} />
-        </View>
 
-        <CoinWalletCard
-          coins={coins}
-          lifetimeEarned={coinData?.lifetimeEarned}
-          lifetimeSpent={coinData?.lifetimeEarned != null ? coinData.lifetimeEarned - coins : null}
-          onHistoryPress={() => router.push('/coins-history')}
-          onShopPress={() => router.push('/shop')}
-        />
+        {/* ── My Institute ── */}
+        <Card pressable onPress={() => router.push('/institute' as never)}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+            <View
+              style={{
+                width: 40, height: 40, borderRadius: radius.md,
+                backgroundColor: 'rgba(99,102,241,0.15)',
+                alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="school-outline" size={20} color="#6366f1" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Typography variant="label">My Institute</Typography>
+              <Typography variant="caption" color={theme.textTertiary}>
+                Tests, mock exams &amp; institute activities
+              </Typography>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
+          </View>
+        </Card>
 
         {/* ── Profile Tier ── */}
         <Card pressable onPress={() => router.push('/profile-tiers' as never)}>
@@ -167,27 +164,7 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
           </View>
         </Card>
-        {/* ── My Institute ── */}
-        <Card pressable onPress={() => router.push('/institute' as never)}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-            <View
-              style={{
-                width: 40, height: 40, borderRadius: radius.md,
-                backgroundColor: 'rgba(99,102,241,0.15)',
-                alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <Ionicons name="school-outline" size={20} color="#6366f1" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Typography variant="label">My Institute</Typography>
-              <Typography variant="caption" color={theme.textTertiary}>
-                Tests, mock exams &amp; institute activities
-              </Typography>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
-          </View>
-        </Card>
+
 
         <BadgeShowcase badges={earnedBadges} />
 

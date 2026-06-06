@@ -417,6 +417,17 @@ export default function MiniSessionScreen() {
     });
   }, [router, examIds, selectedSubjects, examDate, preferredStudyTime, dailyCardTarget, totalStepsParam, studyPersonality, motivationType, sessionPreference]);
 
+  // ─── Coin particles (must be at top level — Rules of Hooks) ──
+  const coinParticles = useMemo(
+    () =>
+      Array.from({ length: 12 }, (_, i) => ({
+        key: i,
+        delay: i * 60,
+        startX: (Math.random() - 0.5) * 60,
+      })),
+    [],
+  );
+
   const handleFinishReward = useCallback(() => {
     const correctCount = results.filter(r => r === true).length;
     navigateToComplete(correctCount, cards.length, coinsEarned);
@@ -463,16 +474,6 @@ export default function MiniSessionScreen() {
   if (phase === 'reward') {
     const correctCount = results.filter(r => r === true).length;
     const allCorrect = correctCount === cards.length;
-
-    const coinParticles = useMemo(
-      () =>
-        Array.from({ length: 12 }, (_, i) => ({
-          key: i,
-          delay: i * 60,
-          startX: (Math.random() - 0.5) * 60,
-        })),
-      [],
-    );
 
     return (
       <ScreenWrapper>

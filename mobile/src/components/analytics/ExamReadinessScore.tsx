@@ -231,13 +231,27 @@ export function ExamReadinessScore({ data }: ExamReadinessScoreProps) {
             {/* Signal breakdown */}
             {data.totalTopicsInExam > 0 && (
               <View style={{ gap: 4, alignItems: 'center' }}>
+                {/* Coverage as the primary gating context */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                  <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 10 }}>
+                    📚 Syllabus coverage:
+                  </Typography>
+                  <Typography
+                    variant="captionBold"
+                    color={data.coverageFactor >= 0.5 ? '#10B981' : data.coverageFactor >= 0.2 ? '#F59E0B' : '#EF4444'}
+                    style={{ fontSize: 10 }}
+                  >
+                    {data.studiedTopics}/{data.totalTopicsInExam} topics
+                    {' '}(×{Math.round(Math.sqrt(data.coverageFactor) * 100)}% gate)
+                  </Typography>
+                </View>
+                {/* Per-signal breakdown */}
                 <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', justifyContent: 'center' }}>
                   {[
                     { label: 'Understanding', value: data.conceptMasteryScore, icon: '🧠' },
                     { label: 'Depth', value: data.depthScore, icon: '📊' },
-                    { label: 'Coverage', value: Math.round(data.coverageFactor * 100), icon: '📚' },
                     { label: 'Consistency', value: data.consistencyScore, icon: '📅' },
-                    { label: 'Ability', value: data.abilityScore, icon: '⚡' },
+                    { label: 'Ability', value: data.abilityScore, icon: '⚡', noData: data.abilityScore === 0 && data.studentAbility === 0 },
                   ].map(sig => (
                     <View key={sig.label} style={{ alignItems: 'center', minWidth: 52 }}>
                       <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 9 }}>
@@ -245,17 +259,14 @@ export function ExamReadinessScore({ data }: ExamReadinessScoreProps) {
                       </Typography>
                       <Typography
                         variant="captionBold"
-                        color={sig.value >= 70 ? '#10B981' : sig.value >= 40 ? '#F59E0B' : '#EF4444'}
+                        color={'noData' in sig && sig.noData ? theme.textTertiary : sig.value >= 70 ? '#10B981' : sig.value >= 40 ? '#F59E0B' : '#EF4444'}
                         style={{ fontSize: 11 }}
                       >
-                        {sig.value}%
+                        {'noData' in sig && sig.noData ? '—' : `${sig.value}%`}
                       </Typography>
                     </View>
                   ))}
                 </View>
-                <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 9 }}>
-                  {data.studiedTopics} of {data.totalTopicsInExam} topics studied
-                </Typography>
               </View>
             )}
           </View>

@@ -139,7 +139,11 @@ export default function ProgressScreen() {
         {learningProfile && (() => {
           const r = learningProfile.examReadiness;
           const health = learningProfile.knowledgeHealth;
-          const sorted = [...health].sort((a, b) => b.conceptMastery - a.conceptMastery);
+          // Only include subjects the student has actually started
+          const studiedSubjects = health.filter(s => s.studiedTopics > 0);
+          const sorted = [...studiedSubjects].sort(
+            (a, b) => (b.conceptMastery || b.retentionEstimate) - (a.conceptMastery || a.retentionEstimate)
+          );
           const strongest = sorted[0];
           const weakest = sorted.length > 1 ? sorted[sorted.length - 1] : null;
           const emoji = getPersonalityEmoji(preferences?.studyPersonality);
@@ -150,19 +154,28 @@ export default function ProgressScreen() {
             ? `You're a ${personality} ${emoji} who's covered ${coverage} topics. `
             : `You've covered ${coverage} topics so far. `;
 
-          const strengthLine = strongest
-            ? `Your strongest area is ${strongest.subjectName} (${strongest.conceptMastery}% mastery). `
+          // Use whichever score is meaningful (BKT mastery if available, otherwise SM-2 retention)
+          const strongestScore = strongest
+            ? (strongest.conceptMastery || strongest.retentionEstimate)
+            : 0;
+          const strengthLine = strongest && strongestScore > 0
+            ? `Your strongest area is ${strongest.subjectName} (${strongestScore}% mastery). `
             : '';
 
-          const weakLine = weakest && weakest.conceptMastery < 50
-            ? `${weakest.subjectName} (${weakest.conceptMastery}%) needs the most attention. `
+          const weakestScore = weakest
+            ? (weakest.conceptMastery || weakest.retentionEstimate)
+            : 0;
+          const weakLine = weakest && weakestScore < 50
+            ? `${weakest.subjectName} (${weakestScore}%) needs the most attention. `
             : '';
 
           const pacing = r.daysToTargetReadiness > 0
             ? `At your current pace, you'll hit 85% readiness in ~${r.daysToTargetReadiness} days.`
             : r.overallScore >= 85
               ? 'You\'re at target readiness — keep reinforcing!'
-              : '';
+              : studiedSubjects.length === 0
+                ? 'Start your first study session to build your learning profile!'
+                : '';
 
           return (
             <View style={{
