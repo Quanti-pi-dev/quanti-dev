@@ -46,6 +46,7 @@ import { microSessionRoutes } from './routes/micro-session.routes.js';
 import { studyPactRoutes } from './routes/study-pact.routes.js';
 import { profileRoutes } from './routes/profile.routes.js';
 import { userContentRoutes } from './routes/user-content.routes.js';
+import { statsRoutes } from './routes/stats.routes.js';
 
 // ─── Fastify Instance ─────────────────────────────────────────
 
@@ -149,6 +150,7 @@ async function registerRoutes() {
   // Content creation investment (Hook Model §4.2)
   // Personal decks, deck sharing, and card annotations
   await server.register(userContentRoutes,       { prefix: '/api/v1' });
+  await server.register(statsRoutes,             { prefix: '/api/v1/stats' });
 }
 
 // ─── Cron Jobs ────────────────────────────────────────────────

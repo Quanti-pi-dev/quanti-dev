@@ -30,6 +30,8 @@ import { Header } from '../../src/components/layout/Header';
 import { Typography } from '../../src/components/ui/Typography';
 import { Button } from '../../src/components/ui/Button';
 import { Skeleton } from '../../src/components/ui/Skeleton';
+import { SubjectTrendingBadge } from '../../src/components/onboarding/SocialProofBadge';
+import { SubjectPreviewSheet } from '../../src/components/onboarding/SubjectPreviewSheet';
 
 // ─── Subject type (matches API response shape) ──────────────
 interface OnboardingSubject {
@@ -85,11 +87,13 @@ function SubjectCard({
   subject,
   isSelected,
   onPress,
+  onPreview,
   index,
 }: {
   subject: OnboardingSubject;
   isSelected: boolean;
   onPress: () => void;
+  onPreview: () => void;
   index: number;
 }) {
   const { theme, isDark } = useTheme();
@@ -115,8 +119,10 @@ function SubjectCard({
     >
       <TouchableOpacity
         onPress={onPress}
+        onLongPress={onPreview}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
+        delayLongPress={400}
         activeOpacity={1}
         style={{
           flexDirection: 'row',
@@ -203,7 +209,24 @@ function SubjectCard({
               {subject.description}
             </Typography>
           ) : null}
+          <SubjectTrendingBadge subjectId={subject.id} delay={300 + index * 80} />
         </View>
+
+        {/* Preview info icon */}
+        <TouchableOpacity
+          onPress={onPreview}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: radius.full,
+            backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Ionicons name="eye-outline" size={14} color={theme.textTertiary} />
+        </TouchableOpacity>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -220,6 +243,7 @@ export default function SubjectSelectionScreen() {
   const { showAlert, showToast } = useGlobalUI();
   const { refreshUser, user } = useAuth();
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [previewSubject, setPreviewSubject] = useState<OnboardingSubject | null>(null);
 
   // Dynamic step count passed from exam selection screen
   const totalSteps = parseInt(totalStepsParam ?? '3', 10);
@@ -268,7 +292,7 @@ export default function SubjectSelectionScreen() {
       await refreshUser();
       // Route to exam goals screen
       router.push({
-        pathname: '/(onboarding)/exam-goals',
+        pathname: '/(onboarding)/study-personality' as never,
         params: {
           examIds: examIds ?? '',
           selectedSubjects: selectedSubjects.join(','),
@@ -422,6 +446,7 @@ export default function SubjectSelectionScreen() {
               subject={subject}
               isSelected={selectedSubjects.includes(subject.id)}
               onPress={() => toggleSubject(subject.id)}
+              onPreview={() => setPreviewSubject(subject)}
               index={index}
             />
           ))}
@@ -470,6 +495,15 @@ export default function SubjectSelectionScreen() {
           Skip for now
         </Button>
       </Animated.View>
+
+      {/* Subject preview sheet */}
+      <SubjectPreviewSheet
+        visible={!!previewSubject}
+        onClose={() => setPreviewSubject(null)}
+        subjectId={previewSubject?.id ?? ''}
+        subjectName={previewSubject?.name ?? ''}
+        examId={examIdArray[0]}
+      />
     </ScreenWrapper>
   );
 }

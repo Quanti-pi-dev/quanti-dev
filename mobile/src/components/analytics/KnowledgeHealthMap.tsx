@@ -79,12 +79,14 @@ function TopicHealthRow({ topic }: { topic: TopicMemoryState }) {
   }
 
   const trendCfg = TREND_ICONS[topic.trend];
-  const mastery = getMasteryLabel(topic.retentionEstimate);
+  const mastery = getMasteryLabel(topic.conceptMastery || topic.retentionEstimate);
 
+  // Use concept mastery as primary indicator (tutor-grade), fall back to retention
+  const primaryScore = topic.conceptMastery || topic.retentionEstimate;
   const barColor =
-    topic.retentionEstimate >= 80 ? '#10B981' :
-    topic.retentionEstimate >= 60 ? '#F59E0B' :
-    topic.retentionEstimate >= 40 ? '#F97316' : '#EF4444';
+    primaryScore >= 80 ? '#10B981' :
+    primaryScore >= 60 ? '#F59E0B' :
+    primaryScore >= 40 ? '#F97316' : '#EF4444';
 
   return (
     <Animated.View entering={FadeIn.duration(250)}>
@@ -103,10 +105,30 @@ function TopicHealthRow({ topic }: { topic: TopicMemoryState }) {
             {topic.topicName}
           </Typography>
 
-          {/* Retention % */}
+          {/* Concept Mastery % (primary: tutor-grade understanding) */}
           <Typography variant="captionBold" color={barColor} style={{ fontSize: 12 }}>
-            {topic.retentionEstimate}%
+            {primaryScore}%
           </Typography>
+
+          {/* Depth badge */}
+          {topic.depthScore > 0 && (
+            <View
+              style={{
+                backgroundColor: topic.depthScore >= 50 ? '#10B98110' : '#F59E0B10',
+                paddingHorizontal: 5,
+                paddingVertical: 1,
+                borderRadius: radius.full,
+              }}
+            >
+              <Typography
+                variant="caption"
+                color={topic.depthScore >= 50 ? '#10B981' : '#F59E0B'}
+                style={{ fontSize: 9 }}
+              >
+                D:{topic.depthScore}%
+              </Typography>
+            </View>
+          )}
 
           {/* Trend badge */}
           <View
@@ -127,10 +149,17 @@ function TopicHealthRow({ topic }: { topic: TopicMemoryState }) {
         </View>
 
         <ProgressBar
-          progress={topic.retentionEstimate / 100}
+          progress={primaryScore / 100}
           height={4}
           color={barColor}
         />
+
+        {/* Weak concepts */}
+        {topic.weakConcepts && topic.weakConcepts.length > 0 && (
+          <Typography variant="caption" color="#EF4444" style={{ fontSize: 9 }}>
+            ⚠ Weak: {topic.weakConcepts.slice(0, 2).join(', ')}
+          </Typography>
+        )}
 
         {topic.cardsOverdue > 0 && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>

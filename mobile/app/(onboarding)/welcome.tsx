@@ -23,6 +23,7 @@ import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';
 import { Button } from '../../src/components/ui/Button';
+import { GlobalActivityBadge } from '../../src/components/onboarding/SocialProofBadge';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const LOGO_SOURCE = require('../../assets/adaptive-icon.png');
@@ -244,7 +245,7 @@ export default function OnboardingWelcomeScreen() {
               gap: spacing.sm,
             }}
           >
-            {['📚 Smart Flashcards', '📊 Track Progress', '🏆 Earn Rewards'].map((pill, i) => (
+            {['🔥 Build study streaks', '💰 Earn coins & unlock rewards', '⚔️ Challenge friends'].map((pill, i) => (
               <Animated.View
                 key={pill}
                 entering={FadeInDown.delay(1000 + i * 150).duration(400)}
@@ -263,6 +264,9 @@ export default function OnboardingWelcomeScreen() {
               </Animated.View>
             ))}
           </Animated.View>
+
+          {/* Social proof — live student counter */}
+          <GlobalActivityBadge delay={1500} />
 
           {/* CTA */}
           <Animated.View entering={FadeInDown.delay(1400).duration(400)} style={{ width: '100%' }}>

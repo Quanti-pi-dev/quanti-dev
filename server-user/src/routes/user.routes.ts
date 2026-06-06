@@ -28,6 +28,10 @@ const updatePreferencesSchema = z.object({
   examDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   preferredStudyTime: z.enum(['morning', 'afternoon', 'evening']).nullable().optional(),
   dailyCardTarget: z.number().int().min(5).max(200).nullable().optional(),
+  // Phase 3: Study personality quiz fields
+  studyPersonality: z.string().max(100).nullable().optional(),
+  motivationType: z.enum(['competing', 'progress', 'goals']).nullable().optional(),
+  sessionPreference: z.enum(['quick', 'deep', 'mixed']).nullable().optional(),
 });
 
 // Allowed MIME types for avatar uploads
@@ -153,6 +157,84 @@ export async function userRoutes(fastify: FastifyInstance): Promise<void> {
     return reply.send({
       success: true,
       data: prefs,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ─── GET /users/onboarding-context — Adaptive onboarding path ──
+  // Phase 4: Returns user type, referrer info, and institute config
+  // to determine which onboarding screens to show and what to pre-fill.
+  //
+  // User types:
+  //   - new_user:          Full onboarding flow (default)
+  //   - referred_user:     Show referrer's stats as social proof
+  //   - institute_student: Pre-fill exam/subject from institute config
+  fastify.get('/onboarding-context', async (request: FastifyRequest, reply: FastifyReply) => {
+    const userId = request.user!.id;
+    const { ref: referralCode } = (request.query as { ref?: string }) ?? {};
+
+    let userType: 'new_user' | 'referred_user' | 'institute_student' = 'new_user';
+    let referrer: {
+      displayName: string;
+      avatarUrl: string | null;
+      statLine: string;
+    } | null = null;
+    let institute: {
+      instituteId: string;
+      instituteName: string;
+      preSelectedExams: string[];
+      preSelectedSubjects: string[];
+    } | null = null;
+
+    // Check for referral code
+    if (referralCode) {
+      try {
+        const referrerProfile = await userRepository.findById(referralCode);
+        if (referrerProfile) {
+          userType = 'referred_user';
+          referrer = {
+            displayName: referrerProfile.displayName ?? 'A friend',
+            avatarUrl: referrerProfile.avatarUrl ?? null,
+            statLine: 'Invited you to study together',
+          };
+        }
+      } catch {
+        // Invalid referral code — continue as new user
+      }
+    }
+
+    // Check for institute membership (overrides referral)
+    try {
+      const redis = getRedisClient();
+      const instituteId = await redis.get(`user_institute:${userId}`);
+      if (instituteId) {
+        const instituteData = await redis.get(`institute_config:${instituteId}`);
+        if (instituteData) {
+          try {
+            const config = JSON.parse(instituteData) as {
+              name?: string;
+              preSelectedExams?: string[];
+              preSelectedSubjects?: string[];
+            };
+            userType = 'institute_student';
+            institute = {
+              instituteId,
+              instituteName: config.name ?? 'Your Institute',
+              preSelectedExams: config.preSelectedExams ?? [],
+              preSelectedSubjects: config.preSelectedSubjects ?? [],
+            };
+          } catch {
+            // Malformed institute config — ignore
+          }
+        }
+      }
+    } catch {
+      // Redis unavailable — continue without institute context
+    }
+
+    return reply.send({
+      success: true,
+      data: { userType, referrer, institute },
       timestamp: new Date().toISOString(),
     });
   });

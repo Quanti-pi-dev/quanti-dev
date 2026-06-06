@@ -26,6 +26,7 @@ import { Typography } from '../../src/components/ui/Typography';
 import { Button } from '../../src/components/ui/Button';
 import { Skeleton } from '../../src/components/ui/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
+import { ExamPopularityBadge } from '../../src/components/onboarding/SocialProofBadge';
 
 
 interface Exam { id: string; title: string; category: string; }
@@ -214,6 +215,9 @@ function ExamCard({
         >
           {exam.title}
         </Typography>
+
+        {/* Social proof: student count */}
+        <ExamPopularityBadge examId={exam.id} delay={400 + index * 100} />
       </TouchableOpacity>
     </Animated.View>
   );

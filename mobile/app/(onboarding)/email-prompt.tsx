@@ -78,11 +78,17 @@ export default function EmailPromptScreen() {
   const currentStep = parseInt(currentStepParam ?? '3', 10);
 
   // Auto-skip if user already has a real email (not a placeholder from social login).
-  // FIX B3: Route through the subscription prompt, not directly to /(tabs),
-  // to preserve the full onboarding flow.
+  // Route to study-personality to continue the onboarding flow.
   useEffect(() => {
     if (user?.email && !user.email.includes('@placeholder.')) {
-      router.replace({ pathname: '/subscription', params: { fromOnboarding: 'true' } });
+      router.replace({
+        pathname: '/(onboarding)/study-personality' as never,
+        params: {
+          examIds: examIds ?? '',
+          selectedSubjects: selectedSubjects ?? '',
+          totalSteps: totalStepsParam ?? '4',
+        },
+      });
     }
   }, [user, router]);
 
@@ -95,7 +101,7 @@ export default function EmailPromptScreen() {
       await api.put('/auth/update-email', { email });
 
       // 2. Save preferences without marking onboarding as completed —
-      // the completion screen will do that after the subscription prompt
+      // the completion screen will do that after the mini-session
       await api.put('/users/preferences', {
         selectedExams: examIds?.split(',').filter(Boolean) ?? [],
         selectedSubjects: selectedSubjects?.split(',').filter(Boolean) ?? [],
@@ -103,8 +109,15 @@ export default function EmailPromptScreen() {
     },
     onSuccess: async () => {
       await refreshUser();
-      // Route to subscription prompt with onboarding context
-      router.push({ pathname: '/subscription', params: { fromOnboarding: 'true' } });
+      // Route to study-personality to continue onboarding flow
+      router.push({
+        pathname: '/(onboarding)/study-personality' as never,
+        params: {
+          examIds: examIds ?? '',
+          selectedSubjects: selectedSubjects ?? '',
+          totalSteps: totalStepsParam ?? '4',
+        },
+      });
     },
     onError: (err: unknown) => {
       setError(err instanceof Error ? err.message : 'Could not save your email. Please try again.');

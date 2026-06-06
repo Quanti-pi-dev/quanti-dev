@@ -24,6 +24,7 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   interpolate,
+  runOnJS,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +32,9 @@ import { useTheme } from '../theme';
 import { radius, spacing, typography, shadows } from '../theme/tokens';
 import { Typography } from './ui/Typography';
 import { RichContent } from './ui/RichContent';
+import { TypewriterText } from './ui/TypewriterText';
+import { RichTypewriter } from './ui/RichTypewriter';
+import { isRichContent } from '../utils/stripLatex';
 import { useGlowPulse, TIMING_FLIP } from '../theme/animations';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -80,6 +84,8 @@ export const FlashCard = memo(function FlashCard({
 
   const [selectedKey, setSelectedKey] = useState<'A' | 'B' | 'C' | 'D' | null>(null);
   const [answerState, setAnswerState] = useState<AnswerState>('unanswered');
+  // Track when the flip animation has fully landed so the typewriter can start
+  const [isFlipped, setIsFlipped] = useState(false);
 
   // Store timeout id to clear on unmount
   const flipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -112,10 +118,17 @@ export const FlashCard = memo(function FlashCard({
     : answerState === 'skipped' ? theme.glowSkip
     : 'transparent';
 
+  // Called on JS thread once the flip animation completes
+  const markFlipped = useCallback(() => setIsFlipped(true), []);
+
   const handleFlipToBack = useCallback(() => {
-    flip.value = withTiming(1, TIMING_FLIP);
+    setIsFlipped(false); // reset in case card was already flipped (shouldn't happen, but guard)
+    flip.value = withTiming(1, TIMING_FLIP, (finished) => {
+      'worklet';
+      if (finished) runOnJS(markFlipped)();
+    });
     pulse();
-  }, [flip, pulse]);
+  }, [flip, pulse, markFlipped]);
 
   const handleSelectOption = useCallback((key: 'A' | 'B' | 'C' | 'D') => {
     if (answerState !== 'unanswered') return;
@@ -433,9 +446,28 @@ export const FlashCard = memo(function FlashCard({
             {(explanation || explanationImageUrl) ? (
               <View style={{ gap: spacing.sm, marginTop: spacing.xs }}>
                 {explanation ? (
-                  <RichContent variant="bodySmall" color={theme.textSecondary}>
-                    {explanation}
-                  </RichContent>
+                  // Use typewriter for plain text; two-phase crossfade for LaTeX/markdown
+                  isRichContent(explanation) ? (
+                    <RichTypewriter
+                      variant="bodySmall"
+                      color={theme.textSecondary}
+                      active={isFlipped}
+                      speed={16}
+                      startDelay={180}
+                    >
+                      {explanation}
+                    </RichTypewriter>
+                  ) : (
+                    <TypewriterText
+                      variant="bodySmall"
+                      color={theme.textSecondary}
+                      active={isFlipped}
+                      speed={16}
+                      startDelay={180}
+                    >
+                      {explanation}
+                    </TypewriterText>
+                  )
                 ) : null}
                 {explanationImageUrl ? (
                   <Image

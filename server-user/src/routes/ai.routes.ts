@@ -1,13 +1,15 @@
 // ─── AI Routes ───────────────────────────────────────────────
 // Recommendations, Gemini-powered learning insights, and live card explanations.
 
+import crypto from 'node:crypto';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { z } from 'zod';
 import { requireAuth } from '../middleware/rbac.js';
 import { recommendationService } from '@kd/db';
 import { geminiGenerate } from '@kd/db';
 import { generateTargetedFeedback } from '@kd/db';
 import { getAIQuotaLimit, getAIQuotaStatus, checkAndIncrementAIQuota } from '@kd/db';
-import { getMongoDb } from '@kd/db';
+import { getMongoDb, getRedisClient } from '@kd/db';
 import { ObjectId } from 'mongodb';
 import type { Flashcard } from '@kd/shared';
 
@@ -246,6 +248,118 @@ export async function aiRoutes(fastify: FastifyInstance): Promise<void> {
       data: { feedback },
     });
   });
+  // ─── POST /ai/study-plan-preview ─────────────────────────
+  // Phase 4: AI-powered personalized study plan narrative for onboarding.
+  // Generates a 2-3 sentence personalized study narrative based on the
+  // student's exam, subjects, exam date, and study personality.
+  //
+  // This endpoint is EXEMPT from the daily AI quota — onboarding should
+  // never be gated by usage limits. Results are cached in Redis for 24h
+  // to avoid redundant AI calls for the same inputs.
+  //
+  // Psychology: Personalized plan creates commitment (Consistency Principle)
+  // and makes the data collection feel valuable (Reciprocity).
+  fastify.post('/study-plan-preview', async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = z.object({
+      examId: z.string().min(1),
+      subjects: z.array(z.string()).min(1).max(20),
+      examDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      studyPersonality: z.string().max(100).optional(),
+      dailyCardTarget: z.number().int().positive().optional(),
+    }).parse(request.body);
+
+    // ── Cache lookup ─────────────────────────────────────────
+    const cacheKey = `study_plan_preview:${crypto
+      .createHash('sha256')
+      .update(JSON.stringify(body))
+      .digest('hex')}`;
+
+    const redis = getRedisClient();
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        return reply.send({
+          success: true,
+          data: { narrative: cached, source: 'cache' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } catch {
+      // Redis unavailable — proceed without cache
+    }
+
+    // ── Resolve subject names for richer context ─────────────
+    let subjectNames: string[] = [];
+    try {
+      const db = getMongoDb();
+      const subjectDocs = await db.collection('subjects').find(
+        { _id: { $in: body.subjects.flatMap(id => {
+          try { return [new ObjectId(id)]; } catch { return []; }
+        }) } },
+        { projection: { name: 1 } },
+      ).toArray();
+      subjectNames = subjectDocs.map(d => (d['name'] as string) ?? 'Unknown');
+    } catch {
+      subjectNames = body.subjects; // Fallback to IDs if DB fails
+    }
+
+    // ── Compute days until exam ──────────────────────────────
+    let daysUntilExam = 90; // Default
+    if (body.examDate) {
+      const examDate = new Date(body.examDate);
+      const now = new Date();
+      daysUntilExam = Math.max(1, Math.ceil((examDate.getTime() - now.getTime()) / 86400000));
+    }
+
+    const dailyTarget = body.dailyCardTarget ?? 15;
+
+    // ── Build AI prompt ─────────────────────────────────────
+    const userPrompt = [
+      `Student profile:`,
+      `- Subjects: ${subjectNames.join(', ')}`,
+      `- Days until exam: ${daysUntilExam}`,
+      `- Daily study target: ${dailyTarget} cards/day`,
+      body.studyPersonality ? `- Study personality: ${body.studyPersonality}` : '',
+      '',
+      'Generate a personalized 2-3 sentence study plan recommendation.',
+    ].filter(Boolean).join('\n');
+
+    try {
+      const narrative = await geminiGenerate({
+        model: 'free/auto',
+        systemPrompt: STUDY_PLAN_SYSTEM_PROMPT,
+        userPrompt,
+        maxOutputTokens: 200,
+        temperature: 0.6,
+      });
+
+      const trimmed = narrative.trim();
+
+      // Cache for 24 hours
+      try {
+        await redis.setex(cacheKey, 86400, trimmed);
+      } catch {
+        // Cache write failure — non-critical
+      }
+
+      return reply.send({
+        success: true,
+        data: { narrative: trimmed, source: 'ai' },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      fastify.log.warn({ err }, 'Study plan AI generation failed — returning fallback');
+
+      // Fallback narrative when AI is unavailable
+      const fallback = `Your adaptive study plan is ready! With ${daysUntilExam} days until your exam and ${subjectNames.length} subjects to cover, we'll pace you at ~${dailyTarget} cards per day. Let's get started!`;
+
+      return reply.send({
+        success: true,
+        data: { narrative: fallback, source: 'fallback' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+  });
 }
 
 // ─── Prompts ─────────────────────────────────────────────────
@@ -260,3 +374,14 @@ When given a multiple-choice question and its correct answer, explain WHY that a
 - Wrap ALL mathematical expressions, variables, equations, and units in LaTeX dollar-sign delimiters.
   Use $...$ for inline math (e.g. $v = u + at$) and $$...$$ for standalone equations on their own line.
 - Examples of correct LaTeX: $F = ma$, $v^2 = u^2 + 2as$, $s = \\frac{1}{2}at^2$, $\\sqrt{2gh}$, $[LT^{-1}]$.`;
+
+const STUDY_PLAN_SYSTEM_PROMPT = `You are a friendly, expert study coach for competitive exam students.
+Given a student's subjects, days until exam, daily target, and personality type, write a personalized 2-3 sentence study plan recommendation.
+
+Rules:
+- Be warm and encouraging, not robotic.
+- Reference their specific subjects and timeline.
+- If they have a study personality, tailor advice to it (e.g. "As a Night Owl Sprinter, you'll crush short evening sessions").
+- Keep it under 60 words — this is a quick motivational snapshot, not a detailed schedule.
+- Do NOT use markdown, headers, or bullet points. Write flowing sentences.
+- Do NOT say "Based on your profile" or similar filler. Jump straight into the plan.`;

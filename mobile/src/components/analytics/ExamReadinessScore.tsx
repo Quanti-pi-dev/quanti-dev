@@ -228,18 +228,51 @@ export function ExamReadinessScore({ data }: ExamReadinessScoreProps) {
           {/* Ring */}
           <View style={{ alignItems: 'center', gap: spacing.sm }}>
             <ReadinessRing score={data.overallScore} />
-            {/* Coverage indicator */}
+            {/* Signal breakdown */}
             {data.totalTopicsInExam > 0 && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 10 }}>
-                  {data.studiedTopics} of {data.totalTopicsInExam} topics covered
-                </Typography>
-                <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 10 }}>
-                  · Retention {data.retentionScore}%
+              <View style={{ gap: 4, alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  {[
+                    { label: 'Understanding', value: data.conceptMasteryScore, icon: '🧠' },
+                    { label: 'Depth', value: data.depthScore, icon: '📊' },
+                    { label: 'Coverage', value: Math.round(data.coverageFactor * 100), icon: '📚' },
+                    { label: 'Consistency', value: data.consistencyScore, icon: '📅' },
+                    { label: 'Ability', value: data.abilityScore, icon: '⚡' },
+                  ].map(sig => (
+                    <View key={sig.label} style={{ alignItems: 'center', minWidth: 52 }}>
+                      <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 9 }}>
+                        {sig.icon} {sig.label}
+                      </Typography>
+                      <Typography
+                        variant="captionBold"
+                        color={sig.value >= 70 ? '#10B981' : sig.value >= 40 ? '#F59E0B' : '#EF4444'}
+                        style={{ fontSize: 11 }}
+                      >
+                        {sig.value}%
+                      </Typography>
+                    </View>
+                  ))}
+                </View>
+                <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 9 }}>
+                  {data.studiedTopics} of {data.totalTopicsInExam} topics studied
                 </Typography>
               </View>
             )}
           </View>
+
+          {/* Weak concepts alert */}
+          {data.weakConcepts && data.weakConcepts.length > 0 && (
+            <View style={{ backgroundColor: '#EF444410', padding: spacing.sm, borderRadius: 8, gap: 4 }}>
+              <Typography variant="captionBold" color="#EF4444" style={{ fontSize: 11 }}>
+                ⚠️ Concepts you keep struggling with:
+              </Typography>
+              {data.weakConcepts.slice(0, 3).map((wc, i) => (
+                <Typography key={i} variant="caption" color={theme.textSecondary} style={{ fontSize: 10 }}>
+                  • {wc.concept} ({wc.subjectName}) — {Math.round(wc.pMastery * 100)}% mastery
+                </Typography>
+              ))}
+            </View>
+          )}
 
           {/* Strong / Vulnerable areas */}
           <View style={{ gap: spacing.md }}>

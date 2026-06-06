@@ -40,8 +40,14 @@ export interface TopicMemoryState {
   topicName: string;
   subjectId: string;
   subjectName: string;
-  /** Estimated current retention 0–100. */
+  /** Estimated current retention 0–100 (SM-2 Ebbinghaus). */
   retentionEstimate: number;
+  /** BKT concept mastery 0–100: P(student truly understands concepts in this topic). */
+  conceptMastery: number;
+  /** Depth score 0–100: how deep the student has gone (Level 1 = surface, Level 3 = deep). */
+  depthScore: number;
+  /** Specific concept tags the student is weak on (BKT p_mastery < 0.4 with 5+ attempts). */
+  weakConcepts: string[];
   /** Days since the student last studied this topic. */
   daysSinceLastReview: number;
   /** Cards past their optimal review date. */
@@ -66,6 +72,10 @@ export interface SubjectMemoryState {
   subjectName: string;
   /** Weighted average retention across all topics 0–100. */
   retentionEstimate: number;
+  /** Average BKT concept mastery across topics 0–100. */
+  conceptMastery: number;
+  /** Average depth score across topics 0–100. */
+  depthScore: number;
   /** Topic-level breakdowns (includes not-started topics). */
   topics: TopicMemoryState[];
   /** Total overdue cards across all topics. */
@@ -95,20 +105,30 @@ export interface TopicForecast {
 }
 
 export interface ExamReadiness {
-  /** Overall readiness score 0–100, factoring in coverage. */
+  /** Overall readiness score 0–100, multi-signal tutor assessment. */
   overallScore: number;
-  /** Raw retention of studied cards 0–100 (before coverage penalty). */
-  retentionScore: number;
-  /** Syllabus coverage 0–1 (studied topics / total topics). */
+  /** BKT concept mastery component 0–100 (weight: 35%). */
+  conceptMasteryScore: number;
+  /** Depth component 0–100: have they practiced hard questions? (weight: 25%). */
+  depthScore: number;
+  /** Syllabus coverage 0–1 (studied topics / total topics) (weight: 20%). */
   coverageFactor: number;
+  /** Study consistency 0–100: active days pattern (weight: 10%). */
+  consistencyScore: number;
+  /** IRT ability match 0–100: can they handle exam-level difficulty? (weight: 10%). */
+  abilityScore: number;
+  /** IRT student ability parameter θ (-3 to +3). */
+  studentAbility: number;
   /** Topics the student has studied. */
   studiedTopics: number;
   /** Total topics in the exam syllabus. */
   totalTopicsInExam: number;
-  /** Subjects/topics the student is exam-ready in (coverage > 50% AND retention > 75%). */
+  /** Subjects exam-ready: BKT mastery ≥ 0.7, depth ≥ 50%, coverage ≥ 60%. */
   strongAreas: string[];
-  /** Subjects/topics at risk of declining or underexplored. */
+  /** Subjects at risk: low mastery or low coverage or repeated errors. */
   vulnerableAreas: string[];
+  /** Specific concept tags the student repeatedly fails. */
+  weakConcepts: { concept: string; subjectName: string; pMastery: number }[];
   /** Estimated study days to reach target readiness (85%). */
   daysToTargetReadiness: number;
   /** Change from last week's readiness score. */

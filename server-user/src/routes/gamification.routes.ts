@@ -157,6 +157,107 @@ export async function gamificationRoutes(fastify: FastifyInstance): Promise<void
     });
   });
 
+  // ─── POST /gamify/starter-coins — Award onboarding starter coins ──
+  // Idempotent: only awards once per user (Redis guard key).
+  // Called by the mini-session screen after a student completes
+  // their first 3-card challenge during onboarding.
+  fastify.post('/starter-coins', async (request: FastifyRequest, reply: FastifyReply) => {
+    const userId = request.user!.id;
+    const redis = getRedisClient();
+    const guardKey = `starter_coins:${userId}`;
+
+    // Idempotent guard — only award once per user
+    const alreadyAwarded = await redis.get(guardKey);
+    if (alreadyAwarded) {
+      return reply.send({
+        success: true,
+        data: { awarded: false, message: 'Starter coins already awarded' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const body = request.body as { amount?: number; reason?: string } | undefined;
+    const amount = Math.min(Math.max(body?.amount ?? 5, 1), 20); // Cap at 20
+
+    const balance = await gamificationRepository.earnCoins(userId, amount, 'onboarding_starter');
+    await redis.set(guardKey, '1'); // No TTL — permanent
+
+    return reply.send({
+      success: true,
+      data: { awarded: true, amount, balance },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ─── POST /gamify/starter-pack — Award full onboarding starter pack ──
+  // Phase 2: Awards 10 coins + 1 streak freeze + "First Steps" badge.
+  // Idempotent via Redis guard key — awards once per user lifetime.
+  // Called by the completion screen after the mini-session + profile reveal.
+  //
+  // Psychology: Endowed Progress Effect (Nunes & Drèze) — giving students
+  // real inventory items creates switching cost and investment.
+  fastify.post('/starter-pack', async (request: FastifyRequest, reply: FastifyReply) => {
+    const userId = request.user!.id;
+    const redis = getRedisClient();
+    const guardKey = `starter_pack:${userId}`;
+
+    // Idempotent guard — only award once per user
+    const alreadyAwarded = await redis.get(guardKey);
+    if (alreadyAwarded) {
+      return reply.send({
+        success: true,
+        data: { awarded: false, message: 'Starter pack already claimed' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const rewards: { type: string; detail: string }[] = [];
+
+    try {
+      // 1. Award 10 coins
+      await gamificationRepository.earnCoins(userId, 10, 'starter_pack');
+      rewards.push({ type: 'coins', detail: '10' });
+
+      // 2. Award streak freeze (add 1 to user's inventory)
+      await redis.incr(`streak_freeze:${userId}`);
+      rewards.push({ type: 'streak_freeze', detail: '1' });
+
+      // 3. Award "First Steps" badge
+      try {
+        await gamificationRepository.awardBadge(userId, 'first_steps');
+      } catch {
+        // Badge may already exist or awardBadge may not accept these params — non-critical
+      }
+      rewards.push({ type: 'badge', detail: 'First Steps' });
+
+      // Mark as awarded permanently
+      await redis.set(guardKey, '1');
+
+      // Queue celebration cascade
+      const celebration = {
+        steps: [
+          { type: 'confetti', durationMs: 1500, payload: {} },
+          { type: 'coin_drop', durationMs: 2000, payload: { coins: 10 } },
+          { type: 'badge_reveal', durationMs: 2500, payload: { icon: 'footsteps-outline', label: 'First Steps' } },
+        ],
+      };
+      await redis.set(`celebration_queue:${userId}`, JSON.stringify(celebration));
+
+      return reply.send({
+        success: true,
+        data: { awarded: true, rewards },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      fastify.log.error(err, 'starter-pack award failed');
+      return reply.status(500).send({
+        success: false,
+        error: { code: 'STARTER_PACK_ERROR', message: 'Failed to award starter pack' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+  });
+
   // ─── GET /gamify/flash-event/active — Active flash events ──
   // Returns the currently active flash event (if any) for the homepage
   // blitz banner on the mobile client.

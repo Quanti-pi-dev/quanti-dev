@@ -23,6 +23,7 @@ import { WebView } from 'react-native-webview';
 import { useTheme } from '../../theme';
 import { typography as tokens } from '../../theme/tokens';
 import { Typography } from './Typography';
+import { stripLatex, isRichContent } from '../../utils/stripLatex';
 
 // ─── Global Height Cache ──────────────────────────────────────
 // Once a piece of content has been rendered and measured, cache
@@ -49,51 +50,15 @@ interface RichContentProps {
   /** Accepts both TextStyle (for Typography fallback) and ViewStyle (for WebView wrapper) */
   style?: StyleProp<TextStyle & ViewStyle>;
   children: string;
+  /**
+   * Called once the WebView has fully rendered and measured its content.
+   * Used by RichTypewriter to know when to trigger the Phase-2 crossfade.
+   */
+  onReady?: () => void;
 }
 
 // ─── Constants ────────────────────────────────────────────────
 
-// Detect LaTeX ($...$ or $$...$$) or markdown (bold, italic, lists)
-const HAS_RICH = /\$\$.+?\$\$|\$.+?\$|\*\*.+?\*\*|\*.+?\*|^\s*[-*]\s/ms;
-
-function containsRichContent(text: string): boolean {
-  if (!text || typeof text !== 'string') return false;
-  return HAS_RICH.test(text);
-}
-
-/** Strip LaTeX $ delimiters for readable plain-text fallback. */
-function stripLatex(text: string): string {
-  if (!text || typeof text !== 'string') return '';
-  return text
-    .replace(/\$\$(.*?)\$\$/gs, '$1')   // $$...$$ → content
-    .replace(/\$(.*?)\$/g, '$1')         // $...$ → content
-    .replace(/\\text\{(.*?)\}/g, '$1')   // \text{eV} → eV
-    .replace(/\\frac\{(.*?)\}\{(.*?)\}/g, '($1/$2)')  // \frac{a}{b} → (a/b)
-    .replace(/\\times/g, '×')           // \times → ×
-    .replace(/\\pm/g, '±')              // \pm → ±
-    .replace(/\\leq/g, '≤')             // \leq → ≤
-    .replace(/\\geq/g, '≥')             // \geq → ≥
-    .replace(/\\neq/g, '≠')             // \neq → ≠
-    .replace(/\\rightarrow/g, '→')      // \rightarrow → →
-    .replace(/\\lambda/g, 'λ')          // \lambda → λ
-    .replace(/\\nu/g, 'ν')              // \nu → ν
-    .replace(/\\pi/g, 'π')              // \pi → π
-    .replace(/\\alpha/g, 'α')           // \alpha → α
-    .replace(/\\beta/g, 'β')            // \beta → β
-    .replace(/\\gamma/g, 'γ')           // \gamma → γ
-    .replace(/\\theta/g, 'θ')           // \theta → θ
-    .replace(/\\omega/g, 'ω')           // \omega → ω
-    .replace(/\\Delta/g, 'Δ')           // \Delta → Δ
-    .replace(/\\infty/g, '∞')           // \infty → ∞
-    .replace(/\\\,/g, ' ')              // thin space → space
-    .replace(/\\\\/g, '')               // stray backslashes
-    .replace(/\\([a-zA-Z]+)/g, '$1')    // remaining \commands → just the name
-    .replace(/[{}]/g, '')               // remove braces
-    .replace(/\^/g, '^')                // keep carets readable
-    .replace(/_/g, '_')                 // keep underscores readable
-    .replace(/\s{2,}/g, ' ')            // collapse multiple spaces
-    .trim();
-}
 
 // Map variant → font size in px (matches Typography token sizes)
 const VARIANT_FONT_SIZE: Record<VariantKey, number> = {
@@ -236,6 +201,7 @@ export const RichContent = memo(function RichContent({
   align = 'left',
   style,
   children,
+  onReady,
 }: RichContentProps) {
   const { theme } = useTheme();
 
@@ -245,7 +211,11 @@ export const RichContent = memo(function RichContent({
   }
 
   // Fast-path: plain text → native Typography, zero WebView overhead
-  if (!containsRichContent(children)) {
+  if (!isRichContent(children)) {
+    // Plain text is rendered synchronously — signal ready on next tick
+    // so callers (RichTypewriter) don't need to special-case this path.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useEffect(() => { onReady?.(); }, [onReady]);
     return (
       // Cast: ViewStyle & TextStyle overlap for common layout props (flex, width, etc.)
       <Typography variant={variant} color={color} align={align} style={style as TextStyle}>
@@ -262,6 +232,7 @@ export const RichContent = memo(function RichContent({
       color={color}
       align={align}
       style={style}
+      onReady={onReady}
     />
   );
 });
@@ -275,9 +246,11 @@ interface RichWebViewProps {
   color?: string;
   align: string;
   style?: StyleProp<TextStyle & ViewStyle>;
+  /** Forwarded from RichContentProps — called when WebView reports its height. */
+  onReady?: () => void;
 }
 
-function RichWebView({ content, variant, fontSize, color, align, style }: RichWebViewProps) {
+function RichWebView({ content, variant, fontSize, color, align, style, onReady }: RichWebViewProps) {
   const { theme } = useTheme();
   const resolvedColor = color ?? theme.text;
 
@@ -317,6 +290,9 @@ function RichWebView({ content, variant, fontSize, color, align, style }: RichWe
 
   const source = useMemo(() => ({ html }), [html]);
 
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+
   const handleMessage = useCallback((event: { nativeEvent: { data: string } }) => {
     try {
       const msg = JSON.parse(event.nativeEvent.data) as { type: string; value: number };
@@ -328,6 +304,8 @@ function RichWebView({ content, variant, fontSize, color, align, style }: RichWe
         // PERF: Cache height for instant render on revisit
         heightCache.set(cacheKey, h);
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        // Notify RichTypewriter that WebView is ready for crossfade
+        onReadyRef.current?.();
       }
     } catch {
       // ignore malformed messages

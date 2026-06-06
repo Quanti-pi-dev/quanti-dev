@@ -19,7 +19,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
 import { spacing, radius } from '../../theme/tokens';
 import { Typography } from '../ui/Typography';
-import { RichContent } from '../ui/RichContent';
+import { TypewriterText } from '../ui/TypewriterText';
+import { RichTypewriter } from '../ui/RichTypewriter';
+import { isRichContent } from '../../utils/stripLatex';
 import { useExplainCard, useExplainWrong } from '../../hooks/useAI';
 import { useSubscriptionGate } from '../../hooks/useSubscriptionGate';
 import type { TargetedFeedbackResponse } from '../../services/api-contracts';
@@ -135,6 +137,20 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
   const isLoadingLive = explainCard.isPending || explainWrong.isPending;
   const isOpen = showDeepDive;
   const hasTargeted = !!targetedFeedback;
+
+  // ── Typewriter active signals ──────────────────────────────
+  // Each fires true exactly once per open: when loading finishes and text is set.
+  // Resetting on cardIndex is handled by the useEffect above (setShowDeepDive(false)).
+
+  // Generic explanation: active as soon as the panel opens with text and no loader
+  const genericActive = isOpen && !isLoadingLive && !hasTargeted && displayText.length > 0;
+
+  // Targeted feedback: active when targeted data arrives
+  const targetedExplActive = isOpen && !isLoadingLive && hasTargeted;
+
+  // Misconception (plain, shorter) — starts right away; memory trick staggers 300ms
+  // We drive both from the same `targetedExplActive` signal; TypewriterText
+  // handles its own startDelay per instance.
 
   return (
     <View style={{ paddingHorizontal: spacing.xl, paddingBottom: spacing.sm }}>
@@ -271,15 +287,42 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                     <Typography variant="captionBold" color="#EF4444" style={{ marginBottom: 2 }}>
                       What went wrong
                     </Typography>
-                    <Typography variant="bodySmall" color={theme.textSecondary}>
+                    <TypewriterText
+                      variant="bodySmall"
+                      color={theme.textSecondary}
+                      active={targetedExplActive}
+                      speed={20}
+                      startDelay={60}
+                    >
                       {targetedFeedback.misconception}
-                    </Typography>
+                    </TypewriterText>
                   </View>
 
                   {/* Targeted explanation */}
-                  <RichContent variant="bodySmall" color={theme.textSecondary}>
-                    {targetedFeedback.explanation}
-                  </RichContent>
+                  {(() => {
+                    const isRich = isRichContent(targetedFeedback.explanation);
+                    return isRich ? (
+                      <RichTypewriter
+                        variant="bodySmall"
+                        color={theme.textSecondary}
+                        active={targetedExplActive}
+                        speed={14}
+                        startDelay={120}
+                      >
+                        {targetedFeedback.explanation}
+                      </RichTypewriter>
+                    ) : (
+                      <TypewriterText
+                        variant="bodySmall"
+                        color={theme.textSecondary}
+                        active={targetedExplActive}
+                        speed={14}
+                        startDelay={120}
+                      >
+                        {targetedFeedback.explanation}
+                      </TypewriterText>
+                    );
+                  })()}
 
                   {/* Memory trick */}
                   {targetedFeedback.memoryTrick && (
@@ -298,21 +341,46 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                         <Typography variant="captionBold" color="#10B981">
                           Memory Trick
                         </Typography>
-                        <Typography variant="bodySmall" color={theme.textSecondary}>
+                        <TypewriterText
+                          variant="bodySmall"
+                          color={theme.textSecondary}
+                          active={targetedExplActive}
+                          speed={20}
+                          startDelay={420}
+                        >
                           {targetedFeedback.memoryTrick}
-                        </Typography>
+                        </TypewriterText>
                       </View>
                     </View>
                   )}
                 </View>
               ) : (
                 // ── Generic explanation ──────────────────────────
-                <RichContent
-                  variant="bodySmall"
-                  color={theme.textSecondary}
-                >
-                  {displayText || 'No additional explanation is available for this card.'}
-                </RichContent>
+                (() => {
+                  const text = displayText || 'No additional explanation is available for this card.';
+                  const isRich = isRichContent(text);
+                  return isRich ? (
+                    <RichTypewriter
+                      variant="bodySmall"
+                      color={theme.textSecondary}
+                      active={genericActive}
+                      speed={14}
+                      startDelay={100}
+                    >
+                      {text}
+                    </RichTypewriter>
+                  ) : (
+                    <TypewriterText
+                      variant="bodySmall"
+                      color={theme.textSecondary}
+                      active={genericActive}
+                      speed={14}
+                      startDelay={100}
+                    >
+                      {text}
+                    </TypewriterText>
+                  );
+                })()
               )}
             </View>
 

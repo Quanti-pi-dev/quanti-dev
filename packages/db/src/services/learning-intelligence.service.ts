@@ -150,6 +150,176 @@ async function getExamSyllabus(selectedExams: string[]): Promise<SyllabusSubject
   return result;
 }
 
+// ─── Intelligence Data Loaders ───────────────────────────────
+// These read data from BKT, IRT, error journal, and level progress
+// that already exists in Redis but was previously ignored.
+
+interface ConceptMasteryData {
+  tag: string;
+  pMastery: number;
+  totalAttempts: number;
+  correctAttempts: number;
+}
+
+/** Load all BKT concept mastery data for a user. */
+async function loadConceptMastery(userId: string): Promise<ConceptMasteryData[]> {
+  const redis = getRedisClient();
+  try {
+    const keys = await redis.smembers(`concept_mastery_keys:${userId}`);
+    if (keys.length === 0) return [];
+
+    const pipeline = redis.pipeline();
+    for (const tag of keys) {
+      pipeline.hgetall(`concept_mastery:${userId}:${tag}`);
+    }
+    const results = await pipeline.exec();
+
+    const data: ConceptMasteryData[] = [];
+    for (let i = 0; i < keys.length; i++) {
+      const [err, raw] = results?.[i] ?? [null, {}];
+      const d = (!err && raw ? raw : {}) as Record<string, string>;
+      if (d['p_mastery']) {
+        data.push({
+          tag: keys[i]!,
+          pMastery: parseFloat(d['p_mastery']),
+          totalAttempts: parseInt(d['total_attempts'] ?? '0', 10),
+          correctAttempts: parseInt(d['correct_attempts'] ?? '0', 10),
+        });
+      }
+    }
+    return data;
+  } catch (err) {
+    log.warn({ err }, 'Failed to load concept mastery');
+    return [];
+  }
+}
+
+/** Load IRT student ability θ. */
+async function loadStudentAbilityTheta(userId: string): Promise<number> {
+  const redis = getRedisClient();
+  try {
+    const data = await redis.hgetall(`student_ability:${userId}`);
+    if (data['theta']) return parseFloat(data['theta']);
+    const correct = parseInt(data['correct'] ?? '0', 10);
+    const total = parseInt(data['total'] ?? '0', 10);
+    if (total >= 5) {
+      const p = Math.max(0.01, Math.min(0.99, correct / total));
+      return Math.max(-3, Math.min(3, Math.log(p / (1 - p))));
+    }
+  } catch (err) {
+    log.warn({ err }, 'Failed to load student ability');
+  }
+  return 0; // average ability
+}
+
+/** Load error journal — concepts the student repeatedly gets wrong. */
+async function loadErrorPatterns(userId: string): Promise<Map<string, number>> {
+  const redis = getRedisClient();
+  const errorCounts = new Map<string, number>();
+  try {
+    const entries = await redis.zrevrange(`error_journal:${userId}`, 0, 99);
+    for (const entry of entries) {
+      try {
+        const data = JSON.parse(entry) as { cardId?: string; topicSlug?: string; tags?: string[] };
+        if (data.tags) {
+          for (const tag of data.tags) {
+            errorCounts.set(tag, (errorCounts.get(tag) ?? 0) + 1);
+          }
+        }
+        if (data.topicSlug) {
+          errorCounts.set(`topic:${data.topicSlug}`, (errorCounts.get(`topic:${data.topicSlug}`) ?? 0) + 1);
+        }
+      } catch { /* skip malformed */ }
+    }
+  } catch (err) {
+    log.warn({ err }, 'Failed to load error patterns');
+  }
+  return errorCounts;
+}
+
+interface LevelDepthData {
+  topicSlug: string;
+  subjectId: string;
+  levels: Map<string, { correct: number; total: number }>;
+}
+
+/** Load level progression depth per topic. */
+async function loadLevelDepth(userId: string): Promise<Map<string, LevelDepthData>> {
+  const redis = getRedisClient();
+  const depthMap = new Map<string, LevelDepthData>();
+  try {
+    const members = await redis.smembers(`level_progress_keys:${userId}`);
+    if (members.length === 0) return depthMap;
+
+    const pipeline = redis.pipeline();
+    const validMembers: string[] = [];
+    for (const member of members) {
+      const seg = member.split(':');
+      if (seg.length !== 4) continue;
+      validMembers.push(member);
+      const [examId, subjectId, topicSlug, level] = seg as [string, string, string, string];
+      pipeline.hgetall(`level_progress:${userId}:${examId}:${subjectId}:${topicSlug}:${level}`);
+    }
+    const results = await pipeline.exec();
+
+    for (let i = 0; i < validMembers.length; i++) {
+      const seg = validMembers[i]!.split(':');
+      const [, subjectId, topicSlug, level] = seg as [string, string, string, string];
+      const [err, raw] = results?.[i] ?? [null, {}];
+      const d = (!err && raw ? raw : {}) as Record<string, string>;
+
+      const key = `${subjectId}:${topicSlug}`;
+      if (!depthMap.has(key)) {
+        depthMap.set(key, { topicSlug: topicSlug!, subjectId: subjectId!, levels: new Map() });
+      }
+      depthMap.get(key)!.levels.set(level!, {
+        correct: parseInt(d['correct'] ?? '0', 10),
+        total: parseInt(d['total'] ?? '0', 10),
+      });
+    }
+  } catch (err) {
+    log.warn({ err }, 'Failed to load level depth');
+  }
+  return depthMap;
+}
+
+/**
+ * Compute depth score 0–100 from level completion rates.
+ * Level 1 = 15%, Level 2 = 30%, Level 3 = 55% weight.
+ */
+function computeDepthScore(levels: Map<string, { correct: number; total: number }>): number {
+  const LEVEL_WEIGHTS: Record<string, number> = { '1': 0.15, '2': 0.30, '3': 0.55 };
+  const UNLOCK_THRESHOLD = 30;
+  let score = 0;
+
+  for (const [level, { correct }] of levels) {
+    const weight = LEVEL_WEIGHTS[level] ?? 0.1;
+    const completion = Math.min(1, correct / UNLOCK_THRESHOLD);
+    score += weight * completion;
+  }
+
+  return Math.round(score * 100);
+}
+
+/** Compute consistency score 0–100 from recent active study days. */
+async function computeConsistencyScore(userId: string): Promise<number> {
+  const pg = getPostgresPool();
+  try {
+    const result = await pg.query(
+      `SELECT COUNT(DISTINCT started_at::date) AS active_days
+       FROM study_sessions
+       WHERE user_id = (SELECT id FROM users WHERE firebase_uid = $1)
+         AND started_at >= NOW() - INTERVAL '14 days'`,
+      [userId],
+    );
+    const activeDays = parseInt(result.rows[0]?.active_days ?? '0', 10);
+    // 14 days window: 10+ days = 100, 7 days = 70, 3 days = 30, 0 = 0
+    return Math.min(100, Math.round((activeDays / 10) * 100));
+  } catch {
+    return 0;
+  }
+}
+
 // ─── Learning Profile Builder ────────────────────────────────
 
 export async function buildLearningProfile(userId: string, selectedExams?: string[]): Promise<LearningProfile> {
@@ -169,15 +339,30 @@ export async function buildLearningProfile(userId: string, selectedExams?: strin
   // ── Fetch syllabus for coverage computation ──
   const syllabus = await getExamSyllabus(selectedExams ?? []);
 
-  // ── Cache miss: full computation ──
-  const [knowledgeHealth, velocity, cardStates] = await Promise.all([
-    buildKnowledgeHealth(userId, syllabus),
+  // ── Load ALL intelligence signals in parallel ──
+  const [
+    knowledgeHealthBase, velocity, cardStates,
+    conceptMasteryAll, studentTheta, errorPatterns, levelDepth, consistency,
+  ] = await Promise.all([
+    buildKnowledgeHealthBase(userId, syllabus),
     buildLearningVelocity(userId),
     getAllCardMemoryStates(userId),
+    loadConceptMastery(userId),
+    loadStudentAbilityTheta(userId),
+    loadErrorPatterns(userId),
+    loadLevelDepth(userId),
+    computeConsistencyScore(userId),
   ]);
 
+  // ── Enrich knowledge health with BKT, depth, and error data ──
+  const knowledgeHealth = enrichWithIntelligence(
+    knowledgeHealthBase, conceptMasteryAll, levelDepth, errorPatterns,
+  );
+
   const topicForecasts = buildTopicForecasts(knowledgeHealth);
-  const examReadiness = buildExamReadiness(knowledgeHealth, velocity, syllabus);
+  const examReadiness = buildExamReadiness(
+    knowledgeHealth, velocity, syllabus, studentTheta, consistency, conceptMasteryAll,
+  );
   const studyPlan = buildStudyPlan(knowledgeHealth, topicForecasts, userId);
 
   const totalOverdueCards = knowledgeHealth.reduce((s, sub) => s + sub.totalOverdue, 0);
@@ -234,7 +419,7 @@ async function getAllCardMemoryStates(userId: string): Promise<CardMemoryState[]
 
 // ─── Knowledge Health ────────────────────────────────────────
 
-async function buildKnowledgeHealth(userId: string, syllabus: SyllabusSubject[]): Promise<SubjectMemoryState[]> {
+async function buildKnowledgeHealthBase(userId: string, syllabus: SyllabusSubject[]): Promise<SubjectMemoryState[]> {
   const redis = getRedisClient();
   const cardIds = await redis.smembers(`card_memory_keys:${userId}`);
 
@@ -339,6 +524,9 @@ async function buildKnowledgeHealth(userId: string, syllabus: SyllabusSubject[])
       topicSlug, topicName, subjectId,
       subjectName: nameMap.get(subjectId) ?? subjectId,
       retentionEstimate: avgRetention,
+      conceptMastery: 0,  // filled by enrichWithIntelligence
+      depthScore: 0,       // filled by enrichWithIntelligence
+      weakConcepts: [],    // filled by enrichWithIntelligence
       daysSinceLastReview: daysSinceLast,
       cardsOverdue: overdue, cardsDueSoon: dueSoon,
       totalCards: cards.length,
@@ -387,6 +575,9 @@ async function buildKnowledgeHealth(userId: string, syllabus: SyllabusSubject[])
         subjectId,
         subjectName: nameMap.get(subjectId) ?? subjectId,
         retentionEstimate: 0,
+        conceptMastery: 0,
+        depthScore: 0,
+        weakConcepts: [],
         daysSinceLastReview: 0,
         cardsOverdue: 0, cardsDueSoon: 0,
         totalCards: 0,
@@ -420,6 +611,8 @@ async function buildKnowledgeHealth(userId: string, syllabus: SyllabusSubject[])
       subjectId,
       subjectName: nameMap.get(subjectId) ?? subjectId,
       retentionEstimate: subjectRetention,
+      conceptMastery: 0,  // filled by enrichWithIntelligence
+      depthScore: 0,       // filled by enrichWithIntelligence
       topics,
       totalOverdue: subjectOverdue,
       totalDueSoon: subjectDueSoon,
@@ -429,6 +622,86 @@ async function buildKnowledgeHealth(userId: string, syllabus: SyllabusSubject[])
   }
 
   subjects.sort((a, b) => a.retentionEstimate - b.retentionEstimate);
+  return subjects;
+}
+
+// ─── Intelligence Enrichment ─────────────────────────────────
+// Overlays BKT concept mastery, level depth, and error patterns
+// onto the base knowledge health data. This is the "tutor brain."
+
+function enrichWithIntelligence(
+  subjects: SubjectMemoryState[],
+  conceptMasteryAll: ConceptMasteryData[],
+  levelDepth: Map<string, LevelDepthData>,
+  errorPatterns: Map<string, number>,
+): SubjectMemoryState[] {
+
+  for (const subject of subjects) {
+    let subjectMasterySum = 0;
+    let subjectMasteryCount = 0;
+    let subjectDepthSum = 0;
+    let subjectDepthCount = 0;
+
+    for (const topic of subject.topics) {
+      if (topic.urgency === 'not-started') continue;
+
+      // ── BKT Concept Mastery ──
+      // Find all concept tags that match this topic (tags often include topic slug)
+      const topicConcepts = conceptMasteryAll.filter(c =>
+        c.tag.includes(topic.topicSlug) ||
+        c.tag.startsWith(`${subject.subjectId}:`) && c.tag.includes(topic.topicSlug)
+      );
+
+      if (topicConcepts.length > 0) {
+        const avgMastery = topicConcepts.reduce((s, c) => s + c.pMastery, 0) / topicConcepts.length;
+        topic.conceptMastery = Math.round(avgMastery * 100);
+
+        // Identify weak concepts: p_mastery < 0.4 with 5+ attempts
+        topic.weakConcepts = topicConcepts
+          .filter(c => c.pMastery < 0.4 && c.totalAttempts >= 5)
+          .map(c => c.tag);
+      } else {
+        // Fallback: use retention estimate as rough proxy
+        topic.conceptMastery = topic.retentionEstimate;
+      }
+
+      // ── Level Depth Score ──
+      const depthKey = `${subject.subjectId}:${topic.topicSlug}`;
+      const depth = levelDepth.get(depthKey);
+      if (depth) {
+        topic.depthScore = computeDepthScore(depth.levels);
+      }
+
+      // ── Error Pattern Enrichment ──
+      const topicErrors = errorPatterns.get(`topic:${topic.topicSlug}`) ?? 0;
+      if (topicErrors >= 3 && topic.urgency !== 'critical') {
+        // Promote urgency if student keeps failing this topic
+        topic.urgency = 'review-soon';
+      }
+
+      // ── Refine urgency using concept mastery (tutor-grade) ──
+      // A tutor wouldn't call something "mastered" if BKT says < 0.7
+      if (topic.urgency === 'mastered' && topic.conceptMastery < 70) {
+        topic.urgency = 'stable'; // downgrade: they can recall but don't deeply understand
+      }
+      // A tutor wouldn't call something "stable" if depth is very low
+      if (topic.urgency === 'stable' && topic.depthScore < 20 && topic.totalCards > 5) {
+        topic.urgency = 'review-soon'; // they only did easy questions
+      }
+
+      subjectMasterySum += topic.conceptMastery;
+      subjectMasteryCount++;
+      subjectDepthSum += topic.depthScore;
+      subjectDepthCount++;
+    }
+
+    // Subject-level aggregations
+    subject.conceptMastery = subjectMasteryCount > 0
+      ? Math.round(subjectMasterySum / subjectMasteryCount) : 0;
+    subject.depthScore = subjectDepthCount > 0
+      ? Math.round(subjectDepthSum / subjectDepthCount) : 0;
+  }
+
   return subjects;
 }
 
@@ -574,73 +847,114 @@ function buildExamReadiness(
   health: SubjectMemoryState[],
   velocity: LearningVelocity,
   syllabus: SyllabusSubject[],
+  studentTheta: number,
+  consistencyScore: number,
+  conceptMasteryAll: ConceptMasteryData[],
 ): ExamReadiness {
   const empty: ExamReadiness = {
-    overallScore: 0, retentionScore: 0, coverageFactor: 0,
-    studiedTopics: 0, totalTopicsInExam: 0,
-    strongAreas: [], vulnerableAreas: [],
+    overallScore: 0, conceptMasteryScore: 0, depthScore: 0,
+    coverageFactor: 0, consistencyScore: 0, abilityScore: 0,
+    studentAbility: 0, studiedTopics: 0, totalTopicsInExam: 0,
+    strongAreas: [], vulnerableAreas: [], weakConcepts: [],
     daysToTargetReadiness: 0, weeklyDelta: 0,
   };
   if (health.length === 0) return empty;
 
-  // Compute coverage: studied topics vs total topics in syllabus
+  // ── Compute each signal ──
+
   const totalTopicsInExam = syllabus.reduce((s, sub) => s + sub.topics.length, 0) || 1;
   let studiedTopicCount = 0;
-  let totalStudiedCards = 0;
-  let weightedRetention = 0;
+  let masterySum = 0, depthSum = 0;
+  let masteryCount = 0, depthCount = 0;
   const strong: string[] = [];
   const vulnerable: string[] = [];
 
   for (const subject of health) {
     const studied = subject.topics.filter(t => t.urgency !== 'not-started');
-    const subjectStudiedCards = studied.reduce((s, t) => s + t.totalCards, 0);
     studiedTopicCount += studied.length;
-    totalStudiedCards += subjectStudiedCards;
-    weightedRetention += subject.retentionEstimate * subjectStudiedCards;
 
-    // Strong = coverage > 50% AND retention > 75%
+    for (const t of studied) {
+      masterySum += t.conceptMastery;
+      masteryCount++;
+      depthSum += t.depthScore;
+      depthCount++;
+    }
+
+    // Strong = BKT mastery ≥ 70, depth ≥ 50%, coverage ≥ 60%, no weak concepts
     const subjectCoverage = subject.totalTopicsInSubject > 0
-      ? subject.studiedTopics / subject.totalTopicsInSubject
-      : 0;
-    if (subject.retentionEstimate >= 75 && subjectCoverage >= 0.5) {
+      ? subject.studiedTopics / subject.totalTopicsInSubject : 0;
+    const hasWeaks = subject.topics.some(t => t.weakConcepts.length > 0);
+
+    if (subject.conceptMastery >= 70 && subject.depthScore >= 50 && subjectCoverage >= 0.6 && !hasWeaks) {
       strong.push(subject.subjectName);
-    } else if (subject.retentionEstimate < 60 || subjectCoverage < 0.3) {
+    } else if (subject.conceptMastery < 50 || subjectCoverage < 0.3 || subject.depthScore < 20) {
       vulnerable.push(subject.subjectName);
     }
   }
 
-  // Raw retention of studied material
-  const retentionScore = totalStudiedCards > 0
-    ? Math.round(weightedRetention / totalStudiedCards)
-    : 0;
+  // Signal 1: Concept Mastery (35%) — do they understand the material?
+  const conceptMasteryScore = masteryCount > 0 ? Math.round(masterySum / masteryCount) : 0;
 
-  // Coverage factor: what fraction of the syllabus has been touched
+  // Signal 2: Depth Score (25%) — have they practiced hard questions?
+  const depthScoreAvg = depthCount > 0 ? Math.round(depthSum / depthCount) : 0;
+
+  // Signal 3: Coverage (20%) — have they seen enough topics?
   const coverageFactor = Math.min(1, studiedTopicCount / totalTopicsInExam);
+  const coverageScore = Math.round(coverageFactor * 100);
 
-  // Overall readiness = retention weighted by coverage
-  // At 100% coverage, score = retention. At 10% coverage, score ≈ retention * 0.32
-  // Formula: score = retention × coverage^0.5 (square root softens the penalty)
-  const coverageWeight = Math.sqrt(coverageFactor);
-  const overallScore = Math.round(retentionScore * coverageWeight);
+  // Signal 4: Consistency (10%) — are they studying regularly?
+  // Already computed by computeConsistencyScore()
 
-  // Days to target: factor in both retention gap and coverage gap
+  // Signal 5: Ability Match (10%) — can they handle exam difficulty?
+  // θ ranges from -3 (weak) to +3 (strong). Map to 0-100.
+  // θ = 0 (average) → 50, θ = 1.5 → 85, θ = -1.5 → 15
+  const abilityScore = Math.round(Math.min(100, Math.max(0, (studentTheta + 3) / 6 * 100)));
+
+  // ── Weighted overall score ──
+  const overallScore = Math.round(
+    0.35 * conceptMasteryScore +
+    0.25 * depthScoreAvg +
+    0.20 * coverageScore +
+    0.10 * consistencyScore +
+    0.10 * abilityScore
+  );
+
+  // ── Weak concepts extraction ──
+  const weakConcepts = conceptMasteryAll
+    .filter(c => c.pMastery < 0.4 && c.totalAttempts >= 5)
+    .sort((a, b) => a.pMastery - b.pMastery)
+    .slice(0, 10)
+    .map(c => {
+      // Try to find subject name from health data
+      const matchingSub = health.find(s => s.topics.some(t => c.tag.includes(t.topicSlug)));
+      return {
+        concept: c.tag,
+        subjectName: matchingSub?.subjectName ?? 'Unknown',
+        pMastery: Math.round(c.pMastery * 100) / 100,
+      };
+    });
+
+  // ── Days to target ──
   const targetScore = 85;
   const deficit = Math.max(0, targetScore - overallScore);
-  // Estimate: user covers ~2 new topics per study day on average
-  const topicsCovered = studiedTopicCount;
-  const topicsRemaining = totalTopicsInExam - topicsCovered;
+  const topicsRemaining = totalTopicsInExam - studiedTopicCount;
   const daysForCoverage = topicsRemaining > 0 ? Math.ceil(topicsRemaining / 2) : 0;
-  const daysForRetention = velocity.cardsPerDay > 0 ? Math.ceil(deficit / 3) : 0;
-  const daysToTarget = Math.max(daysForCoverage, daysForRetention);
+  const daysForMastery = velocity.cardsPerDay > 0 ? Math.ceil(deficit / 2) : 0;
+  const daysToTarget = Math.max(daysForCoverage, daysForMastery);
 
   return {
     overallScore,
-    retentionScore,
+    conceptMasteryScore,
+    depthScore: depthScoreAvg,
     coverageFactor: Math.round(coverageFactor * 100) / 100,
+    consistencyScore,
+    abilityScore,
+    studentAbility: Math.round(studentTheta * 100) / 100,
     studiedTopics: studiedTopicCount,
     totalTopicsInExam,
     strongAreas: strong,
     vulnerableAreas: vulnerable,
+    weakConcepts,
     daysToTargetReadiness: daysToTarget,
     weeklyDelta: velocity.accuracyDelta,
   };

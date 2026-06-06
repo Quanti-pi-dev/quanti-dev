@@ -26,7 +26,9 @@ export default function OnboardingLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="subjects" />
       <Stack.Screen name="exam-goals" />
+      <Stack.Screen name="study-personality" />
       <Stack.Screen name="email-prompt" />
+      <Stack.Screen name="mini-session" options={{ animation: 'fade', gestureEnabled: false }} />
       <Stack.Screen name="complete" options={{ animation: 'fade', gestureEnabled: false }} />
     </Stack>
   );

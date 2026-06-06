@@ -297,7 +297,7 @@ export default function ExamGoalsScreen() {
   const handleContinue = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push({
-      pathname: '/(onboarding)/complete',
+      pathname: '/(onboarding)/mini-session',
       params: {
         examIds: examIds ?? '',
         selectedSubjects: selectedSubjects ?? '',
@@ -312,7 +312,7 @@ export default function ExamGoalsScreen() {
   const handleSkip = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push({
-      pathname: '/(onboarding)/complete',
+      pathname: '/(onboarding)/mini-session',
       params: {
         examIds: examIds ?? '',
         selectedSubjects: selectedSubjects ?? '',
