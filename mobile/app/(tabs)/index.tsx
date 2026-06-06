@@ -27,6 +27,12 @@ import { Skeleton } from '../../src/components/ui/Skeleton';
 import { ExamCard } from '../../src/components/ExamCard';
 import { ActivityItem } from '../../src/components/ActivityItem';
 import { StudyInsightsCard } from '../../src/components/StudyInsightsCard';
+import { TutorBriefCard } from '../../src/components/TutorBriefCard';
+import { KnowledgeHealthCompact } from '../../src/components/KnowledgeHealthCompact';
+import { ExamReadinessGauge } from '../../src/components/ExamReadinessGauge';
+import { TopicDecayAlert } from '../../src/components/TopicDecayAlert';
+import { TutorBriefSkeleton, KnowledgeHealthSkeleton, ExamReadinessSkeleton } from '../../src/components/TutorSkeletons';
+import { TutorEmptyState } from '../../src/components/TutorEmptyState';
 import { TargetSubjectCard, SUBJECT_ACCENT_PALETTE, getSubjectIcon } from '../../src/components/TargetSubjectCard';
 import { UpNextHeroCard } from '../../src/components/UpNextHeroCard';
 import { ExamCountdownWidget } from '../../src/components/ExamCountdownWidget';
@@ -42,8 +48,10 @@ import { useProgressSummary, useStudyStreak } from '../../src/hooks/useProgress'
 import { useCoinBalance, useLevelProgressSummary } from '../../src/hooks/useGamification';
 import { usePersonalizedSubjects } from '../../src/hooks/usePersonalizedSubjects';
 import { useExams } from '../../src/hooks/useExams';
+import { useLearningProfile } from '../../src/hooks/useLearningProfile';
 import { fetchRecentSessions } from '../../src/services/api-contracts';
 import { formatRelativeTime } from '../../src/utils/time';
+import { getTutorSubtitle } from '../../src/utils/tutor-voice';
 import type { Subject } from '@kd/shared';
 
 const FREE_EXAM_PREVIEW = 3;
@@ -57,15 +65,12 @@ function getGreeting(name: string) {
   return `Good ${time}, ${first}`;
 }
 
-function getSubtitle(examName?: string, streak?: number, solved?: number) {
-  if (streak && streak >= 7) return `🔥 ${streak}-day streak — your consistency is building mastery!`;
-  if (streak && streak >= 3) return `${streak} days strong 💪 Your brain is forming connections`;
-  if (solved && solved > 50) {
-    const mastery = getEducatorMasteryLevel(Math.min(Math.round((solved / 120) * 100), 100));
-    return `${mastery.emoji} ${mastery.label} — ${mastery.sublabel.toLowerCase()}`;
-  }
-  if (examName) return `Let's build your ${examName} mastery today`;
-  return 'Ready to grow your understanding?';
+function getSubtitle(
+  prefs: Parameters<typeof getTutorSubtitle>[0],
+  streak: number,
+  examName?: string,
+) {
+  return getTutorSubtitle(prefs, streak, examName);
 }
 
 // ─── Shimmer upgrade pill ─────────────────────────────────────
@@ -230,6 +235,11 @@ export default function HomeScreen() {
 
   const lastSession = activityData?.[0];
 
+  // ─── Learning intelligence ──────────────────────────────
+  const { data: learningProfile, isLoading: isLPLoading } = useLearningProfile();
+  // Has the student done any study sessions at all?
+  const hasStudyData = learningProfile && learningProfile.totalTrackedCards > 0;
+
   // ─── Weekly heatmap data ─────────────────────────────────
   const weekData = useMemo(
     () => getWeekStudyData(streakData?.lastStudyDate),
@@ -258,11 +268,10 @@ export default function HomeScreen() {
               {getGreeting(displayName)}
             </Typography>
             <Typography variant="caption" color={theme.textTertiary} style={{ marginTop: 2 }}>
-              {getSubtitle(primaryExam?.title, streak, solved)}
+              {getSubtitle(preferences, streak, primaryExam?.title)}
             </Typography>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-            <CoinDisplay coins={coins} size="sm" />
             {!isSubscribed && <UpgradePill onPress={goToUpgrade} />}
           </View>
         </View>
@@ -375,14 +384,26 @@ export default function HomeScreen() {
             />
           </FadeInView>
 
-          {/* ━━━ Study Insight (contextual tip) ━━━ */}
+          {/* ━━━ Tutor Brief (intelligence-driven insight) ━━━ */}
           <FadeInView delay={240}>
-            <StudyInsightsCard data={{
-              streak,
-              freezes: streakData?.streakFreezes ?? 0,
-              accuracy: progressData?.overallAccuracy ?? null,
-              studiedToday,
-            }} />
+            {isLPLoading ? (
+              <TutorBriefSkeleton />
+            ) : hasStudyData ? (
+              <TutorBriefCard
+                learningProfile={learningProfile}
+                preferences={preferences}
+                streak={streak}
+              />
+            ) : isOnboarded ? (
+              <TutorEmptyState preferences={preferences} />
+            ) : (
+              <StudyInsightsCard data={{
+                streak,
+                freezes: streakData?.streakFreezes ?? 0,
+                accuracy: progressData?.overallAccuracy ?? null,
+                studiedToday,
+              }} />
+            )}
           </FadeInView>
 
           {/* ━━━ Weekly Highlight Reel ━━━ */}
@@ -391,6 +412,28 @@ export default function HomeScreen() {
               <WeeklyHighlightCard onDismiss={() => setHighlightDismissed(true)} />
             </FadeInView>
           )}
+
+          {/* ━━━ Topic Decay Alert (only if high-risk topics exist) ━━━ */}
+          {hasStudyData && learningProfile.topicForecasts.length > 0 && (
+            <TopicDecayAlert forecasts={learningProfile.topicForecasts} />
+          )}
+
+          {/* ━━━ Knowledge Health Compact ━━━ */}
+          {isLPLoading ? (
+            <KnowledgeHealthSkeleton />
+          ) : hasStudyData && learningProfile.knowledgeHealth.length > 0 ? (
+            <KnowledgeHealthCompact
+              knowledgeHealth={learningProfile.knowledgeHealth}
+              totalOverdue={learningProfile.totalOverdueCards}
+            />
+          ) : null}
+
+          {/* ━━━ Exam Readiness Gauge ━━━ */}
+          {isLPLoading ? (
+            <ExamReadinessSkeleton />
+          ) : hasStudyData ? (
+            <ExamReadinessGauge data={learningProfile.examReadiness} />
+          ) : null}
 
           {/* ══════════════════════════════════════════════════════
               PERSONALIZED SECTIONS — only shown if onboarded

@@ -41,6 +41,9 @@ import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { useState, useCallback, useEffect } from 'react';
 import type { Deck, Subject } from '@kd/shared';
 import { apiGet, apiPost } from '../../src/services/api-contracts';
+import { useLearningProfile } from '../../src/hooks/useLearningProfile';
+import { TodaysStudyPlan } from '../../src/components/analytics/TodaysStudyPlan';
+import { getSessionTip } from '../../src/utils/tutor-voice';
 
 // ─── Accent palette reused for discover decks ────────────────────────────────────────────
 const DECK_ACCENTS = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#14B8A6', '#3B82F6', '#EF4444'];
@@ -373,6 +376,9 @@ export default function StudyScreen() {
   const { data: decksPages, isLoading: isDecksLoading } = useDecks(12);
   const { data: levelSummary, isLoading: isLevelLoading } = useLevelProgressSummary();
 
+  // ── Learning intelligence (shared across tabs via React Query) ───
+  const { data: learningProfile, isLoading: isLPLoading } = useLearningProfile();
+
   // ── Fetch full Subject objects for onboarded users ────────
   // PERF: Uses shared hook — same query key as Home screen, React Query deduplicates.
   const { data: onboardedSubjects, isLoading: isSubjectsLoading } = usePersonalizedSubjects();
@@ -527,9 +533,20 @@ export default function StudyScreen() {
                 <Typography variant="h3">{greetingEmoji}</Typography>
               </View>
               <Typography variant="body" color={theme.textSecondary}>
-                {hasSubjects
-                  ? `Tracking ${mergedSubjects.length} subject${mergedSubjects.length > 1 ? 's' : ''} — building your mastery profile`
-                  : 'Start exploring exams to build your learning profile.'}
+                {(() => {
+                  // Personality-aware session tip from intelligence engine
+                  const topSession = learningProfile?.studyPlan?.sessions?.[0];
+                  if (topSession) {
+                    return getSessionTip(
+                      preferences,
+                      topSession.topicName,
+                      topSession.reason,
+                    );
+                  }
+                  return hasSubjects
+                    ? `Tracking ${mergedSubjects.length} subject${mergedSubjects.length > 1 ? 's' : ''} — building your mastery profile`
+                    : 'Start exploring exams to build your learning profile.';
+                })()}
               </Typography>
             </View>
           </View>
@@ -574,7 +591,22 @@ export default function StudyScreen() {
           <TodaysFocusSection />
         </View>
 
-        {/* ── Section 1.5: Your Current Subjects ─────────────── */}
+        {/* ── Section 1.5: Today's AI Study Plan ───────────── */}
+        {isLPLoading ? (
+          <View style={{ marginTop: spacing.xl, paddingHorizontal: spacing.xl, gap: spacing.md }}>
+            <Skeleton width={160} height={16} />
+            <Skeleton width="100%" height={72} borderRadius={radius.xl} />
+            <Skeleton width="100%" height={72} borderRadius={radius.xl} />
+          </View>
+        ) : learningProfile?.studyPlan && learningProfile.studyPlan.sessions.length > 0 ? (
+          <View style={{ marginTop: spacing.xl, paddingHorizontal: spacing.xl }}>
+            <TodaysStudyPlan
+              plan={learningProfile.studyPlan}
+            />
+          </View>
+        ) : null}
+
+        {/* ── Section 2: Your Current Subjects ─────────────── */}
         <View style={{ marginTop: spacing['2xl'], gap: spacing.md }}>
           <View style={{ paddingHorizontal: spacing.xl }}>
             <SectionHeader

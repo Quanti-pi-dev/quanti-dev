@@ -40,6 +40,12 @@ export interface UserPreferences {
   preferredStudyTime: 'morning' | 'afternoon' | 'evening' | null;
   /** Daily card target computed from exam date and content volume. */
   dailyCardTarget: number | null;
+  /** Study archetype label from onboarding quiz (e.g. "Night Owl Sprinter"). */
+  studyPersonality: string | null;
+  /** Primary motivation type from onboarding quiz. */
+  motivationType: 'competing' | 'progress' | 'goals' | null;
+  /** Session length preference from onboarding quiz. */
+  sessionPreference: 'quick' | 'deep' | 'mixed' | null;
 }
 
 export interface JwtPayload {

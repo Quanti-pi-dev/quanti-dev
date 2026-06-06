@@ -6,8 +6,12 @@
 // • Pro+: Chronotype + Speed vs Accuracy
 // • Master: Subject Mastery Radar + AI Study Recommendations
 
-import { useState, useCallback } from 'react';
-import { View, ScrollView, useWindowDimensions, TouchableOpacity, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import {
+  View, ScrollView, TouchableOpacity,
+  useWindowDimensions, NativeSyntheticEvent, NativeScrollEvent,
+  RefreshControl,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
@@ -35,11 +39,14 @@ import { LearningVelocityCard } from '../../src/components/analytics/LearningVel
 import { useSubscriptionGate } from '../../src/hooks/useSubscriptionGate';
 import { useProgressSummary, useStudyStreak, useAdvancedInsights } from '../../src/hooks/useProgress';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../src/services/api';
 import { progressKeys } from '../../src/hooks/useProgress';
 import { useProgressAnalytics, LEVEL_COLORS, CARDS_PER_SUBJECT } from '../../src/hooks/useProgressAnalytics';
 import { useLearningProfile } from '../../src/hooks/useLearningProfile';
+import { getPersonalityEmoji } from '../../src/utils/tutor-voice';
+import { NextMilestoneCard } from '../../src/components/NextMilestoneCard';
+import { NextMilestoneSkeleton } from '../../src/components/TutorSkeletons';
 
 // ─── Screen ──────────────────────────────────────────────────
 
@@ -67,7 +74,7 @@ export default function ProgressScreen() {
   const { data: progressData } = useProgressSummary();
   const { data: streakData } = useStudyStreak();
   const { data: advancedData } = useAdvancedInsights(hasAdvancedAnalytics);
-  const { data: learningProfile } = useLearningProfile();
+  const { data: learningProfile, isLoading: isLPLoading } = useLearningProfile();
 
   // Weekly session history for the report card (always fetched — free tier)
   // PERF: Uses same query key as useProgressAnalytics ('weekly-history') so
@@ -101,6 +108,18 @@ export default function ProgressScreen() {
   const freezes = streakData?.streakFreezes ?? 0;
   const isPersonalBestStreak = streak > 1 && streak >= longestStreak;
 
+  // ── Pull-to-refresh ──────────────────────────────────────
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['progress'] }),
+      queryClient.invalidateQueries({ queryKey: ['gamification'] }),
+    ]);
+    setRefreshing(false);
+  }, [queryClient]);
+
 
 
   return (
@@ -110,8 +129,56 @@ export default function ProgressScreen() {
         contentContainerStyle={{ padding: spacing.xl, gap: spacing.xl, paddingBottom: spacing['4xl'] }}
         onScroll={handleScroll}
         scrollEventThrottle={200}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
+        }
       >
         <Typography variant="h3">Your Learning Profile</Typography>
+
+        {/* ── Tutor Narrative — personalised progress summary ── */}
+        {learningProfile && (() => {
+          const r = learningProfile.examReadiness;
+          const health = learningProfile.knowledgeHealth;
+          const sorted = [...health].sort((a, b) => b.conceptMastery - a.conceptMastery);
+          const strongest = sorted[0];
+          const weakest = sorted.length > 1 ? sorted[sorted.length - 1] : null;
+          const emoji = getPersonalityEmoji(preferences?.studyPersonality);
+          const personality = preferences?.studyPersonality;
+          const coverage = `${r.studiedTopics} of ${r.totalTopicsInExam}`;
+
+          const narrative = personality
+            ? `You're a ${personality} ${emoji} who's covered ${coverage} topics. `
+            : `You've covered ${coverage} topics so far. `;
+
+          const strengthLine = strongest
+            ? `Your strongest area is ${strongest.subjectName} (${strongest.conceptMastery}% mastery). `
+            : '';
+
+          const weakLine = weakest && weakest.conceptMastery < 50
+            ? `${weakest.subjectName} (${weakest.conceptMastery}%) needs the most attention. `
+            : '';
+
+          const pacing = r.daysToTargetReadiness > 0
+            ? `At your current pace, you'll hit 85% readiness in ~${r.daysToTargetReadiness} days.`
+            : r.overallScore >= 85
+              ? 'You\'re at target readiness — keep reinforcing!'
+              : '';
+
+          return (
+            <View style={{
+              backgroundColor: theme.cardAlt,
+              borderRadius: radius['2xl'],
+              padding: spacing.lg,
+              gap: spacing.xs,
+              borderWidth: 1,
+              borderColor: theme.border,
+            }}>
+              <Typography variant="body" color={theme.textSecondary} style={{ lineHeight: 20 }}>
+                {narrative}{strengthLine}{weakLine}{pacing}
+              </Typography>
+            </View>
+          );
+        })()}
 
         {/* ══════════════════════════════════════════════════════════
             LEARNING INTELLIGENCE — Available to ALL users (free)
@@ -162,23 +229,66 @@ export default function ProgressScreen() {
           <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
         </View>
 
-        {/* ── Study Insights ── */}
-        <StudyInsightsCard
-          data={{
-            streak,
-            freezes,
-            accuracy: progressData?.overallAccuracy ?? null,
-            studiedToday: streakData?.lastStudyDate === new Date().toISOString().split('T')[0],
-            weakestSubject:
-                  levelSummary.length > 0
-                ? levelSummary.reduce(
-                    (w: any, s: any) =>
-                      s.correctAnswers < w.correctAnswers ? s : w,
-                    levelSummary[0]!,
-                  )?.subjectName
-                : undefined,
-          }}
-        />
+        {/* ── Study Insights / Weak Concepts ── */}
+        {learningProfile && learningProfile.examReadiness.weakConcepts.length > 0 ? (
+          <View style={{
+            backgroundColor: '#EF444412',
+            borderRadius: radius['2xl'],
+            padding: spacing.lg,
+            borderWidth: 1,
+            borderColor: '#EF444433',
+            gap: spacing.sm,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <View style={{
+                width: 36, height: 36, borderRadius: 18,
+                backgroundColor: '#EF444422',
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Typography variant="bodyLarge">🔬</Typography>
+              </View>
+              <Typography variant="label" color="#EF4444">Concepts to Master</Typography>
+            </View>
+            {learningProfile.examReadiness.weakConcepts.slice(0, 3).map((wc) => (
+              <View key={wc.concept} style={{ gap: spacing.xs }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="bodySmall" color={theme.textSecondary} style={{ flex: 1 }} numberOfLines={1}>
+                    {wc.concept} ({wc.subjectName})
+                  </Typography>
+                  <Typography variant="captionBold" color="#EF4444">{Math.round(wc.pMastery * 100)}%</Typography>
+                </View>
+                <ProgressBar progress={wc.pMastery} height={4} color="#EF4444" />
+              </View>
+            ))}
+          </View>
+        ) : (
+          <StudyInsightsCard
+            data={{
+              streak,
+              freezes,
+              accuracy: progressData?.overallAccuracy ?? null,
+              studiedToday: streakData?.lastStudyDate === new Date().toISOString().split('T')[0],
+              weakestSubject:
+                    levelSummary.length > 0
+                  ? levelSummary.reduce(
+                      (w: any, s: any) =>
+                        s.correctAnswers < w.correctAnswers ? s : w,
+                      levelSummary[0]!,
+                    )?.subjectName
+                  : undefined,
+            }}
+          />
+        )}
+
+        {/* ── Next Milestone Card ── */}
+        {isLPLoading ? (
+          <NextMilestoneSkeleton />
+        ) : learningProfile ? (
+          <NextMilestoneCard
+            examReadiness={learningProfile.examReadiness}
+            knowledgeHealth={learningProfile.knowledgeHealth}
+          />
+        ) : null}
 
         {/* ── Error Journal Quick Link ── */}
         <TouchableOpacity

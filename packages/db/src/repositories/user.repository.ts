@@ -185,7 +185,8 @@ class UserRepository {
       `SELECT up.user_id, up.theme, up.active_theme, up.notifications_enabled,
               up.study_reminders_enabled, up.reminder_time,
               up.onboarding_completed, up.selected_exams, up.selected_subjects,
-              up.exam_date, up.preferred_study_time, up.daily_card_target
+              up.exam_date, up.preferred_study_time, up.daily_card_target,
+              up.study_personality, up.motivation_type, up.session_preference
        FROM user_preferences up
        JOIN users u ON u.id = up.user_id
        WHERE u.firebase_uid = $1`,
@@ -208,6 +209,9 @@ class UserRepository {
       examDate: row.exam_date ? row.exam_date.toISOString().split('T')[0] : null,
       preferredStudyTime: row.preferred_study_time ?? null,
       dailyCardTarget: row.daily_card_target ?? null,
+      studyPersonality: row.study_personality ?? null,
+      motivationType: row.motivation_type ?? null,
+      sessionPreference: row.session_preference ?? null,
     };
   }
 
@@ -263,6 +267,18 @@ class UserRepository {
     if (input.dailyCardTarget !== undefined) {
       setClauses.push(`daily_card_target = $${paramIndex++}`);
       values.push(input.dailyCardTarget);
+    }
+    if ((input as Record<string, unknown>).studyPersonality !== undefined) {
+      setClauses.push(`study_personality = $${paramIndex++}`);
+      values.push((input as Record<string, unknown>).studyPersonality);
+    }
+    if ((input as Record<string, unknown>).motivationType !== undefined) {
+      setClauses.push(`motivation_type = $${paramIndex++}`);
+      values.push((input as Record<string, unknown>).motivationType);
+    }
+    if ((input as Record<string, unknown>).sessionPreference !== undefined) {
+      setClauses.push(`session_preference = $${paramIndex++}`);
+      values.push((input as Record<string, unknown>).sessionPreference);
     }
 
     if (setClauses.length === 0) {
