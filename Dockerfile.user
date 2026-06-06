@@ -37,6 +37,11 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/server-user ./server-user
 
+# Copy the raw db scripts directory so tsx can run migrate.ts and
+# create-mongo-indexes.ts at container startup (these are not compiled
+# into dist — they are run directly by tsx).
+COPY packages/db/db /app/packages/db/db
+
 # Add a startup script to handle migrations before starting the server.
 # NOTE: We call tsx directly (not via npm workspace scripts) because the
 # npm scripts use --env-file=../../.env which doesn't exist in Docker.
