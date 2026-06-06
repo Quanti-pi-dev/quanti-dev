@@ -1,11 +1,9 @@
-// ─── TopicSunburstChart ──────────────────────────────────────
-// Premium hierarchical sunburst chart with:
-//   • Inner ring → Subjects (proportional by study effort)
-//   • Outer ring → Topics within each subject
-//   • Tap any segment to select — glow highlight + detail banner
-//   • Animated entrance with spring physics
-//   • Rich HSL color palette with luminance-shifted topic shades
-//   • Ghost skeleton for empty state
+// ─── MasterySunburstChart ─────────────────────────────────────
+// Rewired from accuracy to BKT mastery (Phase 2).
+//   • Inner ring → Subjects (arc sized by study effort, color = mastery)
+//   • Outer ring → Topics (color = mastery, ghost segments for not-started)
+//   • Center shows overall mastery %
+//   • Legend shows mastery classification labels
 
 import { useMemo, useState, useCallback } from 'react';
 import { View, Pressable } from 'react-native';
@@ -22,7 +20,7 @@ import { useTheme } from '../../theme';
 import { spacing, radius } from '../../theme/tokens';
 import { Typography } from '../ui/Typography';
 import { Card } from '../ui/Card';
-import type { SubjectTopicDistribution } from '@kd/shared';
+import type { SubjectMemoryState } from '@kd/shared';
 
 // ─── Constants ───────────────────────────────────────────────
 
@@ -93,6 +91,15 @@ function shiftColor(hex: string, amount: number): string {
   return `#${((1 << 24) | (nr << 16) | (ng << 8) | nb).toString(16).slice(1)}`;
 }
 
+// ─── Mastery Classification ──────────────────────────────────
+
+function classifyMastery(pct: number): string {
+  if (pct >= 85) return 'Distinguished';
+  if (pct >= 60) return 'Proficient';
+  if (pct >= 20) return 'Developing';
+  return 'Emerging';
+}
+
 // ─── Types ────────────────────────────────────────────────────
 
 interface SegmentInfo {
@@ -107,7 +114,9 @@ interface SegmentInfo {
   value: number;
   total: number;
   pct: number;
-  accuracy: number;
+  mastery: number;
+  classification: string;
+  isGhost: boolean;
 }
 
 interface CenterInfo {
@@ -243,11 +252,11 @@ function TopicRow({ color, label, pct, isSelected, onPress }: {
 
 // ─── Main Component ──────────────────────────────────────────
 
-interface TopicSunburstChartProps {
-  data: SubjectTopicDistribution[];
+interface MasterySunburstChartProps {
+  data: SubjectMemoryState[];
 }
 
-export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
+export function MasterySunburstChart({ data }: MasterySunburstChartProps) {
   const { theme } = useTheme();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expandedSubject, setExpandedSubject] = useState<number | null>(0);
@@ -257,7 +266,7 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
   // ── Compute segments ──────────────────────────────────────
   const { segments, centerDefault, subjectMeta } = useMemo(() => {
     const segs: SegmentInfo[] = [];
-    const meta: { name: string; color: string; pct: number; topics: { name: string; color: string; pct: number; id: string }[] }[] = [];
+    const meta: { name: string; color: string; pct: number; classification: string; coverage: string; topics: { name: string; color: string; pct: number; classification: string; id: string; isGhost: boolean }[] }[] = [];
 
     if (isEmpty) {
       const ghostShare = (2 * Math.PI) / GHOST_SUBJECTS;
@@ -271,7 +280,8 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
           path: arcPath(CX, CY, INNER_R, INNER_R + INNER_THICK, subStart, subEnd),
           color: pal.base, glowColor: pal.light, ring: 'inner',
           subjectIndex: si, topicIndex: -1,
-          label: '', value: 0, total: 0, pct: 0, accuracy: 0,
+          label: '', value: 0, total: 0, pct: 0, mastery: 0,
+          classification: '', isGhost: true,
         });
         const topics = GHOST_TOPICS[si] ?? 2;
         const topicShare = (ghostShare - GAP_RAD) / topics;
@@ -281,11 +291,10 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
           segs.push({
             id: `ghost-outer-${si}-${ti}`,
             path: arcPath(CX, CY, OUTER_R, OUTER_R + OUTER_THICK, ts, te),
-            color: shiftColor(pal.base, 30),
-            glowColor: pal.light,
-            ring: 'outer',
+            color: shiftColor(pal.base, 30), glowColor: pal.light, ring: 'outer',
             subjectIndex: si, topicIndex: ti,
-            label: '', value: 0, total: 0, pct: 0, accuracy: 0,
+            label: '', value: 0, total: 0, pct: 0, mastery: 0,
+            classification: '', isGhost: true,
           });
         }
         angle += ghostShare;
@@ -297,83 +306,107 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
       };
     }
 
-    const grandTotal = data.reduce((s, d) => s + d.totalAnswers, 0) || 1;
+    // Arc sizing: proportional to total cards studied (study effort)
+    const grandTotalCards = data.reduce((s, d) => d.topics.reduce((acc, t) => acc + t.totalCards, s), 0) || 1;
+    // Overall mastery: weighted avg across subjects
+    const overallMastery = Math.round(
+      data.reduce((s, d) => s + d.conceptMastery * d.topics.reduce((acc, t) => acc + t.totalCards, 0), 0) /
+      Math.max(data.reduce((s, d) => s + d.topics.reduce((acc, t) => acc + t.totalCards, 0), 0), 1)
+    );
     const fullArc = 2 * Math.PI;
     let angle = -Math.PI / 2;
 
     data.forEach((subject, si) => {
       const pal = SUBJECT_PALETTE[si % SUBJECT_PALETTE.length]!;
-      const subjectArc = Math.max(MIN_ARC, (subject.totalAnswers / grandTotal) * fullArc);
+      const subjectCards = subject.topics.reduce((s, t) => s + t.totalCards, 0);
+      const subjectArc = Math.max(MIN_ARC, (subjectCards / grandTotalCards) * fullArc);
       const subStart = angle + GAP_RAD / 2;
       const subEnd = angle + subjectArc - GAP_RAD / 2;
-      const subjectPct = subject.totalAnswers > 0
-        ? Math.round((subject.correctAnswers / subject.totalAnswers) * 100)
-        : 0;
+      const subjectMastery = Math.round(subject.conceptMastery);
 
       if (subEnd > subStart) {
         segs.push({
           id: `s-${si}`,
           path: arcPath(CX, CY, INNER_R, INNER_R + INNER_THICK, subStart, subEnd),
-          color: pal.base,
-          glowColor: pal.light,
-          ring: 'inner',
-          subjectIndex: si,
-          topicIndex: -1,
+          color: pal.base, glowColor: pal.light, ring: 'inner',
+          subjectIndex: si, topicIndex: -1,
           label: subject.subjectName,
-          value: subject.totalAnswers,
-          total: subject.totalAnswers,
-          pct: subjectPct,
-          accuracy: subjectPct,
+          value: subjectCards, total: subjectCards,
+          pct: subjectMastery, mastery: subjectMastery,
+          classification: classifyMastery(subjectMastery), isGhost: false,
         });
       }
 
-      // Outer ring — topics
-      const topicTotal = subject.topics.reduce((s, t) => s + t.totalAnswers, 0) || 1;
+      // Outer ring — topics (studied + ghost for not-started)
+      const studiedTopics = subject.topics.filter(t => t.totalCards > 0);
+      const ghostTopics = subject.topics.filter(t => t.totalCards === 0);
+      const topicTotal = studiedTopics.reduce((s, t) => s + t.totalCards, 0) || 1;
+      // Reserve 15% of arc for ghost segments if any exist
+      const ghostFraction = ghostTopics.length > 0 ? 0.15 : 0;
+      const studiedArc = (subjectArc - GAP_RAD) * (1 - ghostFraction);
+      const ghostArc = (subjectArc - GAP_RAD) * ghostFraction;
       let topicAngle = subStart;
-      const usableArc = subjectArc - GAP_RAD;
       const topicMetas: typeof meta[0]['topics'] = [];
 
-      subject.topics.forEach((topic, ti) => {
-        const topicArc = Math.max(
-          MIN_ARC * 0.5,
-          (topic.totalAnswers / topicTotal) * usableArc,
-        );
+      studiedTopics.forEach((topic, ti) => {
+        const topicArcSize = Math.max(MIN_ARC * 0.5, (topic.totalCards / topicTotal) * studiedArc);
         const ts = topicAngle + GAP_RAD / 3;
-        const te = topicAngle + topicArc - GAP_RAD / 3;
-        topicAngle += topicArc;
+        const te = topicAngle + topicArcSize - GAP_RAD / 3;
+        topicAngle += topicArcSize;
 
-        // Lighter shade per topic — shifted 20-50% toward white
         const lightShift = 20 + ti * 12;
         const topicColor = shiftColor(pal.base, lightShift);
-        const topicPct = topic.totalAnswers > 0
-          ? Math.round((topic.correctAnswers / topic.totalAnswers) * 100)
-          : 0;
+        const topicMastery = Math.round(topic.conceptMastery);
         const id = `t-${si}-${ti}`;
 
         if (te > ts) {
           segs.push({
-            id,
+            id, ring: 'outer',
             path: arcPath(CX, CY, OUTER_R, OUTER_R + OUTER_THICK, ts, te),
-            color: topicColor,
-            glowColor: shiftColor(topicColor, 15),
-            ring: 'outer',
-            subjectIndex: si,
-            topicIndex: ti,
+            color: topicColor, glowColor: shiftColor(topicColor, 15),
+            subjectIndex: si, topicIndex: ti,
             label: topic.topicName,
-            value: topic.totalAnswers,
-            total: topic.totalAnswers,
-            pct: topicPct,
-            accuracy: topicPct,
+            value: topic.totalCards, total: topic.totalCards,
+            pct: topicMastery, mastery: topicMastery,
+            classification: classifyMastery(topicMastery), isGhost: false,
           });
         }
-
-        topicMetas.push({ name: topic.topicName, color: topicColor, pct: topicPct, id });
+        topicMetas.push({ name: topic.topicName, color: topicColor, pct: topicMastery, classification: classifyMastery(topicMastery), id, isGhost: false });
       });
+
+      // Ghost segments for not-started topics
+      if (ghostTopics.length > 0) {
+        const perGhostArc = ghostArc / ghostTopics.length;
+        ghostTopics.forEach((topic, gi) => {
+          const gti = studiedTopics.length + gi;
+          const ts = topicAngle + GAP_RAD / 3;
+          const te = topicAngle + perGhostArc - GAP_RAD / 3;
+          topicAngle += perGhostArc;
+          const ghostColor = shiftColor(pal.base, 50);
+          const id = `t-${si}-${gti}`;
+
+          if (te > ts) {
+            segs.push({
+              id, ring: 'outer',
+              path: arcPath(CX, CY, OUTER_R, OUTER_R + OUTER_THICK, ts, te),
+              color: ghostColor, glowColor: ghostColor,
+              subjectIndex: si, topicIndex: gti,
+              label: topic.topicName,
+              value: 0, total: topic.totalCardsAvailable,
+              pct: 0, mastery: 0,
+              classification: 'Not started', isGhost: true,
+            });
+          }
+          topicMetas.push({ name: topic.topicName, color: ghostColor, pct: 0, classification: 'Not started', id, isGhost: true });
+        });
+      }
 
       meta.push({
         name: subject.subjectName,
         color: pal.base,
-        pct: subjectPct,
+        pct: subjectMastery,
+        classification: classifyMastery(subjectMastery),
+        coverage: `${subject.studiedTopics}/${subject.totalTopicsInSubject}`,
         topics: topicMetas,
       });
 
@@ -383,9 +416,9 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
     return {
       segments: segs,
       centerDefault: {
-        label: 'Total',
-        value: grandTotal,
-        sub: 'answers',
+        label: 'Mastery',
+        value: overallMastery,
+        sub: '% mastery',
       },
       subjectMeta: meta,
     };
@@ -398,8 +431,8 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
     if (!seg) return centerDefault;
     return {
       label: seg.label,
-      value: seg.accuracy,
-      sub: '% accuracy',
+      value: seg.mastery,
+      sub: seg.isGhost ? 'not started' : `% ${seg.classification.toLowerCase()}`,
     };
   }, [selectedId, segments, centerDefault]);
 
@@ -441,14 +474,14 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
       accessibilityRole="summary"
       accessibilityLabel={
         isEmpty
-          ? 'Topic Distribution chart. No data yet.'
-          : `Topic Distribution chart. ${subjectMeta.length} subjects.`
+          ? 'Subject Mastery chart. No data yet.'
+          : `Subject Mastery chart. ${subjectMeta.length} subjects.`
       }
     >
       <View style={{ gap: spacing.lg }}>
         {/* Header */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <Typography variant="h4">Topic Mastery</Typography>
+          <Typography variant="h4">Subject Mastery</Typography>
           <View style={{
             flexDirection: 'row',
             alignItems: 'center',
@@ -460,7 +493,7 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
           }}>
             <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: theme.primary }} />
             <Typography variant="caption" color={theme.primary} style={{ fontSize: 10 }}>
-              accuracy %
+              mastery %
             </Typography>
           </View>
         </View>
@@ -488,13 +521,15 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
 
               const opacity = isEmpty
                 ? 0.08
-                : selectedId === null
-                  ? 0.88
-                  : isSelected
-                    ? 1
-                    : isSiblingHighlight
-                      ? 0.6
-                      : 0.15;
+                : seg.isGhost && selectedId === null
+                  ? 0.08
+                  : selectedId === null
+                    ? 0.88
+                    : isSelected
+                      ? 1
+                      : isSiblingHighlight
+                        ? 0.6
+                        : 0.15;
 
               return (
                 <Path
@@ -536,7 +571,7 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
                   x={CX}
                   y={centerInfo.label === 'Total' ? CY - 4 : CY - 6}
                   textAnchor="middle"
-                  fontSize={centerInfo.label === 'Total' ? 24 : 20}
+                  fontSize={centerInfo.label === 'Mastery' ? 24 : 20}
                   fontWeight="800"
                   fill={selectedId
                     ? (segments.find(s => s.id === selectedId)?.color ?? theme.text)
@@ -547,20 +582,20 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
                 </SvgText>
                 <SvgText
                   x={CX}
-                  y={centerInfo.label === 'Total' ? CY + 14 : CY + 12}
+                  y={centerInfo.label === 'Mastery' ? CY + 14 : CY + 12}
                   textAnchor="middle"
                   fontSize={9}
                   fill={theme.textTertiary}
                   fontFamily="System"
                   fontWeight="500"
                 >
-                  {centerInfo.label === 'Total'
+                  {centerInfo.label === 'Mastery'
                     ? centerInfo.sub
                     : centerInfo.label.length > 12
                       ? centerInfo.label.slice(0, 11) + '…'
                       : centerInfo.label}
                 </SvgText>
-                {centerInfo.label !== 'Total' && (
+                {centerInfo.label !== 'Mastery' && (
                   <SvgText
                     x={CX}
                     y={CY + 23}
@@ -640,7 +675,7 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
                 gap: spacing.md,
               }}
             >
-              {/* Accuracy circle */}
+              {/* Mastery circle */}
               <View style={{
                 width: 44, height: 44, borderRadius: 22,
                 backgroundColor: seg.color + '18',
@@ -649,7 +684,7 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
                 alignItems: 'center', justifyContent: 'center',
               }}>
                 <Typography variant="h4" color={seg.color} style={{ fontSize: 15 }}>
-                  {seg.accuracy}%
+                  {seg.isGhost ? '—' : `${seg.mastery}%`}
                 </Typography>
               </View>
               <View style={{ flex: 1, gap: 2 }}>
@@ -657,7 +692,9 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
                   {seg.label}
                 </Typography>
                 <Typography variant="caption" color={theme.textSecondary}>
-                  {seg.value} answers · {seg.ring === 'inner' ? 'Subject' : 'Topic'}
+                  {seg.isGhost
+                    ? `Not started · ${seg.total} cards available`
+                    : `${seg.classification} · ${seg.ring === 'inner' ? 'Subject' : 'Topic'}`}
                 </Typography>
               </View>
               <Pressable
@@ -710,10 +747,10 @@ export function TopicSunburstChart({ data }: TopicSunburstChartProps) {
         ) : (
           <View style={{ alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md }}>
             <Typography variant="label" color={theme.textTertiary} align="center">
-              Start studying to see your topic breakdown
+              Start studying to see your mastery
             </Typography>
             <Typography variant="caption" color={theme.textTertiary} align="center">
-              Answering flashcards will populate this chart with your Subject → Topic distribution
+              Answering flashcards will populate this chart with your Subject → Topic mastery
             </Typography>
           </View>
         )}

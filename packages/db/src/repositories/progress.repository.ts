@@ -570,13 +570,15 @@ class ProgressRepository {
    * 3. Subject Strengths — per-subject strength scores from Redis level data
    */
   async getAdvancedInsights(userId: string): Promise<AdvancedInsights> {
-    const [chronotype, speedAccuracy, subjectStrengths, topicDistribution] = await Promise.all([
-      this.getChronotypeData(userId),
-      this.getSpeedAccuracyData(userId),
-      this.getSubjectStrengths(userId),
-      this.getTopicDistribution(userId),
-    ]);
-    return { chronotype, speedAccuracy, subjectStrengths, topicDistribution };
+    // Phase 4 cleanup: Only chronotype is still consumed (for TodaysStudyPlan peak hour).
+    // Speed/accuracy, subject strengths, and topic distribution were purged in Phase 1.
+    const chronotype = await this.getChronotypeData(userId);
+    return {
+      chronotype,
+      speedAccuracy: [],
+      subjectStrengths: [],
+      topicDistribution: [],
+    };
   }
 
   /** Hourly accuracy from study_sessions — which hours produce the best results? */

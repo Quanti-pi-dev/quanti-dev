@@ -387,7 +387,30 @@ export async function adminSubscriptionRoutes(fastify: FastifyInstance): Promise
     }
     const updatedUser = result.rows[0];
     if (updatedUser.firebase_uid) {
-      await authService.syncRoleClaim(updatedUser.firebase_uid, role);
+      const INSTITUTE_ROLES = ['educator', 'examiner', 'institute_admin'];
+      if (INSTITUTE_ROLES.includes(role)) {
+        // Look up the user's current institute membership to preserve institute_id
+        const memberRow = await pool.query(
+          `SELECT institute_id FROM institute_members WHERE user_id = $1 ORDER BY joined_at DESC LIMIT 1`,
+          [id],
+        );
+        const instituteId: string | undefined = memberRow.rows[0]?.institute_id;
+        if (instituteId) {
+          // Update both the platform role AND the institute_role claim so the portal reflects the change
+          await authService.setInstituteClaims(updatedUser.firebase_uid, instituteId, role, role);
+          // Also update the institute_members row so the DB stays consistent
+          await pool.query(
+            `UPDATE institute_members SET role = $1 WHERE user_id = $2 AND institute_id = $3`,
+            [role, id, instituteId],
+          );
+        } else {
+          // No institute membership found — just sync the platform role claim
+          await authService.syncRoleClaim(updatedUser.firebase_uid, role);
+        }
+      } else {
+        // Non-institute role (student / admin) — clear institute claims and update platform role
+        await authService.syncRoleClaim(updatedUser.firebase_uid, role);
+      }
     }
     return reply.send({ success: true, data: { id: updatedUser.id, role: updatedUser.role }, timestamp: new Date().toISOString() });
   });

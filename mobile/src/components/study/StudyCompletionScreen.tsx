@@ -22,6 +22,7 @@ import { Typography } from '../ui/Typography';
 import { Button } from '../ui/Button';
 import { AccuracyRing } from './AccuracyRing';
 import { ConfettiBurst } from './ConfettiBurst';
+import { FocusQualityScore } from '../analytics/FocusQualityScore';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   initiateWager,
@@ -399,6 +400,14 @@ export const StudyCompletionScreen = React.memo(function StudyCompletionScreen({
             />
           </View>
         </Animated.View>
+
+        {/* Focus Quality Score — post-session diagnostic */}
+        <FocusQualityScore
+          correctCount={correctCount}
+          incorrectCount={incorrectCount}
+          skippedCount={skippedCount}
+          totalCards={total}
+        />
 
         {/* Coins earned */}
         {totalCoins > 0 && (
