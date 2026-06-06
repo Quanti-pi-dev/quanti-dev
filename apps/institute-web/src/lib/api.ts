@@ -20,10 +20,11 @@ api.interceptors.request.use(async (config) => {
 
 api.interceptors.response.use(
   (res) => res,
-  async (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      if (typeof window !== 'undefined') window.location.href = '/login';
-    }
+  (error) => {
+    // Do NOT hard-redirect on 401/403 here.
+    // The AuthProvider already monitors Firebase auth state and navigates to
+    // /login when the session is invalid. Doing window.location here creates
+    // a redirect loop: API error → /login → login → dashboard → API error → …
     return Promise.reject(error);
   },
 );
