@@ -17,6 +17,8 @@ import { spacing, radius } from '../src/theme/tokens';
 import { ScreenWrapper } from '../src/components/layout/ScreenWrapper';
 import { Header } from '../src/components/layout/Header';
 import { Typography } from '../src/components/ui/Typography';
+import { RichContent } from '../src/components/ui/RichContent';
+import { stripLatex } from '../src/utils/stripLatex';
 import { Skeleton } from '../src/components/ui/Skeleton';
 import { Button } from '../src/components/ui/Button';
 import {
@@ -65,9 +67,9 @@ function AnswerPill({
     >
       {icon && <Ionicons name={icon as any} size={16} color={border} style={{ marginTop: imageUrl ? 2 : 0 }} />}
       <View style={{ flex: 1, gap: spacing.xs }}>
-        <Typography variant="caption" color={textColor}>
+        <RichContent variant="caption" color={textColor}>
           {text}
-        </Typography>
+        </RichContent>
         {imageUrl ? (
           <Image
             source={{ uri: imageUrl }}
@@ -141,9 +143,15 @@ function ErrorCard({
           </View>
 
           <View style={{ flex: 1, gap: 4 }}>
-            <Typography variant="bodySemiBold" color={theme.text} numberOfLines={expanded ? undefined : 2}>
-              {entry.question}
-            </Typography>
+            {expanded ? (
+              <RichContent variant="bodySemiBold" color={theme.text}>
+                {entry.question}
+              </RichContent>
+            ) : (
+              <Typography variant="bodySemiBold" color={theme.text} numberOfLines={2}>
+                {stripLatex(entry.question)}
+              </Typography>
+            )}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' }}>
               <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 11 }}>
                 {entry.subjectName}

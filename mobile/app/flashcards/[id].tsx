@@ -236,7 +236,7 @@ export default function FlashcardStudyScreen() {
   const isCurrentAnswered = answered[currentIdx] !== undefined;
 
   // FIX PF5: Memoize filtered counts to avoid O(n) scan on every render
-  const { correctCount, answeredCount, incorrectCount, skippedCount, isComplete, currentStreak } = useMemo(() => {
+  const { correctCount, answeredCount, incorrectCount, skippedCount, isComplete, currentStreak, longestStreak } = useMemo(() => {
     const correct = answered.filter((a) => a === true).length;
     const answeredTotal = answered.filter((a) => a !== undefined).length;
     const incorrect = answered.filter((a) => a === false).length;
@@ -251,6 +251,18 @@ export default function FlashcardStudyScreen() {
       else break; // false or 'skipped' breaks the streak
     }
 
+    // Longest streak: max consecutive correct answers in the entire session
+    let longestStreak = 0;
+    let runningStreak = 0;
+    for (let i = 0; i < answered.length; i++) {
+      if (answered[i] === true) {
+        runningStreak++;
+        if (runningStreak > longestStreak) longestStreak = runningStreak;
+      } else if (answered[i] !== undefined) {
+        runningStreak = 0;
+      }
+    }
+
     return {
       correctCount: correct,
       answeredCount: answeredTotal,
@@ -258,6 +270,7 @@ export default function FlashcardStudyScreen() {
       skippedCount: skipped,
       isComplete: total > 0 && answeredTotal === total,
       currentStreak: streak,
+      longestStreak,
     };
   }, [answered, total]);
 
@@ -423,6 +436,7 @@ export default function FlashcardStudyScreen() {
         skippedCount={skippedCount}
         sessionCoinsEarned={sessionCoinsEarned}
         deckId={effectiveDeckId}
+        longestStreak={longestStreak}
         onStudyAgain={() => {
           setCurrentIdx(0);
           setAnswered([]);

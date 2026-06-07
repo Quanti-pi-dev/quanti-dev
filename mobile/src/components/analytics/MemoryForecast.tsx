@@ -121,7 +121,21 @@ export function MemoryForecast({ forecasts }: MemoryForecastProps) {
 
               {/* Fix CTA */}
               <TouchableOpacity
-                onPress={() => router.push('/review-queue')}
+                onPress={() => {
+                  if (f.examId && f.subjectId) {
+                    router.push({
+                      pathname: '/exams/[examId]/subjects/[subjectId]/levels',
+                      params: {
+                        examId: f.examId,
+                        subjectId: f.subjectId,
+                        title: f.subjectName,
+                        topicSlug: f.topicSlug,
+                      },
+                    });
+                  } else {
+                    router.push('/(tabs)/study');
+                  }
+                }}
                 activeOpacity={0.7}
                 style={{
                   flexDirection: 'row',

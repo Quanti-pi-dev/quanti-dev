@@ -72,7 +72,7 @@ export async function updateCardMemory(
 
 /** Topic/card counts per subject for coverage computation. */
 interface SyllabusTopic { topicSlug: string; topicName: string; cardCount: number }
-interface SyllabusSubject { subjectId: string; subjectName: string; topics: SyllabusTopic[] }
+interface SyllabusSubject { subjectId: string; subjectName: string; examId: string; topics: SyllabusTopic[] }
 
 /**
  * Fetches the complete exam syllabus: all subjects → topics → card counts.
@@ -98,6 +98,14 @@ async function getExamSyllabus(selectedExams: string[]): Promise<SyllabusSubject
     .find({ examId: { $in: validExamIds.map(id => new ObjectId(id)) } })
     .sort({ order: 1 })
     .toArray();
+
+  // Build examId → subjectIds map
+  const subjectExamMap = new Map<string, string>(); // subjectId → examId
+  for (const doc of examSubjectDocs) {
+    const subId = (doc['subjectId'] as ObjectId).toHexString();
+    const exId = (doc['examId'] as ObjectId).toHexString();
+    if (!subjectExamMap.has(subId)) subjectExamMap.set(subId, exId);
+  }
 
   const subjectIds = [...new Set(examSubjectDocs.map(d => (d['subjectId'] as ObjectId).toHexString()))];
   if (subjectIds.length === 0) return [];
@@ -142,6 +150,7 @@ async function getExamSyllabus(selectedExams: string[]): Promise<SyllabusSubject
   const result: SyllabusSubject[] = subjectIds.map(subId => ({
     subjectId: subId,
     subjectName: subjectNameMap.get(subId) ?? subId,
+    examId: subjectExamMap.get(subId) ?? '',
     topics: subjectTopicMap.get(subId) ?? [],
   }));
 
@@ -611,6 +620,7 @@ async function buildKnowledgeHealthBase(userId: string, syllabus: SyllabusSubjec
     subjects.push({
       subjectId,
       subjectName: nameMap.get(subjectId) ?? subjectId,
+      examId: syllabusSubject?.examId,
       retentionEstimate: subjectRetention,
       conceptMastery: 0,  // filled by enrichWithIntelligence
       depthScore: 0,       // filled by enrichWithIntelligence
@@ -827,7 +837,9 @@ function buildTopicForecasts(health: SubjectMemoryState[]): TopicForecast[] {
       forecasts.push({
         topicSlug: topic.topicSlug,
         topicName: topic.topicName,
+        subjectId: topic.subjectId,
         subjectName: topic.subjectName,
+        examId: subject.examId,
         currentAccuracy: topic.retentionEstimate,
         predictedAccuracyIn7Days: futureRetention,
         riskLevel,
@@ -1140,6 +1152,7 @@ function buildStudyPlan(
         topicName: candidate.topic.topicName,
         subjectId: candidate.topic.subjectId,
         subjectName: candidate.topic.subjectName,
+        examId: subject.examId,
         reason: candidate.reason,
         cardCount: finalCards,
         estimatedMinutes: estMins,
@@ -1173,6 +1186,7 @@ function buildStudyPlan(
         topicName: best.topic.topicName,
         subjectId: best.topic.subjectId,
         subjectName: best.topic.subjectName,
+        examId: health.find(s => s.subjectId === subjectId)?.examId,
         reason: best.reason,
         cardCount: Math.min(finalCards, available),
         estimatedMinutes: Math.round(Math.min(finalCards, available) * MINS_PER_CARD),

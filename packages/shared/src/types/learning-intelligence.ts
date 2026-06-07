@@ -70,6 +70,8 @@ export interface TopicMemoryState {
 export interface SubjectMemoryState {
   subjectId: string;
   subjectName: string;
+  /** Primary examId this subject belongs to. */
+  examId?: string;
   /** Weighted average retention across all topics 0–100. */
   retentionEstimate: number;
   /** Average BKT concept mastery across topics 0–100. */
@@ -93,7 +95,9 @@ export interface SubjectMemoryState {
 export interface TopicForecast {
   topicSlug: string;
   topicName: string;
+  subjectId?: string;
   subjectName: string;
+  examId?: string;
   /** Current accuracy for this topic. */
   currentAccuracy: number;
   /** Predicted accuracy in 7 days if no review happens. */
@@ -145,6 +149,8 @@ export interface PlannedStudySession {
   topicName: string;
   subjectId: string;
   subjectName: string;
+  /** Exam this topic belongs to — used for navigation to level-scoped study. */
+  examId?: string;
   /** Why this topic was selected. */
   reason: StudySessionReason;
   /** Number of cards to study. */

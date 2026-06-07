@@ -39,6 +39,7 @@ interface StudyCompletionScreenProps {
   skippedCount: number;
   sessionCoinsEarned: number;
   deckId?: string | null;
+  longestStreak?: number;
   onStudyAgain: () => void;
 }
 
@@ -90,6 +91,7 @@ export const StudyCompletionScreen = React.memo(function StudyCompletionScreen({
   skippedCount,
   sessionCoinsEarned,
   deckId,
+  longestStreak = 0,
   onStudyAgain,
 }: StudyCompletionScreenProps) {
   const { theme } = useTheme();
@@ -407,6 +409,7 @@ export const StudyCompletionScreen = React.memo(function StudyCompletionScreen({
           incorrectCount={incorrectCount}
           skippedCount={skippedCount}
           totalCards={total}
+          longestStreak={longestStreak}
         />
 
         {/* Coins earned */}

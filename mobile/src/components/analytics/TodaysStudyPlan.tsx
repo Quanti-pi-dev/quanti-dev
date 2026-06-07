@@ -35,12 +35,13 @@ const REASON_CONFIG: Record<StudySessionReason, { icon: string; color: string; l
 function SessionRow({
   session,
   index,
+  onPress,
 }: {
   session: PlannedStudySession;
   index: number;
+  onPress: () => void;
 }) {
   const { theme } = useTheme();
-  const router = useRouter();
   const cfg = REASON_CONFIG[session.reason];
 
   const translateX = useSharedValue(30);
@@ -58,7 +59,7 @@ function SessionRow({
   }));
 
   return (
-    <Animated.View style={animStyle}>
+    <Animated.View style={animStyle} accessible accessibilityRole="button" accessibilityLabel={`Study ${session.topicName}`}>
       <TouchableOpacity
         activeOpacity={0.75}
         accessibilityLabel={`Study ${session.topicName}, ${session.cardCount} cards, ${session.estimatedMinutes} minutes`}
@@ -301,7 +302,28 @@ export function TodaysStudyPlan({ plan, chronotypePeakHour }: TodaysStudyPlanPro
         {/* Session list */}
         <View style={{ padding: spacing.md, gap: spacing.sm }}>
           {plan.sessions.map((session, i) => (
-            <SessionRow key={session.topicSlug} session={session} index={i} />
+            <SessionRow
+              key={session.topicSlug}
+              session={session}
+              index={i}
+              onPress={() => {
+                if (session.examId && session.subjectId) {
+                  // Navigate to the subject's topic levels — the student picks their level
+                  router.push({
+                    pathname: '/exams/[examId]/subjects/[subjectId]/levels',
+                    params: {
+                      examId: session.examId,
+                      subjectId: session.subjectId,
+                      title: session.subjectName,
+                      topicSlug: session.topicSlug,
+                    },
+                  });
+                } else {
+                  // Fallback: go to study tab
+                  router.push('/(tabs)/study');
+                }
+              }}
+            />
           ))}
         </View>
 
