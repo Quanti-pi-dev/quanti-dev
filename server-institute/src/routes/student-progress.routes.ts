@@ -369,11 +369,13 @@ export async function studentProgressRoutes(fastify: FastifyInstance): Promise<v
         .map(([slug, count]) => ({ topicSlug: slug, topicName: topicNameMap.get(slug) ?? slug, errorCount: count }));
 
       // ── 9. Streak ─────────────────────────────────────────────
-      const streakResult = await pg.query(
-        `SELECT current_streak, longest_streak, last_study_date FROM user_streaks WHERE user_id = $1`,
-        [userId],
-      );
-      const streak = streakResult.rows[0] ?? { current_streak: 0, longest_streak: 0, last_study_date: null };
+      // Streaks are stored in Redis (streak:{firebaseUid} hash), not PostgreSQL.
+      const streakData = await redis.hgetall(`streak:${firebaseUid}`);
+      const streak = {
+        current_streak:  parseInt(streakData['current_streak']  ?? '0', 10),
+        longest_streak:  parseInt(streakData['longest_streak']  ?? '0', 10),
+        last_study_date: streakData['last_study_date'] ?? null,
+      };
 
       // ── 10. Institute test submissions ────────────────────────
       const testSubmissions = await pg.query(
