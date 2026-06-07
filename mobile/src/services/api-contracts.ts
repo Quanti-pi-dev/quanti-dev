@@ -296,6 +296,7 @@ export interface ErrorJournalEntry {
   topicName: string;
   level: string;
   question: string;
+  explanation?: string | null;
   imageUrl?: string | null;
   explanationImageUrl?: string | null;
   correctAnswerId: string;

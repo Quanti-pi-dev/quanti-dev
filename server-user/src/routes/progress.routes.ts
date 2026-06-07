@@ -580,7 +580,7 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
     const cards = validCardIds.length > 0
       ? await mongo.collection('flashcards')
           .find({ _id: { $in: validCardIds } })
-          .project({ question: 1, answers: 1, correctAnswerId: 1, topicDisplayName: 1 })
+          .project({ question: 1, options: 1, correctAnswerId: 1, topicDisplayName: 1, explanation: 1, imageUrl: 1, explanationImageUrl: 1 })
           .toArray()
       : [];
 
@@ -608,7 +608,10 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
         question: (card?.question as string) ?? 'Question unavailable',
         correctAnswerId: (card?.correctAnswerId as string) ?? '',
         selectedAnswerId: entry.selectedAnswerId,
-        answers: (card?.answers as { id: string; text: string }[]) ?? [],
+        answers: (card?.options as { id: string; text: string }[]) ?? [],
+        explanation: (card?.explanation as string) ?? null,
+        imageUrl: (card?.imageUrl as string) ?? null,
+        explanationImageUrl: (card?.explanationImageUrl as string) ?? null,
         timestamp: entry.timestamp,
       };
     });
@@ -893,9 +896,10 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
       ? await mongo.collection('flashcards')
           .find(mongoFilter)
           .project({
-            question: 1, answers: 1, correctAnswerId: 1,
+            question: 1, options: 1, correctAnswerId: 1,
             source: 1, sourceYear: 1, sourcePaper: 1,
             topicDisplayName: 1, explanation: 1, deckId: 1,
+            imageUrl: 1, explanationImageUrl: 1,
           })
           .toArray()
       : [];
@@ -924,9 +928,11 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
           topicSlug: c.topicSlug,
           topicName: (content.topicDisplayName as string) ?? c.topicSlug,
           question: (content.question as string) ?? '',
-          answers: (content.answers as { id: string; text: string }[]) ?? [],
+          answers: (content.options as { id: string; text: string }[]) ?? [],
           correctAnswerId: (content.correctAnswerId as string) ?? '',
           explanation: (content.explanation as string) ?? null,
+          imageUrl: (content.imageUrl as string) ?? null,
+          explanationImageUrl: (content.explanationImageUrl as string) ?? null,
           source: (content.source as string) ?? 'original',
           sourceYear: (content.sourceYear as number) ?? null,
           sourcePaper: (content.sourcePaper as string) ?? null,

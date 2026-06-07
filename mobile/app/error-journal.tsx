@@ -144,9 +144,20 @@ function ErrorCard({
 
           <View style={{ flex: 1, gap: 4 }}>
             {expanded ? (
-              <RichContent variant="bodySemiBold" color={theme.text}>
-                {entry.question}
-              </RichContent>
+              <>
+                <RichContent variant="bodySemiBold" color={theme.text}>
+                  {entry.question}
+                </RichContent>
+                {entry.imageUrl ? (
+                  <Image
+                    source={{ uri: entry.imageUrl }}
+                    style={{ width: '100%', height: 160, borderRadius: radius.md, marginTop: spacing.xs }}
+                    contentFit="contain"
+                    transition={200}
+                    cachePolicy="memory-disk"
+                  />
+                ) : null}
+              </>
             ) : (
               <Typography variant="bodySemiBold" color={theme.text} numberOfLines={2}>
                 {stripLatex(entry.question)}
@@ -193,6 +204,28 @@ function ErrorCard({
                 isSelected={answer.id === entry.selectedAnswerId}
               />
             ))}
+
+            {(entry.explanation || entry.explanationImageUrl) && (
+              <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: isDark ? 'rgba(59,130,246,0.1)' : 'rgba(59,130,246,0.05)', borderRadius: radius.md, borderWidth: 1, borderColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)' }}>
+                <Typography variant="label" color="#3B82F6" style={{ marginBottom: 4 }}>
+                  Explanation:
+                </Typography>
+                {entry.explanation ? (
+                  <RichContent variant="caption" color={theme.textSecondary}>
+                    {entry.explanation}
+                  </RichContent>
+                ) : null}
+                {entry.explanationImageUrl ? (
+                  <Image
+                    source={{ uri: entry.explanationImageUrl }}
+                    style={{ width: '100%', height: 160, borderRadius: radius.md, marginTop: spacing.xs }}
+                    contentFit="contain"
+                    transition={200}
+                    cachePolicy="memory-disk"
+                  />
+                ) : null}
+              </View>
+            )}
 
             {/* Level badge */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs }}>

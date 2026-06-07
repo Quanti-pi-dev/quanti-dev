@@ -152,18 +152,22 @@ function buildFallbackExplanation(
 // ─── Helpers ─────────────────────────────────────────────────
 
 function extractSection(text: string, label: string): string | undefined {
-  const regex = new RegExp(`${label}:?\\s*(.+?)(?:\\n|$)`, 'i');
+  const regex = new RegExp(`${label}[^a-zA-Z0-9]*([\\s\\S]+?)(?:\\n{2,}|$)`, 'i');
   const match = text.match(regex);
-  return match?.[1]?.trim() || undefined;
+  if (!match) return undefined;
+  
+  let extracted = match[1]?.trim();
+  if (extracted) {
+    extracted = extracted.replace(/^\*\*(.*?)\*\*$/, '$1').replace(/^\*(.*?)\*$/, '$1');
+  }
+  return extracted || undefined;
 }
 
-/** Remove labelled sections (e.g. "Memory Trick: …") from the body text. */
 function stripSections(text: string, labels: string[]): string {
   let result = text;
   for (const label of labels) {
-    // Remove the label line and any immediately following blank line
-    result = result.replace(new RegExp(`\\n?${label}:?[^\\n]*`, 'gi'), '');
+    const regex = new RegExp(`(?:^|\\n)[^\\n]*?${label}[\\s\\S]*?(?:\\n{2,}|$)`, 'gi');
+    result = result.replace(regex, '\n\n');
   }
-  // Collapse multiple consecutive blank lines into one
-  return result.replace(/\n{3,}/g, '\n\n');
+  return result.replace(/\n{3,}/g, '\n\n').trim();
 }
