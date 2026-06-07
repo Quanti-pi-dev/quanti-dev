@@ -185,7 +185,7 @@ export async function studentProgressRoutes(fastify: FastifyInstance): Promise<v
       const { instituteId, firebaseUid } = request.params;
 
       // Verify student belongs to this institute
-      await assertStudentInInstitute(instituteId, firebaseUid);
+      const userId = await assertStudentInInstitute(instituteId, firebaseUid);
 
       const redis = getRedisClient();
       const mongo = getMongoDb();
@@ -197,14 +197,13 @@ export async function studentProgressRoutes(fastify: FastifyInstance): Promise<v
                 im.student_uid, im.joined_at, im.department
          FROM users u
          JOIN institute_members im ON im.user_id = u.id
-         WHERE u.firebase_uid = $1 AND im.institute_id = $2 AND im.is_active = TRUE`,
-        [firebaseUid, instituteId],
+         WHERE u.id = $1 AND im.institute_id = $2 AND im.is_active = TRUE`,
+        [userId, instituteId],
       );
       if (userRow.rows.length === 0) {
         return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND' }, timestamp: new Date().toISOString() });
       }
-      const student = userRow.rows[0];
-      const userId = student['id'] as string;
+      const student = userRow.rows[0]!;
 
       // ── 2. Level progress tracking set ───────────────────────
       const trackedMembers = await redis.smembers(`level_progress_keys:${firebaseUid}`);
@@ -358,7 +357,7 @@ export async function studentProgressRoutes(fastify: FastifyInstance): Promise<v
       // ── 8. Error journal top topics ───────────────────────────
       const errorRaw = await redis.zrevrange(`error_journal:${firebaseUid}`, 0, 99);
       const errorTopicCount = new Map<string, number>();
-      for (let i = 0; i < errorRaw.length; i += 2) {
+      for (let i = 0; i < errorRaw.length; i++) {
         try {
           const parsed2 = JSON.parse(errorRaw[i]!) as { topicSlug: string };
           errorTopicCount.set(parsed2.topicSlug, (errorTopicCount.get(parsed2.topicSlug) ?? 0) + 1);
@@ -397,8 +396,8 @@ export async function studentProgressRoutes(fastify: FastifyInstance): Promise<v
             avatarUrl: student['avatar_url'] as string | null,
             studentUid: student['student_uid'] as string | null,
             department: student['department'] as string | null,
-            joinedAt: (student['joined_at'] as Date).toISOString(),
-            memberSince: (student['created_at'] as Date).toISOString(),
+            joinedAt: new Date(student['joined_at'] as string | Date).toISOString(),
+            memberSince: new Date(student['created_at'] as string | Date).toISOString(),
           },
           overview: {
             totalCorrect: totalCorrectAgg,
@@ -423,7 +422,7 @@ export async function studentProgressRoutes(fastify: FastifyInstance): Promise<v
             score:       r['score'] as number,
             maxScore:    r['max_score'] as number,
             percentage:  r['percentage'] as number,
-            submittedAt: (r['submitted_at'] as Date).toISOString(),
+            submittedAt: new Date(r['submitted_at'] as string | Date).toISOString(),
           })),
         },
         timestamp: new Date().toISOString(),
