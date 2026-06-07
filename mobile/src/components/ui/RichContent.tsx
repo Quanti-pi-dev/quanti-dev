@@ -219,7 +219,7 @@ export const RichContent = memo(function RichContent({
     return (
       // Cast: ViewStyle & TextStyle overlap for common layout props (flex, width, etc.)
       <Typography variant={variant} color={color} align={align} style={style as TextStyle}>
-        {children}
+        {stripLatex(children)}
       </Typography>
     );
   }

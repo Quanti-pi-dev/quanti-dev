@@ -34,7 +34,7 @@ import { Typography } from './ui/Typography';
 import { RichContent } from './ui/RichContent';
 import { TypewriterText } from './ui/TypewriterText';
 import { RichTypewriter } from './ui/RichTypewriter';
-import { isRichContent } from '../utils/stripLatex';
+import { stripLatex, isRichContent } from '../utils/stripLatex';
 import { useGlowPulse, TIMING_FLIP } from '../theme/animations';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -465,7 +465,7 @@ export const FlashCard = memo(function FlashCard({
                       speed={16}
                       startDelay={180}
                     >
-                      {explanation}
+                      {stripLatex(explanation)}
                     </TypewriterText>
                   )
                 ) : null}

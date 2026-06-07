@@ -104,7 +104,7 @@ A student just answered a question WRONG. Your job is to:
 3. Walk through the correct reasoning step-by-step
 4. End with a short memory trick to avoid this mistake
 
-Format your response as clear paragraphs. Use LaTeX ($...$) for math.
+Format your response as clear paragraphs. You MUST use LaTeX ($...$) for ALL math, numbers, and variables.
 Include "Memory Trick:" on its own line before the trick.
 Keep your total response under 150 words. Be warm and specific.`;
 

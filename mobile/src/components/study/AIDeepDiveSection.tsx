@@ -21,7 +21,7 @@ import { spacing, radius } from '../../theme/tokens';
 import { Typography } from '../ui/Typography';
 import { TypewriterText } from '../ui/TypewriterText';
 import { RichTypewriter } from '../ui/RichTypewriter';
-import { isRichContent } from '../../utils/stripLatex';
+import { stripLatex, isRichContent } from '../../utils/stripLatex';
 import { useExplainCard, useExplainWrong } from '../../hooks/useAI';
 import { useSubscriptionGate } from '../../hooks/useSubscriptionGate';
 import type { TargetedFeedbackResponse } from '../../services/api-contracts';
@@ -287,15 +287,30 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                     <Typography variant="captionBold" color="#EF4444" style={{ marginBottom: 2 }}>
                       What went wrong
                     </Typography>
-                    <TypewriterText
-                      variant="bodySmall"
-                      color={theme.textSecondary}
-                      active={targetedExplActive}
-                      speed={20}
-                      startDelay={60}
-                    >
-                      {targetedFeedback.misconception}
-                    </TypewriterText>
+                    {(() => {
+                      const text = targetedFeedback.misconception;
+                      return isRichContent(text) ? (
+                        <RichTypewriter
+                          variant="bodySmall"
+                          color={theme.textSecondary}
+                          active={targetedExplActive}
+                          speed={20}
+                          startDelay={60}
+                        >
+                          {text}
+                        </RichTypewriter>
+                      ) : (
+                        <TypewriterText
+                          variant="bodySmall"
+                          color={theme.textSecondary}
+                          active={targetedExplActive}
+                          speed={20}
+                          startDelay={60}
+                        >
+                          {stripLatex(text)}
+                        </TypewriterText>
+                      );
+                    })()}
                   </View>
 
                   {/* Targeted explanation */}
@@ -319,7 +334,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                         speed={14}
                         startDelay={120}
                       >
-                        {targetedFeedback.explanation}
+                        {stripLatex(targetedFeedback.explanation)}
                       </TypewriterText>
                     );
                   })()}
@@ -341,15 +356,30 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                         <Typography variant="captionBold" color="#10B981">
                           Memory Trick
                         </Typography>
-                        <TypewriterText
-                          variant="bodySmall"
-                          color={theme.textSecondary}
-                          active={targetedExplActive}
-                          speed={20}
-                          startDelay={420}
-                        >
-                          {targetedFeedback.memoryTrick}
-                        </TypewriterText>
+                        {(() => {
+                          const text = targetedFeedback.memoryTrick!;
+                          return isRichContent(text) ? (
+                            <RichTypewriter
+                              variant="bodySmall"
+                              color={theme.textSecondary}
+                              active={targetedExplActive}
+                              speed={20}
+                              startDelay={420}
+                            >
+                              {text}
+                            </RichTypewriter>
+                          ) : (
+                            <TypewriterText
+                              variant="bodySmall"
+                              color={theme.textSecondary}
+                              active={targetedExplActive}
+                              speed={20}
+                              startDelay={420}
+                            >
+                              {stripLatex(text)}
+                            </TypewriterText>
+                          );
+                        })()}
                       </View>
                     </View>
                   )}
@@ -377,7 +407,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                       speed={14}
                       startDelay={100}
                     >
-                      {text}
+                      {stripLatex(text)}
                     </TypewriterText>
                   );
                 })()
