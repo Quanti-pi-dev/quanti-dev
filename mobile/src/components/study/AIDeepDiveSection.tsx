@@ -19,8 +19,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
 import { spacing, radius } from '../../theme/tokens';
 import { Typography } from '../ui/Typography';
+import { RichContent } from '../ui/RichContent';
 import { TypewriterText } from '../ui/TypewriterText';
-import { RichTypewriter } from '../ui/RichTypewriter';
 import { stripLatex, isRichContent } from '../../utils/stripLatex';
 import { useExplainCard, useExplainWrong } from '../../hooks/useAI';
 import { useSubscriptionGate } from '../../hooks/useSubscriptionGate';
@@ -290,7 +290,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                     {(() => {
                       const text = targetedFeedback.misconception;
                       return isRichContent(text) ? (
-                        <RichTypewriter
+                        <RichContent typewriter
                           variant="bodySmall"
                           color={theme.textSecondary}
                           active={targetedExplActive}
@@ -298,7 +298,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                           startDelay={60}
                         >
                           {text}
-                        </RichTypewriter>
+                        </RichContent>
                       ) : (
                         <TypewriterText
                           variant="bodySmall"
@@ -317,7 +317,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                   {(() => {
                     const isRich = isRichContent(targetedFeedback.explanation);
                     return isRich ? (
-                      <RichTypewriter
+                      <RichContent typewriter
                         variant="bodySmall"
                         color={theme.textSecondary}
                         active={targetedExplActive}
@@ -325,7 +325,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                         startDelay={120}
                       >
                         {targetedFeedback.explanation}
-                      </RichTypewriter>
+                      </RichContent>
                     ) : (
                       <TypewriterText
                         variant="bodySmall"
@@ -359,7 +359,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                         {(() => {
                           const text = targetedFeedback.memoryTrick!;
                           return isRichContent(text) ? (
-                            <RichTypewriter
+                            <RichContent typewriter
                               variant="bodySmall"
                               color={theme.textSecondary}
                               active={targetedExplActive}
@@ -367,7 +367,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                               startDelay={420}
                             >
                               {text}
-                            </RichTypewriter>
+                            </RichContent>
                           ) : (
                             <TypewriterText
                               variant="bodySmall"
@@ -390,7 +390,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                   const text = displayText || 'No additional explanation is available for this card.';
                   const isRich = isRichContent(text);
                   return isRich ? (
-                    <RichTypewriter
+                    <RichContent typewriter
                       variant="bodySmall"
                       color={theme.textSecondary}
                       active={genericActive}
@@ -398,7 +398,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                       startDelay={100}
                     >
                       {text}
-                    </RichTypewriter>
+                    </RichContent>
                   ) : (
                     <TypewriterText
                       variant="bodySmall"

@@ -155,7 +155,7 @@ export const TypewriterText = memo(function TypewriterText({
   const visibleText = chars.slice(0, displayed).join('');
 
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+    <View>
       <Typography
         variant={variant}
         color={resolvedColor}

@@ -23,6 +23,7 @@ import { WebView } from 'react-native-webview';
 import { useTheme } from '../../theme';
 import { typography as tokens } from '../../theme/tokens';
 import { Typography } from './Typography';
+import { TypewriterText } from './TypewriterText';
 import { stripLatex, isRichContent } from '../../utils/stripLatex';
 
 // ─── Global Height Cache ──────────────────────────────────────
@@ -52,9 +53,13 @@ interface RichContentProps {
   children: string;
   /**
    * Called once the WebView has fully rendered and measured its content.
-   * Used by RichTypewriter to know when to trigger the Phase-2 crossfade.
    */
   onReady?: () => void;
+  typewriter?: boolean;
+  active?: boolean;
+  speed?: number;
+  startDelay?: number;
+  onComplete?: () => void;
 }
 
 // ─── Constants ────────────────────────────────────────────────
@@ -94,6 +99,9 @@ function buildRichHtml(
   fontSize: number,
   color: string,
   align: string,
+  typewriter: boolean = false,
+  speed: number = 18,
+  startDelay: number = 120,
 ): string {
   const contentJson = JSON.stringify(content);
 
@@ -123,6 +131,10 @@ function buildRichHtml(
     strong { font-weight: 700; }
     em { font-style: italic; }
     p { margin: 0; }
+    @keyframes blink {
+      0%, 100% { box-shadow: 2px 0 0 0 ${color}; }
+      50% { box-shadow: none; }
+    }
   </style>
 </head>
 <body>
@@ -158,7 +170,6 @@ function buildRichHtml(
       }
       wrapper.innerHTML = html;
 
-      // Graceful degradation: only render math if KaTeX loaded
       if (typeof renderMathInElement === 'function') {
         renderMathInElement(wrapper, {
           delimiters: [
@@ -167,6 +178,94 @@ function buildRichHtml(
           ],
           throwOnError: false
         });
+      }
+
+      var isTypewriter = ${JSON.stringify(typewriter)};
+      var speed = ${JSON.stringify(speed)};
+      var startDelay = ${JSON.stringify(startDelay)};
+      
+      var leaves = [];
+      if (isTypewriter) {
+        function traverse(node) {
+          if (node.nodeType === 1) { // ELEMENT_NODE
+            if (node.classList.contains('katex') || node.tagName.toLowerCase() === 'img' || node.tagName.toLowerCase() === 'svg') {
+              node.style.opacity = '0';
+              node.style.transition = 'opacity 0.2s ease-in';
+              leaves.push(node);
+              return;
+            }
+            var children = Array.from(node.childNodes);
+            for (var i = 0; i < children.length; i++) {
+              traverse(children[i]);
+            }
+          } else if (node.nodeType === 3) { // TEXT_NODE
+            var text = node.textContent;
+            var fragment = document.createDocumentFragment();
+            var chars = Array.from(text);
+            for (var i = 0; i < chars.length; i++) {
+              var char = chars[i];
+              if (char.trim() === '') {
+                fragment.appendChild(document.createTextNode(char));
+              } else {
+                var span = document.createElement('span');
+                span.textContent = char;
+                span.style.opacity = '0';
+                fragment.appendChild(span);
+                leaves.push(span);
+              }
+            }
+            node.parentNode.replaceChild(fragment, node);
+          }
+        }
+        traverse(wrapper);
+        
+        var currentIndex = 0;
+        var intervalId = null;
+        var hasStarted = false;
+        
+        window.startTypewriter = function() {
+          if (hasStarted) return;
+          hasStarted = true;
+          
+          setTimeout(function() {
+            intervalId = setInterval(function() {
+              if (currentIndex > 0 && currentIndex <= leaves.length) {
+                var prev = leaves[currentIndex - 1];
+                if (prev) prev.style.boxShadow = 'none';
+              }
+              
+              if (currentIndex >= leaves.length) {
+                clearInterval(intervalId);
+                var lastTextLeaf = null;
+                for (var j = leaves.length - 1; j >= 0; j--) {
+                  if (leaves[j].tagName.toLowerCase() === 'span' && !leaves[j].classList.contains('katex')) {
+                    lastTextLeaf = leaves[j];
+                    break;
+                  }
+                }
+                if (lastTextLeaf) {
+                  lastTextLeaf.style.animation = 'blink 1s step-start infinite';
+                  setTimeout(function() {
+                    lastTextLeaf.style.animation = 'none';
+                    lastTextLeaf.style.boxShadow = 'none';
+                  }, 2000);
+                }
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'complete' }));
+                return;
+              }
+              
+              var leaf = leaves[currentIndex];
+              if (leaf) {
+                leaf.style.opacity = '1';
+                if (leaf.tagName.toLowerCase() === 'span' && !leaf.classList.contains('katex')) {
+                  leaf.style.boxShadow = '2px 0 0 0 ' + ${JSON.stringify(color)};
+                }
+              }
+              
+              currentIndex++;
+            }, speed);
+          }, startDelay);
+        };
       }
 
       // Send height after a small delay to ensure rendering and font-loading are complete
@@ -202,37 +301,70 @@ export const RichContent = memo(function RichContent({
   style,
   children,
   onReady,
+  typewriter = false,
+  active = false,
+  speed = 18,
+  startDelay = 120,
+  onComplete,
 }: RichContentProps) {
   const { theme } = useTheme();
 
+  // Determine if content needs WebView — must be computed before any hooks
+  const validChildren = children && typeof children === 'string' ? children : null;
+  const isRich = validChildren ? isRichContent(validChildren) : false;
+
+  // ⚠️ All hooks must be called unconditionally (Rules of Hooks).
+  // For the plain-text fast-path, signal onReady on next tick.
+  useEffect(() => {
+    if (validChildren && !isRich) {
+      onReady?.();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onReady, isRich, validChildren]);
+
   // Guard: null, undefined, or non-string children → render nothing
-  if (!children || typeof children !== 'string') {
-    return null;
-  }
+  if (!validChildren) return null;
 
   // Fast-path: plain text → native Typography, zero WebView overhead
-  if (!isRichContent(children)) {
-    // Plain text is rendered synchronously — signal ready on next tick
-    // so callers (RichTypewriter) don't need to special-case this path.
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    useEffect(() => { onReady?.(); }, [onReady]);
+  if (!isRich) {
+    if (typewriter) {
+      return (
+        <TypewriterText
+          variant={variant ?? 'body'}
+          color={color}
+          align={align as 'left' | 'center' | 'right'}
+          style={style as TextStyle}
+          active={active}
+          speed={speed}
+          startDelay={startDelay}
+          onComplete={onComplete}
+        >
+          {stripLatex(validChildren)}
+        </TypewriterText>
+      );
+    }
+
     return (
-      // Cast: ViewStyle & TextStyle overlap for common layout props (flex, width, etc.)
       <Typography variant={variant} color={color} align={align} style={style as TextStyle}>
-        {stripLatex(children)}
+        {stripLatex(validChildren)}
       </Typography>
     );
   }
 
   return (
     <RichWebView
-      content={children}
+      content={validChildren}
       variant={variant}
       fontSize={VARIANT_FONT_SIZE[variant] ?? tokens.base}
       color={color}
       align={align}
       style={style}
       onReady={onReady}
+      typewriter={typewriter}
+      active={active}
+      speed={speed}
+      startDelay={startDelay}
+      onComplete={onComplete}
     />
   );
 });
@@ -248,14 +380,24 @@ interface RichWebViewProps {
   style?: StyleProp<TextStyle & ViewStyle>;
   /** Forwarded from RichContentProps — called when WebView reports its height. */
   onReady?: () => void;
+  typewriter?: boolean;
+  active?: boolean;
+  speed?: number;
+  startDelay?: number;
+  onComplete?: () => void;
 }
 
-function RichWebView({ content, variant, fontSize, color, align, style, onReady }: RichWebViewProps) {
+function RichWebView({
+  content, variant, fontSize, color, align, style, onReady,
+  typewriter, active, speed, startDelay, onComplete
+}: RichWebViewProps) {
   const { theme } = useTheme();
   const resolvedColor = color ?? theme.text;
 
-  // PERF: Check height cache for instant render on revisit
-  const cacheKey = getContentKey(content, fontSize);
+  // PERF: Check height cache for instant render on revisit.
+  // Include typewriter in the key — a typewriter render has DOM traversal applied;
+  // a static render does not. Mixing them would produce wrong height cache hits.
+  const cacheKey = `${typewriter ? 'tw' : 'st'}:${getContentKey(content, fontSize)}`;
   const cachedHeight = heightCache.get(cacheKey);
 
   const [webViewHeight, setWebViewHeight] = useState(cachedHeight ?? 0);
@@ -284,14 +426,27 @@ function RichWebView({ content, variant, fontSize, color, align, style, onReady 
   }, [content]); // reset on content change
 
   const html = useMemo(
-    () => buildRichHtml(content, fontSize, resolvedColor, align),
-    [content, fontSize, resolvedColor, align],
+    () => buildRichHtml(content, fontSize, resolvedColor, align, !!typewriter, speed ?? 18, startDelay ?? 120),
+    [content, fontSize, resolvedColor, align, typewriter, speed, startDelay],
   );
 
   const source = useMemo(() => ({ html }), [html]);
 
   const onReadyRef = useRef(onReady);
   onReadyRef.current = onReady;
+
+  // Use ref for onComplete too — consistent with onReady pattern, avoids
+  // recreating handleMessage on every parent re-render.
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+
+  const webViewRef = useRef<WebView>(null);
+
+  useEffect(() => {
+    if (typewriter && active && hasRendered) {
+      webViewRef.current?.injectJavaScript('window.startTypewriter && window.startTypewriter(); true;');
+    }
+  }, [typewriter, active, hasRendered]);
 
   const handleMessage = useCallback((event: { nativeEvent: { data: string } }) => {
     try {
@@ -304,8 +459,9 @@ function RichWebView({ content, variant, fontSize, color, align, style, onReady 
         // PERF: Cache height for instant render on revisit
         heightCache.set(cacheKey, h);
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        // Notify RichTypewriter that WebView is ready for crossfade
         onReadyRef.current?.();
+      } else if (msg.type === 'complete') {
+        onCompleteRef.current?.();
       }
     } catch {
       // ignore malformed messages
@@ -321,6 +477,22 @@ function RichWebView({ content, variant, fontSize, color, align, style, onReady 
 
   // If WebView has permanently failed, show only native text
   if (hasFailed) {
+    if (typewriter) {
+      return (
+        <TypewriterText
+          variant={variant ?? 'body'}
+          color={color}
+          align={align as 'left' | 'center' | 'right'}
+          style={style as TextStyle}
+          active={active}
+          speed={speed}
+          startDelay={startDelay}
+          onComplete={onComplete}
+        >
+          {fallbackText}
+        </TypewriterText>
+      );
+    }
     return (
       <Typography
         variant={variant ?? 'body'}
@@ -337,7 +509,7 @@ function RichWebView({ content, variant, fontSize, color, align, style, onReady 
     <View style={[{ width: '100%' }, style]}>
       {/* Native text fallback — always visible until WebView is ready.
           This guarantees the user NEVER sees a blank card. */}
-      {!hasRendered && (
+      {!hasRendered && !typewriter && (
         <Typography
           variant={variant ?? 'body'}
           color={color}
@@ -351,6 +523,7 @@ function RichWebView({ content, variant, fontSize, color, align, style, onReady 
           Once ready, it replaces the native fallback. */}
       <View style={{ height: hasRendered ? webViewHeight : 0, overflow: 'hidden' }}>
         <WebView
+          ref={webViewRef}
           source={source}
           style={{ flex: 1, backgroundColor: 'transparent' }}
           scrollEnabled={false}

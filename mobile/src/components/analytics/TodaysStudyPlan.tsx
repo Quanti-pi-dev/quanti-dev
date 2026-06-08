@@ -307,21 +307,18 @@ export function TodaysStudyPlan({ plan, chronotypePeakHour }: TodaysStudyPlanPro
               session={session}
               index={i}
               onPress={() => {
-                if (session.examId && session.subjectId) {
-                  // Navigate to the subject's topic levels — the student picks their level
-                  router.push({
-                    pathname: '/exams/[examId]/subjects/[subjectId]/levels',
-                    params: {
-                      examId: session.examId,
-                      subjectId: session.subjectId,
-                      title: session.subjectName,
-                      topicSlug: session.topicSlug,
-                    },
-                  });
-                } else {
-                  // Fallback: go to study tab
-                  router.push('/(tabs)/study');
-                }
+                router.push({
+                  pathname: '/topic-review',
+                  params: {
+                    topicSlug: session.topicSlug,
+                    topicName: session.topicName,
+                    subjectName: session.subjectName,
+                    subjectId: session.subjectId,
+                    examId: session.examId ?? '',
+                    mode: 'daily_plan',
+                    cardCount: String(session.cardCount),
+                  },
+                });
               }}
             />
           ))}
@@ -331,7 +328,24 @@ export function TodaysStudyPlan({ plan, chronotypePeakHour }: TodaysStudyPlanPro
         <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => router.push('/(tabs)/study')}
+            onPress={() => {
+              // Launch the first session's topic directly
+              const first = plan.sessions[0];
+              if (first) {
+                router.push({
+                  pathname: '/topic-review',
+                  params: {
+                    topicSlug: first.topicSlug,
+                    topicName: first.topicName,
+                    subjectName: first.subjectName,
+                    subjectId: first.subjectId,
+                    examId: first.examId ?? '',
+                    mode: 'daily_plan',
+                    cardCount: String(first.cardCount),
+                  },
+                });
+              }
+            }}
             accessibilityLabel="Start today's study plan"
             accessibilityRole="button"
             style={{

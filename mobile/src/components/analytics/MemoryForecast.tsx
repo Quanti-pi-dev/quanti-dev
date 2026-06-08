@@ -122,19 +122,18 @@ export function MemoryForecast({ forecasts }: MemoryForecastProps) {
               {/* Fix CTA */}
               <TouchableOpacity
                 onPress={() => {
-                  if (f.examId && f.subjectId) {
-                    router.push({
-                      pathname: '/exams/[examId]/subjects/[subjectId]/levels',
-                      params: {
-                        examId: f.examId,
-                        subjectId: f.subjectId,
-                        title: f.subjectName,
-                        topicSlug: f.topicSlug,
-                      },
-                    });
-                  } else {
-                    router.push('/(tabs)/study');
-                  }
+                  router.push({
+                    pathname: '/topic-review',
+                    params: {
+                      topicSlug: f.topicSlug,
+                      topicName: f.topicName,
+                      subjectName: f.subjectName,
+                      subjectId: f.subjectId ?? '',
+                      examId: f.examId ?? '',
+                      mode: 'memory_review',
+                      cardCount: String(f.recommendedReviewCards),
+                    },
+                  });
                 }}
                 activeOpacity={0.7}
                 style={{

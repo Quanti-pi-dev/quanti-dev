@@ -1,12 +1,16 @@
 // ─── MistakePatterns ─────────────────────────────────────────
-// Shows the student's top 3 recurring mistakes with mastery %,
-// classification label, and a "Practice This" CTA.
+// Shows the student's top recurring mistakes with mastery %,
+// classification label, and a live "Practice This Concept" CTA
+// that launches a dedicated concept-level adaptive study session.
+//
 // Data source: ExamReadiness.weakConcepts (BKT p_mastery < 0.4)
+// Navigation:  /topic-review?mode=concept_practice&conceptTag=...
 
 import { View, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../theme';
 import { spacing, radius } from '../../theme/tokens';
 import { Typography } from '../ui/Typography';
@@ -17,7 +21,11 @@ import { ProgressBar } from '../ui/ProgressBar';
 
 interface WeakConcept {
   concept: string;
+  tag: string;
+  topicSlug: string;
+  subjectId: string;
   subjectName: string;
+  examId?: string;
   pMastery: number;
 }
 
@@ -91,9 +99,29 @@ export function MistakePatterns({ weakConcepts }: MistakePatternsProps) {
         {top3.map((wc, i) => {
           const masteryPct = Math.round(wc.pMastery * 100);
           const { label, color } = classifyMastery(masteryPct);
+          const canNavigate = !!wc.tag;
+
+          const handlePractice = () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            router.push({
+              pathname: '/topic-review',
+              params: {
+                mode: 'concept_practice',
+                conceptTag: wc.tag,
+                conceptName: wc.concept,
+                topicSlug: wc.topicSlug,
+                topicName: wc.concept,
+                subjectName: wc.subjectName,
+                subjectId: wc.subjectId,
+                examId: wc.examId ?? '',
+                cardCount: '25',
+              },
+            });
+          };
+
           return (
             <Animated.View
-              key={wc.concept}
+              key={`${wc.tag}-${i}`}
               entering={FadeInDown.delay(i * 80).duration(300)}
               style={{
                 backgroundColor: color + '08',
@@ -139,8 +167,8 @@ export function MistakePatterns({ weakConcepts }: MistakePatternsProps) {
 
               {/* CTA */}
               <TouchableOpacity
-                onPress={() => router.push('/error-journal')}
-                activeOpacity={0.7}
+                onPress={canNavigate ? handlePractice : undefined}
+                activeOpacity={canNavigate ? 0.7 : 1}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -148,11 +176,12 @@ export function MistakePatterns({ weakConcepts }: MistakePatternsProps) {
                   gap: 6,
                   paddingVertical: spacing.sm,
                   borderRadius: radius.lg,
-                  backgroundColor: color + '15',
+                  backgroundColor: canNavigate ? color + '15' : theme.cardAlt,
+                  opacity: canNavigate ? 1 : 0.4,
                 }}
               >
-                <Ionicons name="flash" size={14} color={color} />
-                <Typography variant="captionBold" color={color}>
+                <Ionicons name="flash" size={14} color={canNavigate ? color : theme.textTertiary} />
+                <Typography variant="captionBold" color={canNavigate ? color : theme.textTertiary}>
                   Practice This Concept
                 </Typography>
               </TouchableOpacity>

@@ -33,7 +33,6 @@ import { radius, spacing, typography, shadows } from '../theme/tokens';
 import { Typography } from './ui/Typography';
 import { RichContent } from './ui/RichContent';
 import { TypewriterText } from './ui/TypewriterText';
-import { RichTypewriter } from './ui/RichTypewriter';
 import { stripLatex, isRichContent } from '../utils/stripLatex';
 import { useGlowPulse, TIMING_FLIP } from '../theme/animations';
 
@@ -448,7 +447,7 @@ export const FlashCard = memo(function FlashCard({
                 {explanation ? (
                   // Use typewriter for plain text; two-phase crossfade for LaTeX/markdown
                   isRichContent(explanation) ? (
-                    <RichTypewriter
+                    <RichContent typewriter
                       variant="bodySmall"
                       color={theme.textSecondary}
                       active={isFlipped}
@@ -456,7 +455,7 @@ export const FlashCard = memo(function FlashCard({
                       startDelay={180}
                     >
                       {explanation}
-                    </RichTypewriter>
+                    </RichContent>
                   ) : (
                     <TypewriterText
                       variant="bodySmall"

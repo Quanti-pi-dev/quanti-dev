@@ -336,11 +336,33 @@ export interface ReviewQueueCard {
   intervalDays: number;
   easeFactor: number;
   repetitions: number;
+  /** True if this card is from the student's error journal (previously failed). */
+  isRemediation?: boolean;
 }
 
-export async function fetchReviewQueue(source?: 'pyq'): Promise<ReviewQueueCard[]> {
-  const params = source ? { source } : {};
+export async function fetchReviewQueue(opts?: { source?: 'pyq'; topicSlug?: string }): Promise<ReviewQueueCard[]> {
+  const params: Record<string, string> = {};
+  if (opts?.source) params.source = opts.source;
+  if (opts?.topicSlug) params.topicSlug = opts.topicSlug;
   const { data } = await api.get<ApiResponse<ReviewQueueCard[]>>('/progress/review-queue', { params });
+  return (data?.data ?? []) as ReviewQueueCard[];
+}
+
+// ─── Concept Practice (BKT-targeted sessions) ─────────────────
+// Returns cards tagged with a specific BKT concept tag, sorted by
+// adaptive score (remediation cards first, then fresh practice).
+
+export async function fetchConceptPractice(opts: {
+  tag: string;
+  topicSlug?: string;
+  subjectId?: string;
+  limit?: number;
+}): Promise<ReviewQueueCard[]> {
+  const params: Record<string, string> = { tag: opts.tag };
+  if (opts.topicSlug) params.topicSlug = opts.topicSlug;
+  if (opts.subjectId) params.subjectId = opts.subjectId;
+  if (opts.limit) params.limit = String(opts.limit);
+  const { data } = await api.get<ApiResponse<ReviewQueueCard[]>>('/progress/concept-practice', { params });
   return (data?.data ?? []) as ReviewQueueCard[];
 }
 

@@ -190,7 +190,7 @@ export default function ReviewQueueScreen() {
 
   const { data: pyqCards, isLoading: loadingPyq } = useQuery({
     queryKey: ['reviewQueue', 'pyq'],
-    queryFn: () => fetchReviewQueue('pyq'),
+    queryFn: () => fetchReviewQueue({ source: 'pyq' }),
     staleTime: 30_000,
     enabled: pyqOnly,
   });
