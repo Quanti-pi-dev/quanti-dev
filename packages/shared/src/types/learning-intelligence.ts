@@ -131,8 +131,23 @@ export interface ExamReadiness {
   strongAreas: string[];
   /** Subjects at risk: low mastery or low coverage or repeated errors. */
   vulnerableAreas: string[];
-  /** Specific concept tags the student repeatedly fails. */
-  weakConcepts: { concept: string; subjectName: string; pMastery: number }[];
+  /** Specific concept tags the student repeatedly fails, enriched with routing metadata. */
+  weakConcepts: {
+    /** Human-readable display name (resolved from topic or humanized tag). */
+    concept: string;
+    /** Raw BKT concept tag from flashcards.tags[] (e.g. "kinematics"). */
+    tag: string;
+    /** Resolved topic slug for routing to topic-review. Empty if unresolvable. */
+    topicSlug: string;
+    /** Subject MongoDB ID for routing. */
+    subjectId: string;
+    /** Human-readable subject name. */
+    subjectName: string;
+    /** Exam ID from syllabus (for level-cards routing). */
+    examId?: string;
+    /** BKT mastery probability 0–1. */
+    pMastery: number;
+  }[];
   /** Estimated study days to reach target readiness (85%). */
   daysToTargetReadiness: number;
   /** Change from last week's readiness score. */

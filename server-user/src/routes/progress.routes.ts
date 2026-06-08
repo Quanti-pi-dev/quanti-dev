@@ -10,6 +10,7 @@ import { flashcardRepository } from '@kd/db';
 import { rewardService } from '@kd/db';
 import { updateCardMemory } from '@kd/db';
 import { updateKnowledgeModel } from '@kd/db';
+import { selectAdaptiveOrder } from '@kd/db';
 import { getRedisClient, getPostgresPool, getMongoDb } from '@kd/db';
 import { ObjectId } from 'mongodb';
 import { SUBJECT_LEVELS } from '@kd/shared';
@@ -808,15 +809,204 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
     return reply.send({ success: true, data: profile, timestamp: new Date().toISOString() });
   });
 
+  // ─── GET /progress/concept-practice ────────────────────────────
+  // Full-scale concept-level flashcard practice endpoint.
+  // Fetches cards tagged with a specific BKT concept tag, prioritises
+  // cards the student has previously failed (error journal intersection),
+  // and orders them via the adaptive BKT/IRT scorer.
+  //
+  // Query params:
+  //   tag        — required; raw BKT concept tag (e.g. "kinematics")
+  //   topicSlug  — optional; narrows results to a specific topic
+  //   subjectId  — optional; narrows results to a specific subject
+  //   limit      — optional; max cards to return (default 25, max 50)
+  fastify.get('/concept-practice', async (request: FastifyRequest<{
+    Querystring: { tag: string; topicSlug?: string; subjectId?: string; limit?: string };
+  }>, reply: FastifyReply) => {
+    const userId = request.user!.id;
+    const { tag, topicSlug, subjectId, limit: limitStr } = request.query as {
+      tag: string; topicSlug?: string; subjectId?: string; limit?: string;
+    };
+    const limit = Math.min(parseInt(limitStr ?? '25', 10), 50);
+
+    if (!tag || tag.trim().length === 0) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'MISSING_PARAM', message: 'tag query parameter is required' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const mongo = getMongoDb();
+    const redis = getRedisClient();
+
+    // ── 1. Build MongoDB query: cards tagged with this concept ──────
+    // Use $in on tags array — the BKT tag is an exact element in flashcards.tags[]
+    const tagFilter: Record<string, unknown> = {
+      tags: { $in: [tag] },
+    };
+    if (topicSlug) tagFilter['topicSlug'] = topicSlug;
+    if (subjectId && /^[0-9a-fA-F]{24}$/.test(subjectId)) {
+      tagFilter['subjectId'] = new ObjectId(subjectId);
+    }
+
+    const candidateCards = await mongo
+      .collection('flashcards')
+      .find(tagFilter)
+      .project({
+        question: 1, options: 1, correctAnswerId: 1, explanation: 1,
+        imageUrl: 1, explanationImageUrl: 1, source: 1, sourceYear: 1,
+        sourcePaper: 1, topicDisplayName: 1, deckId: 1, topicSlug: 1,
+        subjectId: 1, tags: 1,
+      })
+      .limit(limit * 3) // Fetch extra pool — we'll sort and trim adaptively
+      .toArray();
+
+    if (candidateCards.length === 0) {
+      // Fallback: topicSlug-only search if tag query returned nothing
+      // (handles cases where the BKT tag predates MongoDB tag population)
+      const fallbackFilter: Record<string, unknown> = {};
+      if (topicSlug) fallbackFilter['topicSlug'] = topicSlug;
+      if (subjectId && /^[0-9a-fA-F]{24}$/.test(subjectId)) {
+        fallbackFilter['subjectId'] = new ObjectId(subjectId);
+      }
+
+      const fallbackCards = Object.keys(fallbackFilter).length > 0
+        ? await mongo
+            .collection('flashcards')
+            .find(fallbackFilter)
+            .project({
+              question: 1, options: 1, correctAnswerId: 1, explanation: 1,
+              imageUrl: 1, explanationImageUrl: 1, source: 1, sourceYear: 1,
+              sourcePaper: 1, topicDisplayName: 1, deckId: 1, topicSlug: 1,
+              subjectId: 1, tags: 1,
+            })
+            .limit(limit * 2)
+            .toArray()
+        : [];
+
+      if (fallbackCards.length === 0) {
+        return reply.send({ success: true, data: [], timestamp: new Date().toISOString() });
+      }
+      candidateCards.push(...fallbackCards);
+    }
+
+    // ── 2. Intersect with error journal for remediation priority ────
+    // Cards the student previously got wrong on this concept come first.
+    const errorRaw = await redis.zrevrange(`error_journal:${userId}`, 0, 199, 'WITHSCORES');
+    const errorCardIds = new Set<string>();
+    for (let i = 0; i < errorRaw.length; i += 2) {
+      try {
+        const parsed = JSON.parse(errorRaw[i]!) as { cardId: string };
+        if (parsed.cardId) errorCardIds.add(parsed.cardId);
+      } catch { /* skip malformed */ }
+    }
+
+    // Partition: remediation (previously failed) vs fresh cards
+    const remediationCards = candidateCards.filter(c => errorCardIds.has(c._id.toString()));
+    const freshCards = candidateCards.filter(c => !errorCardIds.has(c._id.toString()));
+
+    // ── 3. Convert to Flashcard shape for adaptive scorer ──────────
+    // selectAdaptiveOrder expects Flashcard[] from @kd/shared
+    const toFlashcard = (c: Record<string, unknown>) => ({
+      id: (c._id as { toString(): string }).toString(),
+      deckId: c.deckId?.toString() ?? '',
+      question: (c.question as string) ?? '',
+      options: (c.options as { id: string; text: string; imageUrl?: string }[]) ?? [],
+      correctAnswerId: (c.correctAnswerId as string) ?? '',
+      explanation: (c.explanation as string) ?? null,
+      imageUrl: (c.imageUrl as string) ?? null,
+      explanationImageUrl: (c.explanationImageUrl as string) ?? null,
+      source: (c.source as string) ?? 'original',
+      sourceYear: (c.sourceYear as number) ?? null,
+      sourcePaper: (c.sourcePaper as string) ?? null,
+      tags: (c.tags as string[]) ?? [],
+    });
+
+    const remediationFlashcards = remediationCards.map(toFlashcard);
+    const freshFlashcards = freshCards.map(toFlashcard);
+
+    // ── 4. Adaptive ordering via BKT/IRT educator brain ────────────
+    let orderedRemediation = remediationFlashcards;
+    let orderedFresh = freshFlashcards;
+    try {
+      if (remediationFlashcards.length > 0) {
+        const result = await selectAdaptiveOrder(remediationFlashcards as never, userId);
+        orderedRemediation = result.cards as typeof remediationFlashcards;
+      }
+      if (freshFlashcards.length > 0) {
+        const result = await selectAdaptiveOrder(freshFlashcards as never, userId);
+        orderedFresh = result.cards as typeof freshFlashcards;
+      }
+    } catch (err) {
+      request.log.warn({ err }, 'Adaptive scoring failed for concept-practice, using original order');
+    }
+
+    // ── 5. Merge: remediation first (max 10), then fresh cards ─────
+    const REMEDIATION_CAP = 10;
+    const merged = [
+      ...orderedRemediation.slice(0, REMEDIATION_CAP),
+      ...orderedFresh,
+    ].slice(0, limit);
+
+    // ── 6. Fetch subject names for enrichment ──────────────────────
+    const rawSubjectIds = [...new Set(
+      candidateCards.map(c => c.subjectId?.toString()).filter(Boolean) as string[],
+    )];
+    const validSubjectIds = rawSubjectIds
+      .filter(id => /^[0-9a-fA-F]{24}$/.test(id))
+      .map(id => new ObjectId(id));
+    const subjects = validSubjectIds.length > 0
+      ? await mongo.collection('subjects').find({ _id: { $in: validSubjectIds } }).project({ name: 1 }).toArray()
+      : [];
+    const subjectNameMap = new Map(subjects.map(s => [s._id.toString(), s.name as string]));
+
+    // ── 7. Build response as ReviewQueueCard shape ─────────────────
+    // Reuses the existing ReviewQueueCard contract so topic-review.tsx
+    // can consume it without any frontend schema changes.
+    const cardMap = new Map(candidateCards.map(c => [c._id.toString(), c]));
+    const data = merged.map(fc => {
+      const raw = cardMap.get(fc.id);
+      const rawSubjectId = raw?.subjectId?.toString() ?? '';
+      return {
+        cardId: fc.id,
+        deckId: fc.deckId,
+        subjectId: rawSubjectId,
+        subjectName: subjectNameMap.get(rawSubjectId) ?? 'Unknown',
+        topicSlug: (raw?.topicSlug as string) ?? topicSlug ?? '',
+        topicName: (raw?.topicDisplayName as string) ?? tag,
+        question: fc.question,
+        answers: fc.options,
+        correctAnswerId: fc.correctAnswerId,
+        explanation: fc.explanation,
+        imageUrl: fc.imageUrl,
+        explanationImageUrl: fc.explanationImageUrl,
+        source: fc.source,
+        sourceYear: fc.sourceYear,
+        sourcePaper: fc.sourcePaper,
+        // SM-2 metadata — concept practice treats all cards as fresh
+        overdueDays: 0,
+        intervalDays: 1,
+        easeFactor: 2.5,
+        repetitions: 0,
+        isRemediation: errorCardIds.has(fc.id),
+      };
+    });
+
+    return reply.send({ success: true, data, timestamp: new Date().toISOString() });
+  });
+
   // ─── GET /progress/review-queue ──────────────────────────────
   // Returns cards whose SM-2 next_review_at is <= now, enriched
   // with question content and PYQ metadata. Sorted by most overdue.
   // Optional ?source=pyq to filter to PYQ-only review.
+  // Optional ?topicSlug=xxx to filter to a single topic.
   fastify.get('/review-queue', async (request: FastifyRequest<{
-    Querystring: { source?: string; limit?: string };
+    Querystring: { source?: string; limit?: string; topicSlug?: string };
   }>, reply: FastifyReply) => {
     const userId = request.user!.id;
     const sourceFilter = (request.query as { source?: string }).source;
+    const topicSlugFilter = (request.query as { topicSlug?: string }).topicSlug;
     const limit = Math.min(parseInt((request.query as { limit?: string }).limit ?? '30', 10), 50);
 
     const redis = getRedisClient();
@@ -860,10 +1050,15 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
 
       const overdueDays = (now.getTime() - nextReview.getTime()) / (1000 * 60 * 60 * 24);
 
+      const cardTopicSlug = data['topic_slug'] ?? '';
+
+      // Skip cards that don't match the topic filter (if specified)
+      if (topicSlugFilter && cardTopicSlug !== topicSlugFilter) continue;
+
       dueCards.push({
         cardId: cardIds[i]!,
         subjectId: data['subject_id'] ?? '',
-        topicSlug: data['topic_slug'] ?? '',
+        topicSlug: cardTopicSlug,
         nextReviewAt: data['next_review_at']!,
         overdueDays: Math.round(overdueDays * 10) / 10,
         intervalDays: parseFloat(data['interval_days'] ?? '1'),

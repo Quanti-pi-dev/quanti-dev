@@ -971,11 +971,19 @@ function buildExamReadiness(
     .sort((a, b) => a.pMastery - b.pMastery)
     .slice(0, 10)
     .map(c => {
-      // Try to find subject name from health data
+      // Try to find subject name and topic name from health data
       const matchingSub = health.find(s => s.topics.some(t => c.tag.includes(t.topicSlug)));
+      const matchingTopic = matchingSub?.topics.find(t => c.tag.includes(t.topicSlug));
+
+      const humanizedTag = c.tag.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
       return {
-        concept: c.tag,
+        concept: matchingTopic?.topicName ?? humanizedTag,
+        tag: c.tag,
+        topicSlug: matchingTopic?.topicSlug ?? '',
+        subjectId: matchingSub?.subjectId ?? '',
         subjectName: matchingSub?.subjectName ?? 'Unknown',
+        examId: matchingSub?.examId,
         pMastery: Math.round(c.pMastery * 100) / 100,
       };
     });
