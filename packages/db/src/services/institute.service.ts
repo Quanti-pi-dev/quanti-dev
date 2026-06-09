@@ -15,6 +15,12 @@ import type {
   SubscriptionContext,
 } from '@kd/shared';
 
+// Lazily resolved to break the circular import:
+// subscriptionService → instituteService → subscriptionService
+// Using dynamic import at call-site keeps module load order safe.
+const getSubCacheKey = (firebaseUid: string) => `sub:${firebaseUid}`;
+const SUBSCRIPTION_CACHE_TTL = 300; // must match subscriptionService value
+
 const log = createServiceLogger('InstituteService');
 
 // ─── Redis Key Helpers ────────────────────────────────────────────
@@ -82,18 +88,18 @@ class InstituteService {
         throw Object.assign(new Error('NO_SEATS_AVAILABLE'), { statusCode: 402 });
       }
 
-      // Provision an individual subscription row linked to the institute sub
+      // Provision an individual subscription row linked to the institute sub.
+      // IMPORTANT: userId stored here must be the firebaseUid so that all
+      // subscription lookups (which query by firebase_uid) can find this row.
       try {
         const plan = await planRepository.findById(instSub.planId);
         if (plan) {
           await subscriptionRepository.create({
-            userId,
+            userId: firebaseUid, // ← always store as firebaseUid, not pgUserId
             planId: instSub.planId,
             status: 'active',
             currentPeriodStart: new Date(instSub.periodStart),
             currentPeriodEnd: new Date(instSub.periodEnd),
-            // Store institute_subscription_id in metadata since we don't add the column yet
-            // (column exists in migration 003; will resolve in repository layer)
           });
         }
       } catch (err) {
@@ -126,6 +132,11 @@ class InstituteService {
 
     // Invalidate membership cache
     await this.redis.del(MEMBERSHIP_CACHE_KEY(firebaseUid));
+
+    // Invalidate subscription context cache so feature-gates immediately
+    // reflect the newly provisioned institute subscription without waiting
+    // for the 5-minute TTL to expire.
+    await this.redis.del(getSubCacheKey(firebaseUid));
 
     // ── Firebase custom claims ─────────────────────────────────────
     // Map join-code role to platform-level UserRole.
@@ -275,11 +286,12 @@ class InstituteService {
    * Returns the higher-tier context.
    */
   async resolveSubscriptionContext(
-    userId: string,
-    firebaseUid: string,
+    userId: string,      // PostgreSQL UUID — used for institute_members lookups only
+    firebaseUid: string, // Firebase UID — used for all subscription lookups
   ): Promise<SubscriptionContext | null> {
-    // 1. Personal subscription (existing flow)
-    const personalSub = await subscriptionRepository.findActiveByUserId(userId);
+    // 1. Personal subscription — always query by firebaseUid because subscriptions.user_id
+    //    stores the firebase_uid (not the PostgreSQL id).
+    const personalSub = await subscriptionRepository.findActiveByUserId(firebaseUid);
     let personalCtx: SubscriptionContext | null = null;
     if (personalSub && ['active', 'trialing'].includes(personalSub.status)) {
       const plan = await planRepository.findById(personalSub.planId);

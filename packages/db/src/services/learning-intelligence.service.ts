@@ -222,9 +222,10 @@ async function loadStudentAbilityTheta(userId: string): Promise<number | null> {
 }
 
 /** Load error journal — concepts the student repeatedly gets wrong. */
-async function loadErrorPatterns(userId: string): Promise<Map<string, number>> {
+async function loadErrorPatterns(userId: string): Promise<{ counts: Map<string, number>; tagToTopic: Map<string, string> }> {
   const redis = getRedisClient();
   const errorCounts = new Map<string, number>();
+  const tagToTopic = new Map<string, string>();
   try {
     const entries = await redis.zrevrange(`error_journal:${userId}`, 0, 99);
     for (const entry of entries) {
@@ -233,6 +234,9 @@ async function loadErrorPatterns(userId: string): Promise<Map<string, number>> {
         if (data.tags) {
           for (const tag of data.tags) {
             errorCounts.set(tag, (errorCounts.get(tag) ?? 0) + 1);
+            if (data.topicSlug) {
+              tagToTopic.set(tag, data.topicSlug);
+            }
           }
         }
         if (data.topicSlug) {
@@ -243,7 +247,7 @@ async function loadErrorPatterns(userId: string): Promise<Map<string, number>> {
   } catch (err) {
     log.warn({ err }, 'Failed to load error patterns');
   }
-  return errorCounts;
+  return { counts: errorCounts, tagToTopic };
 }
 
 interface LevelDepthData {
@@ -366,12 +370,12 @@ export async function buildLearningProfile(userId: string, selectedExams?: strin
 
   // ── Enrich knowledge health with BKT, depth, and error data ──
   const knowledgeHealth = enrichWithIntelligence(
-    knowledgeHealthBase, conceptMasteryAll, levelDepth, errorPatterns,
+    knowledgeHealthBase, conceptMasteryAll, levelDepth, errorPatterns.counts, errorPatterns.tagToTopic
   );
 
   const topicForecasts = buildTopicForecasts(knowledgeHealth);
   const examReadiness = buildExamReadiness(
-    knowledgeHealth, velocity, syllabus, studentTheta, consistency, conceptMasteryAll,
+    knowledgeHealth, velocity, syllabus, studentTheta, consistency, conceptMasteryAll, errorPatterns.tagToTopic
   );
   const studyPlan = buildStudyPlan(knowledgeHealth, topicForecasts, userId);
 
@@ -528,7 +532,7 @@ async function buildKnowledgeHealthBase(userId: string, syllabus: SyllabusSubjec
     else if (avgEase < 2.2) trend = 'declining';
 
     const topicName = syllabusTopicNames.get(syllabusKey)
-      ?? topicSlug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      ?? topicSlug.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
     return {
       topicSlug, topicName, subjectId,
@@ -645,6 +649,7 @@ function enrichWithIntelligence(
   conceptMasteryAll: ConceptMasteryData[],
   levelDepth: Map<string, LevelDepthData>,
   errorPatterns: Map<string, number>,
+  tagToTopic: Map<string, string>,
 ): SubjectMemoryState[] {
 
   for (const subject of subjects) {
@@ -657,10 +662,11 @@ function enrichWithIntelligence(
       if (topic.urgency === 'not-started') continue;
 
       // ── BKT Concept Mastery ──
-      // Find all concept tags that match this topic (tags often include topic slug)
+      // Find all concept tags that match this topic (tags often include topic slug, or map via error journal)
       const topicConcepts = conceptMasteryAll.filter(c =>
         c.tag.includes(topic.topicSlug) ||
-        c.tag.startsWith(`${subject.subjectId}:`) && c.tag.includes(topic.topicSlug)
+        (c.tag.startsWith(`${subject.subjectId}:`) && c.tag.includes(topic.topicSlug)) ||
+        tagToTopic.get(c.tag) === topic.topicSlug
       );
 
       if (topicConcepts.length > 0) {
@@ -868,6 +874,7 @@ function buildExamReadiness(
   studentTheta: number | null,
   consistencyScore: number,
   conceptMasteryAll: ConceptMasteryData[],
+  tagToTopic: Map<string, string>,
 ): ExamReadiness {
   const empty: ExamReadiness = {
     overallScore: 0, conceptMasteryScore: 0, depthScore: 0,
@@ -972,17 +979,19 @@ function buildExamReadiness(
     .slice(0, 10)
     .map(c => {
       // Try to find subject name and topic name from health data
-      const matchingSub = health.find(s => s.topics.some(t => c.tag.includes(t.topicSlug)));
-      const matchingTopic = matchingSub?.topics.find(t => c.tag.includes(t.topicSlug));
+      const mappedTopicSlug = tagToTopic.get(c.tag);
+      const matchingSub = health.find(s => s.topics.some(t => t.topicSlug === mappedTopicSlug || c.tag.includes(t.topicSlug)));
+      const matchingTopic = matchingSub?.topics.find(t => t.topicSlug === mappedTopicSlug || c.tag.includes(t.topicSlug));
 
-      const humanizedTag = c.tag.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      // Make sure we replace BOTH underscores and hyphens before humanizing
+      const humanizedTag = c.tag.replace(/[-_]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 
       return {
-        concept: matchingTopic?.topicName ?? humanizedTag,
+        concept: humanizedTag,
         tag: c.tag,
         topicSlug: matchingTopic?.topicSlug ?? '',
         subjectId: matchingSub?.subjectId ?? '',
-        subjectName: matchingSub?.subjectName ?? 'Unknown',
+        subjectName: matchingTopic ? `${matchingSub?.subjectName} — ${matchingTopic.topicName}` : (matchingSub?.subjectName ?? 'Unknown'),
         examId: matchingSub?.examId,
         pMastery: Math.round(c.pMastery * 100) / 100,
       };

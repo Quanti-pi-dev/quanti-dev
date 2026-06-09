@@ -105,6 +105,8 @@ export default function TopicReviewScreen() {
     cardCount?: string;
     conceptTag?: string;
     conceptName?: string;
+    startCardId?: string;
+    source?: string;
   }>();
   const {
     topicSlug,
@@ -116,11 +118,15 @@ export default function TopicReviewScreen() {
     cardCount,
     conceptTag,
     conceptName,
+    startCardId,
+    source,
   } = params;
 
-  const suggestedCount = parseInt(cardCount ?? '25', 10);
   const isReviewMode = mode === 'memory_review';
   const isConceptMode = mode === 'concept_practice';
+  // Default to a larger count for review mode so we don't truncate the queue early
+  const suggestedCount = cardCount ? parseInt(cardCount, 10) : (isReviewMode ? 100 : 25);
+  
   const headerTitle = isConceptMode
     ? (conceptName || topicName || 'Concept Practice')
     : (topicName || topicSlug || 'Study');
@@ -132,9 +138,9 @@ export default function TopicReviewScreen() {
     isError: reviewError,
     refetch: refetchReview,
   } = useQuery({
-    queryKey: ['topic-review', 'review', topicSlug],
-    queryFn: () => fetchReviewQueue({ topicSlug }),
-    enabled: isReviewMode && !!topicSlug,
+    queryKey: ['topic-review', 'review', topicSlug, source],
+    queryFn: () => fetchReviewQueue({ topicSlug, source: source as 'pyq' | undefined }),
+    enabled: isReviewMode,
     staleTime: 30_000,
   });
 
@@ -190,12 +196,22 @@ export default function TopicReviewScreen() {
   const cards = useMemo(() => {
     if (!rawCards) return null;
     const shuffled = shuffleArray(rawCards);
+    
+    // If a startCardId was provided, bring it to the very front
+    if (startCardId) {
+      const startIndex = shuffled.findIndex(c => c.id === startCardId);
+      if (startIndex > 0) {
+        const [targetCard] = shuffled.splice(startIndex, 1);
+        if (targetCard) shuffled.unshift(targetCard);
+      }
+    }
+
     // Limit to suggested card count when available
     return suggestedCount > 0
       ? shuffled.slice(0, suggestedCount)
       : shuffled;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawCards, shuffleSeed, suggestedCount]);
+  }, [rawCards, shuffleSeed, suggestedCount, startCardId]);
 
   const isLoading = isConceptMode ? conceptLoading : isReviewMode ? reviewLoading : levelLoading;
   const isError = isConceptMode ? conceptError : isReviewMode ? reviewError : levelError;

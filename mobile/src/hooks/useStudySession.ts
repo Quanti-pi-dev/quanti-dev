@@ -136,6 +136,7 @@ export function useStudySession({ deckId, startedAt, skipAnswerDetails = false }
         queryClient.invalidateQueries({ queryKey: gamificationKeys.coins() });
         queryClient.invalidateQueries({ queryKey: gamificationKeys.coinsToday() });
         queryClient.invalidateQueries({ queryKey: sessionsKeys.today() });
+        queryClient.invalidateQueries({ queryKey: [...progressKeys.all, 'learning-profile'] });
       } else {
         // Mid-session: mark stale but DON'T trigger refetch — avoids 6 parallel
         // API calls every 800ms. Data refreshes when user navigates away.

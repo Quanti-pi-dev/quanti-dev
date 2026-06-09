@@ -402,13 +402,15 @@ export default function InstituteHomeScreen() {
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={onRefresh} tintColor="#6366f1" />}
       >
         {/* Page header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xl }}>
-          <View>
-            <Typography variant="h1" color={theme.text}>My Institute</Typography>
-            <Typography variant="body" color={theme.textSecondary} style={{ marginTop: 2 }}>
-              Tests and activities from your institute
-            </Typography>
-          </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: (!memberships || memberships.length === 0) ? 'space-between' : 'flex-end', marginBottom: spacing.xl }}>
+          {(!memberships || memberships.length === 0) && (
+            <View>
+              <Typography variant="h1" color={theme.text}>My Institute</Typography>
+              <Typography variant="body" color={theme.textSecondary} style={{ marginTop: 2 }}>
+                Tests and activities from your institute
+              </Typography>
+            </View>
+          )}
           <TouchableOpacity
             onPress={() => router.push('/institute/join' as never)}
             style={{

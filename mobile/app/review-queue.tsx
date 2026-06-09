@@ -322,15 +322,15 @@ export default function ReviewQueueScreen() {
                 card={card}
                 index={idx}
                 onPress={() => {
-                  // Navigate to study the card in its original deck context.
-                  // Uses deck-mode (not level-mode) so SM-2/BKT updates happen
-                  // via useStudySession's answer flush without inflating any
-                  // specific level's statistics.
-                  if (card.deckId) {
-                    router.push(
-                      `/flashcards/${card.deckId}?title=Review` as never,
-                    );
-                  }
+                  router.push({
+                    pathname: '/topic-review',
+                    params: {
+                      mode: 'memory_review',
+                      topicName: 'Review Queue',
+                      startCardId: card.cardId,
+                      source: pyqOnly ? 'pyq' : undefined,
+                    }
+                  });
                 }}
               />
             ))}

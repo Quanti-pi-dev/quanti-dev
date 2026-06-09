@@ -19,6 +19,7 @@ import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';
 import { apiPost } from '../../src/services/api-contracts';
+import { useSubscription } from '../../src/contexts/SubscriptionContext';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -33,6 +34,7 @@ export default function JoinInstituteScreen() {
   const { theme } = useTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { refreshSubscription } = useSubscription();
 
   const [code, setCode]       = useState('');
   const [loading, setLoading] = useState(false);
@@ -55,10 +57,14 @@ export default function JoinInstituteScreen() {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setSuccess(result);
 
-      // Immediately bust the memberships cache so the home screen
-      // fetches fresh data when we navigate there instead of serving
-      // the stale empty list (which has a 5-min staleTime).
-      await queryClient.invalidateQueries({ queryKey: ['institute-memberships'] });
+      // Bust caches in parallel:
+      // 1. Institute memberships — so the home screen shows the new institute.
+      // 2. Subscription context — so planTier / hasFeature immediately reflect
+      //    the institute-provisioned subscription without needing an app restart.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['institute-memberships'] }),
+        refreshSubscription(),
+      ]);
 
       // Give user 1.5 s to see the success banner, then navigate
       setTimeout(() => {

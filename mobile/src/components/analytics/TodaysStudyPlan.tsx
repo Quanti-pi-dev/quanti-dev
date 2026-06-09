@@ -61,6 +61,7 @@ function SessionRow({
   return (
     <Animated.View style={animStyle} accessible accessibilityRole="button" accessibilityLabel={`Study ${session.topicName}`}>
       <TouchableOpacity
+        onPress={onPress}
         activeOpacity={0.75}
         accessibilityLabel={`Study ${session.topicName}, ${session.cardCount} cards, ${session.estimatedMinutes} minutes`}
         accessibilityRole="button"
@@ -315,7 +316,7 @@ export function TodaysStudyPlan({ plan, chronotypePeakHour }: TodaysStudyPlanPro
                     subjectName: session.subjectName,
                     subjectId: session.subjectId,
                     examId: session.examId ?? '',
-                    mode: 'daily_plan',
+                    mode: session.reason === 'overdue' ? 'memory_review' : 'daily_plan',
                     cardCount: String(session.cardCount),
                   },
                 });
@@ -340,7 +341,7 @@ export function TodaysStudyPlan({ plan, chronotypePeakHour }: TodaysStudyPlanPro
                     subjectName: first.subjectName,
                     subjectId: first.subjectId,
                     examId: first.examId ?? '',
-                    mode: 'daily_plan',
+                    mode: first.reason === 'overdue' ? 'memory_review' : 'daily_plan',
                     cardCount: String(first.cardCount),
                   },
                 });
