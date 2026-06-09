@@ -19,7 +19,6 @@ import type {
 // subscriptionService → instituteService → subscriptionService
 // Using dynamic import at call-site keeps module load order safe.
 const getSubCacheKey = (firebaseUid: string) => `sub:${firebaseUid}`;
-const SUBSCRIPTION_CACHE_TTL = 300; // must match subscriptionService value
 
 const log = createServiceLogger('InstituteService');
 
@@ -286,7 +285,7 @@ class InstituteService {
    * Returns the higher-tier context.
    */
   async resolveSubscriptionContext(
-    userId: string,      // PostgreSQL UUID — used for institute_members lookups only
+    _userId: string,     // PostgreSQL UUID — reserved for future institute_members lookups
     firebaseUid: string, // Firebase UID — used for all subscription lookups
   ): Promise<SubscriptionContext | null> {
     // 1. Personal subscription — always query by firebaseUid because subscriptions.user_id
