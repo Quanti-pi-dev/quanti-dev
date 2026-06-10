@@ -151,7 +151,7 @@ function AnswerOption({
         {imageUrl ? (
           <Image
             source={{ uri: imageUrl }}
-            style={{ width: '100%', height: 100, borderRadius: radius.md, marginTop: 4 }}
+            style={{ width: '100%', aspectRatio: 16 / 9, minHeight: 80, borderRadius: radius.md, marginTop: 4 }}
             contentFit="contain"
             transition={200}
             cachePolicy="memory-disk"
@@ -432,7 +432,7 @@ export default function PYQPracticeScreen() {
               <Image
                 source={{ uri: currentCard.imageUrl }}
                 style={{
-                  width: '100%', height: 160, borderRadius: radius.lg,
+                  width: '100%', aspectRatio: 16 / 9, minHeight: 120, borderRadius: radius.lg,
                   borderWidth: 1, borderColor: theme.border, marginBottom: spacing.xs,
                 }}
                 contentFit="contain"
@@ -479,7 +479,7 @@ export default function PYQPracticeScreen() {
                   {currentCard.explanationImageUrl ? (
                     <Image
                       source={{ uri: currentCard.explanationImageUrl }}
-                      style={{ width: '100%', height: 160, borderRadius: radius.md, marginTop: spacing.xs }}
+                      style={{ width: '100%', aspectRatio: 16 / 9, minHeight: 120, borderRadius: radius.md, marginTop: spacing.xs }}
                       contentFit="contain"
                       transition={200}
                       cachePolicy="memory-disk"

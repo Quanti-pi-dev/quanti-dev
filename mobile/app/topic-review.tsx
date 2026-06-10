@@ -32,7 +32,7 @@ import { RouteErrorBoundary } from '../src/components/ui/RouteErrorBoundary';
 import { CardErrorBoundary } from '../src/components/ui/CardErrorBoundary';
 import { useRecordCompletion } from '../src/hooks/useProgress';
 import { useStudySession } from '../src/hooks/useStudySession';
-import { fetchReviewQueue, fetchLevelCards, fetchConceptPractice, type ReviewQueueCard } from '../src/services/api-contracts';
+import { fetchReviewQueue, fetchLevelCards, fetchConceptPractice, type ReviewQueueCard, type TargetedFeedbackResponse } from '../src/services/api-contracts';
 import type { Flashcard } from '@kd/shared';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -240,6 +240,15 @@ export default function TopicReviewScreen() {
   const [answered, setAnswered] = useState<CardAnswer[]>([]);
   const [sessionCoinsEarned, setSessionCoinsEarned] = useState(0);
   const [selectedOptionIds, setSelectedOptionIds] = useState<SelectedOptionMap>({});
+
+  // ─── AI Deep Dive panel cache (survives card remounts) ────
+  // Keyed by cardId. Stores the last known panel state so navigating back
+  // restores both the expanded/collapsed state and the fetched AI content.
+  const aiDiveStateCache = useRef<Map<string, {
+    isOpen: boolean;
+    liveExplanation: string | null;
+    targetedFeedback: TargetedFeedbackResponse | null;
+  }>>(new Map());
 
   // ─── Response time tracking ───────────────────────────────
   const cardStartTimeRef = useRef(Date.now());
@@ -456,6 +465,26 @@ export default function TopicReviewScreen() {
     (card.options ?? []).findIndex((o) => o.id === card.correctAnswerId)
   ] ?? LETTER_KEYS[0] ?? 'A';
 
+  // ─── Restore state for previously answered cards ──────────
+  // When the student navigates back to a card they already answered, seed
+  // FlashCard with the persisted result so it renders on the back (result) side.
+  const persistedAnswer = answered[currentIdx];
+  const persistedSelectedOptionId = selectedOptionIds[currentIdx];
+
+  type AnswerKey = 'A' | 'B' | 'C' | 'D';
+  const initialAnswerState: 'unanswered' | 'correct' | 'incorrect' | 'skipped' =
+    persistedAnswer === true ? 'correct'
+    : persistedAnswer === false ? 'incorrect'
+    : persistedAnswer === 'skipped' ? 'skipped'
+    : 'unanswered';
+
+  // Recover which letter key was originally selected by matching the stored option ID
+  const initialSelectedKey: AnswerKey | null = (() => {
+    if (!persistedSelectedOptionId) return null;
+    const optIdx = (card.options ?? []).findIndex((o) => o.id === persistedSelectedOptionId);
+    return optIdx >= 0 ? (LETTER_KEYS[optIdx] ?? null) : null;
+  })();
+
   // ─── Active study view ────────────────────────────────────
   return (
     <RouteErrorBoundary fallbackTitle="Session Interrupted">
@@ -473,15 +502,17 @@ export default function TopicReviewScreen() {
         <CardErrorBoundary onSkip={handleSkip}>
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing['2xl'] }}>
             <FlashCard
-              key={card.id}
+              key={`${card.id}-${currentIdx}`}
               question={card.question}
               options={cardOptions}
               correctKey={correctLetterKey}
               explanation={card.explanation ?? ''}
               imageUrl={card.imageUrl}
               explanationImageUrl={card.explanationImageUrl}
-              onAnswer={handleAnswer}
-              onSkip={handleSkip}
+              initialAnswerState={initialAnswerState}
+              initialSelectedKey={initialSelectedKey}
+              onAnswer={initialAnswerState === 'unanswered' ? handleAnswer : undefined}
+              onSkip={initialAnswerState === 'unanswered' ? handleSkip : undefined}
             />
           </View>
 
@@ -491,6 +522,12 @@ export default function TopicReviewScreen() {
             cardIndex={currentIdx}
             cardId={card.id}
             selectedOptionId={selectedOptionIds[currentIdx]}
+            initialOpenState={aiDiveStateCache.current.get(card.id)?.isOpen ?? false}
+            initialLiveExplanation={aiDiveStateCache.current.get(card.id)?.liveExplanation ?? null}
+            initialTargetedFeedback={aiDiveStateCache.current.get(card.id)?.targetedFeedback ?? null}
+            onStateChange={(state) => {
+              aiDiveStateCache.current.set(card.id, state);
+            }}
           />
         </CardErrorBoundary>
       </ScrollView>

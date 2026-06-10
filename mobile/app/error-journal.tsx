@@ -73,7 +73,7 @@ function AnswerPill({
         {imageUrl ? (
           <Image
             source={{ uri: imageUrl }}
-            style={{ width: '100%', height: 80, borderRadius: radius.md, marginTop: 4 }}
+            style={{ width: '100%', aspectRatio: 16 / 9, minHeight: 80, borderRadius: radius.md, marginTop: 4 }}
             contentFit="contain"
             transition={200}
             cachePolicy="memory-disk"
@@ -151,7 +151,7 @@ function ErrorCard({
                 {entry.imageUrl ? (
                   <Image
                     source={{ uri: entry.imageUrl }}
-                    style={{ width: '100%', height: 160, borderRadius: radius.md, marginTop: spacing.xs }}
+                    style={{ width: '100%', aspectRatio: 16 / 9, minHeight: 120, borderRadius: radius.md, marginTop: spacing.xs }}
                     contentFit="contain"
                     transition={200}
                     cachePolicy="memory-disk"
@@ -218,7 +218,7 @@ function ErrorCard({
                 {entry.explanationImageUrl ? (
                   <Image
                     source={{ uri: entry.explanationImageUrl }}
-                    style={{ width: '100%', height: 160, borderRadius: radius.md, marginTop: spacing.xs }}
+                    style={{ width: '100%', aspectRatio: 16 / 9, minHeight: 120, borderRadius: radius.md, marginTop: spacing.xs }}
                     contentFit="contain"
                     transition={200}
                     cachePolicy="memory-disk"

@@ -38,6 +38,21 @@ interface AIDeepDiveSectionProps {
   cardId: string;
   /** The option ID the student selected (for targeted feedback on wrong answers). */
   selectedOptionId?: string;
+  /**
+   * When navigating back to a card that had the dive open, pass true so the
+   * panel auto-expands without requiring another tap.
+   */
+  initialOpenState?: boolean;
+  /** Previously fetched generic AI explanation for this card (from parent cache). */
+  initialLiveExplanation?: string | null;
+  /** Previously fetched targeted feedback for this card (from parent cache). */
+  initialTargetedFeedback?: TargetedFeedbackResponse | null;
+  /** Called whenever the panel open-state or fetched content changes, so the parent can persist it. */
+  onStateChange?: (state: {
+    isOpen: boolean;
+    liveExplanation: string | null;
+    targetedFeedback: TargetedFeedbackResponse | null;
+  }) => void;
 }
 
 export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
@@ -46,14 +61,18 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
   cardIndex,
   cardId,
   selectedOptionId,
+  initialOpenState = false,
+  initialLiveExplanation = null,
+  initialTargetedFeedback = null,
+  onStateChange,
 }: AIDeepDiveSectionProps) {
   const { theme } = useTheme();
   const { canUseFeature } = useSubscriptionGate();
   const hasAIExplanations = canUseFeature('ai_explanations');
 
-  const [showDeepDive, setShowDeepDive] = useState(false);
-  const [liveExplanation, setLiveExplanation] = useState<string | null>(null);
-  const [targetedFeedback, setTargetedFeedback] = useState<TargetedFeedbackResponse | null>(null);
+  const [showDeepDive, setShowDeepDive] = useState(initialOpenState);
+  const [liveExplanation, setLiveExplanation] = useState<string | null>(initialLiveExplanation);
+  const [targetedFeedback, setTargetedFeedback] = useState<TargetedFeedbackResponse | null>(initialTargetedFeedback);
 
   // Per-session cache: cardId → explanation text
   const cacheRef = useRef<Map<string, string>>(new Map());
@@ -71,12 +90,22 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
   const mutateWrongRef = useRef(explainWrong.mutateAsync);
   useEffect(() => { mutateWrongRef.current = explainWrong.mutateAsync; });
 
-  // Reset on card change
+  // Reset on card change (navigating forward to a new, never-seen card resets panel)
   useEffect(() => {
-    setShowDeepDive(false);
-    setLiveExplanation(null);
-    setTargetedFeedback(null);
+    setShowDeepDive(initialOpenState);
+    setLiveExplanation(initialLiveExplanation);
+    setTargetedFeedback(initialTargetedFeedback);
+    // cardIndex is the reset trigger; initial* props carry the restored snapshot
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardIndex]);
+
+  // Notify parent whenever display state changes so it can persist the snapshot
+  useEffect(() => {
+    onStateChange?.({ isOpen: showDeepDive, liveExplanation, targetedFeedback });
+    // We intentionally omit onStateChange from deps to avoid infinite loops if
+    // the parent re-creates the callback on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showDeepDive, liveExplanation, targetedFeedback]);
 
   // The student answered wrong and we have their selected option
   const isWrongAnswer = answer === false && !!selectedOptionId;
@@ -161,7 +190,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
             onPress={fetchExplanation}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel="Show AI explanation for this answer"
+            accessibilityLabel="Show explanation for this answer"
           >
             <LinearGradient
               colors={isWrongAnswer ? ['#EF4444', '#F97316'] : ['#6366F1', '#8B5CF6']}
@@ -195,7 +224,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
                 </View>
                 <View style={{ flex: 1 }}>
                   <Typography variant="label" color={isWrongAnswer ? '#EF4444' : '#6366F1'}>
-                    {isWrongAnswer ? 'Why Was I Wrong?' : 'AI Deep Dive'}
+                    {isWrongAnswer ? 'Why Was I Wrong?' : 'Explanation powered by AI'}
                   </Typography>
                   <Typography variant="caption" color={theme.textTertiary}>
                     {isWrongAnswer
@@ -414,7 +443,7 @@ export const AIDeepDiveSection = React.memo(function AIDeepDiveSection({
               )}
             </View>
 
-            {/* Re-generate button (only for ai_explanations users) */}
+            {/* Re-generate button (only for eligible ai_explanations users) */}
             {hasAIExplanations && !isLoadingLive && (
               <TouchableOpacity
                 onPress={async () => {

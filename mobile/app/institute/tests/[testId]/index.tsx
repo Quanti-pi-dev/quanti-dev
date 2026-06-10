@@ -334,7 +334,7 @@ export default function TakeTestScreen() {
             <Image
               source={{ uri: q.imageUrl }}
               style={{
-                width: '100%', height: 160, borderRadius: radius.lg,
+                width: '100%', aspectRatio: 16 / 9, minHeight: 120, borderRadius: radius.lg,
                 borderWidth: 1, borderColor: theme.border, marginBottom: spacing.md,
               }}
               contentFit="contain"
@@ -387,7 +387,7 @@ export default function TakeTestScreen() {
                     {opt.imageUrl ? (
                       <Image
                         source={{ uri: opt.imageUrl }}
-                        style={{ width: '100%', height: 100, borderRadius: radius.md, marginTop: 4 }}
+                        style={{ width: '100%', aspectRatio: 16 / 9, minHeight: 80, borderRadius: radius.md, marginTop: 4 }}
                         contentFit="contain"
                         transition={200}
                         cachePolicy="memory-disk"

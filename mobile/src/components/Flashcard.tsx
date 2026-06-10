@@ -55,6 +55,13 @@ interface FlashCardProps {
   style?: ViewStyle;
   onAnswer?: (correct: boolean, selectedKey: 'A' | 'B' | 'C' | 'D') => void;
   onSkip?: () => void;
+  /**
+   * When navigating back to an already-answered card, pass the persisted
+   * answer state so the card renders in its resolved (flipped) state.
+   */
+  initialAnswerState?: AnswerState;
+  /** The option key the student originally selected (used with initialAnswerState). */
+  initialSelectedKey?: 'A' | 'B' | 'C' | 'D' | null;
 }
 
 type AnswerState = 'unanswered' | 'correct' | 'incorrect' | 'skipped';
@@ -71,6 +78,8 @@ export const FlashCard = memo(function FlashCard({
   style,
   onAnswer,
   onSkip,
+  initialAnswerState,
+  initialSelectedKey,
 }: FlashCardProps) {
   const { theme } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
@@ -81,10 +90,16 @@ export const FlashCard = memo(function FlashCard({
     cardHeight: (windowWidth - spacing['3xl'] * 2) * 1.35,
   }), [windowWidth]);
 
-  const [selectedKey, setSelectedKey] = useState<'A' | 'B' | 'C' | 'D' | null>(null);
-  const [answerState, setAnswerState] = useState<AnswerState>('unanswered');
-  // Track when the flip animation has fully landed so the typewriter can start
-  const [isFlipped, setIsFlipped] = useState(false);
+  const [selectedKey, setSelectedKey] = useState<'A' | 'B' | 'C' | 'D' | null>(
+    initialSelectedKey ?? null,
+  );
+  const [answerState, setAnswerState] = useState<AnswerState>(
+    initialAnswerState ?? 'unanswered',
+  );
+  // When restoring a previously answered card, start on the back (result) side
+  const [isFlipped, setIsFlipped] = useState(
+    (initialAnswerState ?? 'unanswered') !== 'unanswered',
+  );
 
   // Store timeout id to clear on unmount
   const flipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -94,7 +109,8 @@ export const FlashCard = memo(function FlashCard({
     };
   }, []);
 
-  const flip = useSharedValue(0);
+  // If restoring an answered card, start the flip shared value at 1 (back side)
+  const flip = useSharedValue((initialAnswerState ?? 'unanswered') !== 'unanswered' ? 1 : 0);
   const { glowStyle, pulse } = useGlowPulse();
 
   const frontStyle = useAnimatedStyle(() => ({
@@ -222,17 +238,24 @@ export const FlashCard = memo(function FlashCard({
             height: '100%',
             backgroundColor: theme.card,
             borderRadius: radius['2xl'],
-            padding: spacing.xl,
+            paddingHorizontal: spacing.xl,
+            paddingTop: spacing.xl,
+            paddingBottom: spacing.md,
             ...shadows.lg,
             shadowColor: theme.shadow,
-            gap: spacing.base,
             borderWidth: 1,
             borderColor: theme.border,
           },
         ]}
       >
-        {/* Question (with optional diagram/graph image) */}
-        <View style={{ flex: 1, justifyContent: imageUrl ? 'flex-start' : 'center', gap: spacing.sm, overflow: 'hidden' }}>
+        {/* ── Question block (fixed height, never scrolls) ──────── */}
+        <View
+          style={{
+            maxHeight: imageUrl ? cardHeight * 0.44 : cardHeight * 0.32,
+            gap: spacing.sm,
+            marginBottom: spacing.base,
+          }}
+        >
           {imageUrl ? (
             <View
               style={{
@@ -240,21 +263,21 @@ export const FlashCard = memo(function FlashCard({
                 overflow: 'hidden',
                 borderWidth: 1,
                 borderColor: theme.border,
-                maxHeight: cardHeight * 0.3,
               }}
             >
               <Image
                 source={{ uri: imageUrl }}
-                style={{ width: '100%', height: cardHeight * 0.28 }}
+                style={{ width: '100%', aspectRatio: 16 / 9, minHeight: 100 }}
                 contentFit="contain"
                 transition={{ duration: 250, effect: 'cross-dissolve' }}
                 cachePolicy="memory-disk"
               />
             </View>
           ) : null}
+          {/* Question text — scrollable only within the capped block */}
           <ScrollView
-            contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
-            showsVerticalScrollIndicator={true}
+            contentContainerStyle={{ flexGrow: 1, justifyContent: imageUrl ? 'flex-start' : 'center' }}
+            showsVerticalScrollIndicator={false}
           >
             <RichContent
               variant={imageUrl ? 'bodySmall' : 'h4'}
@@ -265,8 +288,13 @@ export const FlashCard = memo(function FlashCard({
           </ScrollView>
         </View>
 
-        {/* Options */}
-        <View style={{ gap: spacing.sm }}>
+        {/* ── Options (flex:1 → scrollable, fills remaining card space) */}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.xs }}
+          showsVerticalScrollIndicator={true}
+          nestedScrollEnabled={true}
+        >
           {options?.map((opt) => {
             const s = optionStyles(opt.key);
             const isSelected = selectedKey === opt.key;
@@ -280,7 +308,7 @@ export const FlashCard = memo(function FlashCard({
                 activeOpacity={0.78}
                 style={{
                   flexDirection: 'row',
-                  alignItems: 'center',
+                  alignItems: opt.imageUrl ? 'flex-start' : 'center',
                   backgroundColor: s.bg,
                   borderRadius: radius.lg,
                   borderWidth: 1.5,
@@ -289,7 +317,7 @@ export const FlashCard = memo(function FlashCard({
                   gap: spacing.sm,
                 }}
               >
-                {/* Key bubble — changes color on answer */}
+                {/* Key bubble */}
                 <View
                   style={{
                     width: 28,
@@ -299,6 +327,7 @@ export const FlashCard = memo(function FlashCard({
                     alignItems: 'center',
                     justifyContent: 'center',
                     flexShrink: 0,
+                    marginTop: opt.imageUrl ? 2 : 0,
                   }}
                 >
                   {showCheckmark ? (
@@ -319,14 +348,13 @@ export const FlashCard = memo(function FlashCard({
                   {opt.imageUrl ? (
                     <Image
                       source={{ uri: opt.imageUrl }}
-                      style={{ width: '100%', height: 100, borderRadius: radius.md, marginTop: spacing.xs }}
+                      style={{ width: '100%', aspectRatio: 16 / 9, minHeight: 80, borderRadius: radius.md, marginTop: spacing.xs }}
                       contentFit="contain"
                       transition={200}
                     />
                   ) : null}
                 </View>
 
-                {/* Trailing icon for correct/selected */}
                 {showCheckmark && (
                   <Ionicons name="checkmark-circle" size={18} color={s.keyColor} />
                 )}
@@ -336,9 +364,9 @@ export const FlashCard = memo(function FlashCard({
               </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
 
-        {/* Skip button (FIX 4.2) */}
+        {/* ── Skip button — pinned below the scrollable options ── */}
         {onSkip && answerState === 'unanswered' && (
           <TouchableOpacity
             onPress={handleSkip}
@@ -350,6 +378,7 @@ export const FlashCard = memo(function FlashCard({
               gap: 4,
               paddingHorizontal: spacing.md,
               paddingVertical: 6,
+              marginTop: spacing.sm,
               borderRadius: radius.full,
               borderWidth: 1,
               borderColor: theme.border,
@@ -471,7 +500,7 @@ export const FlashCard = memo(function FlashCard({
                 {explanationImageUrl ? (
                   <Image
                     source={{ uri: explanationImageUrl }}
-                    style={{ width: '100%', height: 160, borderRadius: radius.md }}
+                    style={{ width: '100%', aspectRatio: 16 / 9, minHeight: 120, borderRadius: radius.md }}
                     contentFit="contain"
                     transition={200}
                   />

@@ -316,7 +316,11 @@ export function TodaysStudyPlan({ plan, chronotypePeakHour }: TodaysStudyPlanPro
                     subjectName: session.subjectName,
                     subjectId: session.subjectId,
                     examId: session.examId ?? '',
-                    mode: session.reason === 'overdue' ? 'memory_review' : 'daily_plan',
+                    // Always use daily_plan so fetchLevelCards is called and the
+                    // full suggestedCount (cardCount) is honoured. The SM-2 review
+                    // queue is limited to overdue cards and may have fewer than the
+                    // plan promises (e.g. 16 when the plan shows 20).
+                    mode: 'daily_plan',
                     cardCount: String(session.cardCount),
                   },
                 });
@@ -341,7 +345,7 @@ export function TodaysStudyPlan({ plan, chronotypePeakHour }: TodaysStudyPlanPro
                     subjectName: first.subjectName,
                     subjectId: first.subjectId,
                     examId: first.examId ?? '',
-                    mode: first.reason === 'overdue' ? 'memory_review' : 'daily_plan',
+                    mode: 'daily_plan',
                     cardCount: String(first.cardCount),
                   },
                 });

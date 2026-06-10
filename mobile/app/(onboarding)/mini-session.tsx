@@ -11,6 +11,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Dimensions, TouchableOpacity, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -33,6 +34,7 @@ import { useTheme } from '../../src/theme';
 import { spacing, radius } from '../../src/theme/tokens';
 import { ScreenWrapper } from '../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../src/components/ui/Typography';
+import { RichContent } from '../../src/components/ui/RichContent';
 import { Button } from '../../src/components/ui/Button';
 import {
   fetchDiagnosticDeck,
@@ -111,7 +113,7 @@ function AnswerOption({
   revealed,
   onPress,
 }: {
-  answer: { id: string; text: string };
+  answer: { id: string; text: string; imageUrl?: string | null };
   index: number;
   selected: boolean;
   correct: boolean;
@@ -154,7 +156,7 @@ function AnswerOption({
         activeOpacity={0.8}
         style={{
           flexDirection: 'row',
-          alignItems: 'center',
+          alignItems: answer.imageUrl ? 'flex-start' : 'center',
           padding: spacing.md,
           borderRadius: radius.xl,
           borderWidth: 1.5,
@@ -172,6 +174,8 @@ function AnswerOption({
             backgroundColor: letterBg,
             alignItems: 'center',
             justifyContent: 'center',
+            flexShrink: 0,
+            marginTop: answer.imageUrl ? 2 : 0,
           }}
         >
           {revealed && isCorrectAnswer ? (
@@ -185,11 +189,20 @@ function AnswerOption({
           )}
         </View>
 
-        {/* Text */}
-        <View style={{ flex: 1 }}>
-          <Typography variant="body" color={theme.text}>
+        {/* Text + optional image */}
+        <View style={{ flex: 1, gap: spacing.xs }}>
+          <RichContent variant="body" color={theme.text}>
             {answer.text}
-          </Typography>
+          </RichContent>
+          {answer.imageUrl ? (
+            <Image
+              source={{ uri: answer.imageUrl }}
+              style={{ width: '100%', aspectRatio: 16 / 9, minHeight: 80, borderRadius: radius.md, marginTop: 4 }}
+              contentFit="contain"
+              transition={200}
+              cachePolicy="memory-disk"
+            />
+          ) : null}
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -673,9 +686,28 @@ export default function MiniSessionScreen() {
               <Typography variant="caption" color={theme.textTertiary} style={{ marginBottom: spacing.sm }}>
                 {currentCard.topicName}
               </Typography>
-              <Typography variant="bodySemiBold" color={theme.text} style={{ lineHeight: 24 }}>
+              {currentCard.imageUrl ? (
+                <View
+                  style={{
+                    borderRadius: radius.lg,
+                    overflow: 'hidden',
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    marginBottom: spacing.sm,
+                  }}
+                >
+                  <Image
+                    source={{ uri: currentCard.imageUrl }}
+                    style={{ width: '100%', aspectRatio: 16 / 9, minHeight: 120 }}
+                    contentFit="contain"
+                    transition={{ duration: 250, effect: 'cross-dissolve' }}
+                    cachePolicy="memory-disk"
+                  />
+                </View>
+              ) : null}
+              <RichContent variant="bodySemiBold" color={theme.text} style={{ lineHeight: 24 }}>
                 {currentCard.question}
-              </Typography>
+              </RichContent>
             </Animated.View>
           )}
 

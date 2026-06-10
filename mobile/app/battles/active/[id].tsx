@@ -23,6 +23,7 @@ import { useTheme } from '../../../src/theme';
 import { spacing, radius, shadows } from '../../../src/theme/tokens';
 import { ScreenWrapper } from '../../../src/components/layout/ScreenWrapper';
 import { Typography } from '../../../src/components/ui/Typography';
+import { RichContent } from '../../../src/components/ui/RichContent';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { useGlobalUI } from '../../../src/contexts/GlobalUIContext';
 import { useChallengeDetail, useSubmitAnswer } from '../../../src/hooks/useChallenge';
@@ -348,21 +349,20 @@ export default function ActiveChallengeScreen() {
                   overflow: 'hidden',
                   borderWidth: 1,
                   borderColor: theme.border,
-                  maxHeight: 140,
                 }}
               >
                 <Image
                   source={{ uri: currentCard.imageUrl }}
-                  style={{ width: '100%', height: 130 }}
+                  style={{ width: '100%', aspectRatio: 16 / 9, minHeight: 120 }}
                   contentFit="contain"
                   transition={{ duration: 250, effect: 'cross-dissolve' }}
                   cachePolicy="memory-disk"
                 />
               </View>
             ) : null}
-            <Typography variant="label" style={{ fontSize: 15, lineHeight: 22 }}>
+            <RichContent variant="label" style={{ fontSize: 15, lineHeight: 22 }}>
               {currentCard.question}
-            </Typography>
+            </RichContent>
           </Animated.View>
 
           {/* Options */}
@@ -430,13 +430,13 @@ export default function ActiveChallengeScreen() {
                   </View>
 
                   <View style={{ flex: 1, gap: spacing.xs }}>
-                    <Typography variant="body" style={{ fontSize: 14 }}>
+                    <RichContent variant="body" style={{ fontSize: 14 }}>
                       {option.text}
-                    </Typography>
+                    </RichContent>
                     {option.imageUrl ? (
                       <Image
                         source={{ uri: option.imageUrl }}
-                        style={{ width: '100%', height: 100, borderRadius: radius.md, marginTop: 4 }}
+                        style={{ width: '100%', aspectRatio: 16 / 9, minHeight: 80, borderRadius: radius.md, marginTop: 4 }}
                         contentFit="contain"
                         transition={200}
                         cachePolicy="memory-disk"

@@ -16,6 +16,7 @@ import { enqueue } from '../services/offlineQueue';
 import { progressKeys } from './useProgress';
 import { gamificationKeys } from './useGamification';
 import { sessionsKeys } from './useExamsUsedToday';
+import { learningProfileKeys } from './useLearningProfile';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -136,12 +137,16 @@ export function useStudySession({ deckId, startedAt, skipAnswerDetails = false }
         queryClient.invalidateQueries({ queryKey: gamificationKeys.coins() });
         queryClient.invalidateQueries({ queryKey: gamificationKeys.coinsToday() });
         queryClient.invalidateQueries({ queryKey: sessionsKeys.today() });
-        queryClient.invalidateQueries({ queryKey: [...progressKeys.all, 'learning-profile'] });
+        // Invalidate learning profile so TodaysStudyPlan + TodaysFocusSection refresh
+        queryClient.invalidateQueries({ queryKey: learningProfileKeys.all });
       } else {
-        // Mid-session: mark stale but DON'T trigger refetch — avoids 6 parallel
+        // Mid-session: mark stale but DON'T trigger live refetch — avoids parallel
         // API calls every 800ms. Data refreshes when user navigates away.
         queryClient.invalidateQueries({ queryKey: ['progress'], refetchType: 'none' });
         queryClient.invalidateQueries({ queryKey: ['gamification'], refetchType: 'none' });
+        // Also mark learning profile stale so Today's Focus card refreshes on
+        // next focus even when the user leaves a session early (partial study).
+        queryClient.invalidateQueries({ queryKey: learningProfileKeys.all, refetchType: 'none' });
       }
     } catch {
       // Server unreachable — persist to offline queue for later retry

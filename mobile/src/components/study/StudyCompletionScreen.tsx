@@ -19,6 +19,7 @@ import { spacing, radius, typography } from '../../theme/tokens';
 import { ScreenWrapper } from '../layout/ScreenWrapper';
 import { Header } from '../layout/Header';
 import { Typography } from '../ui/Typography';
+import { RichContent } from '../ui/RichContent';
 import { Button } from '../ui/Button';
 import { AccuracyRing } from './AccuracyRing';
 import { ConfettiBurst } from './ConfettiBurst';
@@ -625,9 +626,9 @@ export const StudyCompletionScreen = React.memo(function StudyCompletionScreen({
                       justifyContent: 'center',
                     }}
                   >
-                    <Typography variant="body" align="center" style={{ fontSize: 16, lineHeight: 22 }}>
+                    <RichContent variant="body" align="center" style={{ fontSize: 16, lineHeight: 22 }}>
                       {displayedCards[currentWagerCardIdx].question}
-                    </Typography>
+                    </RichContent>
                   </View>
 
                   {/* Options */}
@@ -668,9 +669,9 @@ export const StudyCompletionScreen = React.memo(function StudyCompletionScreen({
                             borderColor: btnBorderColor,
                           }}
                         >
-                          <Typography variant="body" style={{ fontWeight: textWeight }}>
+                          <RichContent variant="body" style={{ fontWeight: textWeight }}>
                             {opt.text}
-                          </Typography>
+                          </RichContent>
                         </TouchableOpacity>
                       );
                     })}
@@ -701,9 +702,9 @@ export const StudyCompletionScreen = React.memo(function StudyCompletionScreen({
                   >
                     {wagerStatus === 'won' || wagerStatus === 'correct' ? '🎉 Success!' : '❌ Challenge Failed'}
                   </Typography>
-                  <Typography variant="body" align="center" style={{ fontSize: 13 }}>
+                  <RichContent variant="body" align="center" style={{ fontSize: 13 }}>
                     {wagerMessage}
-                  </Typography>
+                  </RichContent>
 
                   {/* Show explanation if available */}
                   {(wagerStatus === 'lost' || wagerStatus === 'won') &&
@@ -712,9 +713,9 @@ export const StudyCompletionScreen = React.memo(function StudyCompletionScreen({
                         <Typography variant="captionBold" color={theme.textSecondary}>
                           Explanation:
                         </Typography>
-                        <Typography variant="caption" color={theme.textSecondary}>
+                        <RichContent variant="caption" color={theme.textSecondary}>
                           {displayedCards[currentWagerCardIdx].explanation}
-                        </Typography>
+                        </RichContent>
                       </View>
                     )}
                 </Animated.View>
