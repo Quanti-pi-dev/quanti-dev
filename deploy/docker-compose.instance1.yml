@@ -40,6 +40,7 @@ services:
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
       - FREELLMAPI_API_KEY=${FREELLMAPI_API_KEY}
       - FREELLMAPI_URL=${FREELLMAPI_URL:-http://host.docker.internal:3001/v1}
+      - SAKT_URL=${SAKT_URL:-}   # set to http://<instance2-private-ip>:10003
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

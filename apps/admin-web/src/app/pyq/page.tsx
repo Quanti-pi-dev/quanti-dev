@@ -168,6 +168,8 @@ function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImpor
     } catch (err) { setError(apiError(err)); } finally { setSaving(false); }
   };
 
+  // Tags MUST start with the deck's topicSlug as a prefix (Option A contract).
+  // e.g. topicSlug="fundamental-rights" → tags=["fundamental-rights-article14"]
   const PLACEHOLDER = JSON.stringify([{
     question: 'Which article guarantees right to equality?',
     options: [
@@ -176,6 +178,7 @@ function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImpor
     ],
     correctAnswerId: 'B',
     explanation: 'Article 14 guarantees equality before law.',
+    tags: ['fundamental-rights-article14', 'fundamental-rights-equality'],
     imageUrl: 'https://…/question.png',
     explanationImageUrl: 'https://…/explanation.png',
   }], null, 2);
@@ -301,6 +304,7 @@ function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImpor
                   <label className={LABEL}>
                     Cards JSON — array of questions (max 500 per call).
                     <span className="text-zinc-600 font-normal ml-1">Supports LaTeX in question/options via $…$</span>
+                    <span className="text-amber-500/80 font-normal ml-1">· Tags must start with the topic slug as a prefix (e.g. <code className="font-mono">kinematics-velocity</code>).</span>
                   </label>
                   <textarea value={raw} onChange={e => setRaw(e.target.value)}
                     placeholder={PLACEHOLDER} rows={10}

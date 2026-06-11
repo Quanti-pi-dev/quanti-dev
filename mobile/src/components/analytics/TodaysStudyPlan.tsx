@@ -19,7 +19,22 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../theme';
 import { spacing, radius } from '../../theme/tokens';
 import { Typography } from '../ui/Typography';
+import { useDailyPlanProgress, type SessionProgress } from '../../hooks/useDailyPlanProgress';
 import type { DailyStudyPlan, PlannedStudySession, StudySessionReason } from '@kd/shared';
+
+// ─── ML Constants ────────────────────────────────────────────
+
+const MODEL_BADGE: Record<string, { label: string; color: string }> = {
+  dkt:  { label: 'DKT',  color: '#6366F1' },
+  sakt: { label: 'SAKT', color: '#8B5CF6' },
+  bkt:  { label: 'BKT',  color: '#64748B' },
+};
+
+const DIFFICULTY_TO_LEVEL: Record<string, string> = {
+  challenging: 'Advanced',
+  moderate:    'Proficient',
+  easy_review: 'Emerging',
+};
 
 // ─── Constants ────────────────────────────────────────────────
 
@@ -35,14 +50,23 @@ const REASON_CONFIG: Record<StudySessionReason, { icon: string; color: string; l
 function SessionRow({
   session,
   index,
+  sessionProgress,
   onPress,
 }: {
   session: PlannedStudySession;
   index: number;
+  sessionProgress?: SessionProgress;
   onPress: () => void;
 }) {
   const { theme } = useTheme();
   const cfg = REASON_CONFIG[session.reason];
+
+  // Progress-aware derived values
+  const isComplete = sessionProgress?.isComplete ?? false;
+  const hasProgress = (sessionProgress?.answered ?? 0) > 0;
+  const progressRatio = sessionProgress
+    ? Math.min(1, sessionProgress.answered / Math.max(1, sessionProgress.total))
+    : 0;
 
   const translateX = useSharedValue(30);
   const opacity = useSharedValue(0);
@@ -58,6 +82,23 @@ function SessionRow({
     transform: [{ translateX: translateX.value }],
   }));
 
+  const rowBg   = isComplete ? '#10B98108' : cfg.bg;
+  const rowBdr  = isComplete ? '#10B98130' : cfg.color + '15';
+  const iconBg  = isComplete ? '#10B98118' : cfg.color + '18';
+  const barColor = isComplete ? '#10B981'  : cfg.color;
+  const labelColor = isComplete ? '#10B981' : hasProgress ? cfg.color : cfg.color;
+  const labelText  = isComplete
+    ? '✓ Completed today'
+    : hasProgress
+    ? `In progress — tap to continue`
+    : cfg.label;
+
+  // ML metadata — model badge + difficulty/dropout flags
+  const ml          = session.mlMeta;
+  const modelBadge  = ml ? (MODEL_BADGE[ml.model] ?? null) : null;
+  const diffHigh    = ml && (ml.pDifficult  ?? 0) >= 0.6;
+  const dropoutHigh = ml && (ml.dropoutRisk ?? 0) >= 0.55;
+
   return (
     <Animated.View style={animStyle} accessible accessibilityRole="button" accessibilityLabel={`Study ${session.topicName}`}>
       <TouchableOpacity
@@ -69,11 +110,11 @@ function SessionRow({
           flexDirection: 'row',
           alignItems: 'center',
           gap: spacing.md,
-          backgroundColor: cfg.bg,
+          backgroundColor: rowBg,
           borderRadius: radius.xl,
           padding: spacing.md,
           borderWidth: 1,
-          borderColor: cfg.color + '15',
+          borderColor: rowBdr,
         }}
       >
         {/* Priority indicator */}
@@ -82,12 +123,12 @@ function SessionRow({
             width: 40,
             height: 40,
             borderRadius: radius.lg,
-            backgroundColor: cfg.color + '18',
+            backgroundColor: iconBg,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <Typography style={{ fontSize: 18 }}>{cfg.icon}</Typography>
+          <Typography style={{ fontSize: 18 }}>{isComplete ? '✅' : cfg.icon}</Typography>
         </View>
 
         {/* Content */}
@@ -101,35 +142,93 @@ function SessionRow({
             </Typography>
             <View style={{ width: 3, height: 3, borderRadius: 2, backgroundColor: theme.textTertiary + '60' }} />
             <Typography variant="caption" color={theme.textSecondary} style={{ fontSize: 11 }}>
-              {session.cardCount} cards
+              {hasProgress
+                ? `${sessionProgress!.answered}/${session.cardCount} cards`
+                : `${session.cardCount} cards`}
             </Typography>
             <View style={{ width: 3, height: 3, borderRadius: 2, backgroundColor: theme.textTertiary + '60' }} />
             <Typography variant="caption" color={theme.textSecondary} style={{ fontSize: 11 }}>
               ~{session.estimatedMinutes}m
             </Typography>
           </View>
-          <Typography variant="caption" color={cfg.color} style={{ fontSize: 10, marginTop: 1 }}>
-            {cfg.label}
+
+          {/* Progress bar — only visible once the session has been opened */}
+          {hasProgress && (
+            <View
+              style={{
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: barColor + '22',
+                marginTop: 4,
+                overflow: 'hidden',
+              }}
+            >
+              <View
+                style={{
+                  height: '100%',
+                  width: `${Math.round(progressRatio * 100)}%`,
+                  backgroundColor: barColor,
+                  borderRadius: 2,
+                }}
+              />
+            </View>
+          )}
+
+          <Typography variant="caption" color={labelColor} style={{ fontSize: 10, marginTop: 1 }}>
+            {labelText}
           </Typography>
+
+          {/* ML badges — difficulty/dropout chips, hidden when complete */}
+          {ml && !isComplete && (diffHigh || dropoutHigh) && (
+            <View style={{ flexDirection: 'row', gap: 4, marginTop: 3, flexWrap: 'wrap' }}>
+              {diffHigh && (
+                <View style={{
+                  backgroundColor: '#F9731615',
+                  borderRadius: radius.full,
+                  paddingHorizontal: 5, paddingVertical: 1,
+                  borderWidth: 1, borderColor: '#F9731630',
+                }}>
+                  <Typography variant="caption" color="#F97316" style={{ fontSize: 9, lineHeight: 13 }}>
+                    ⚡ Challenging
+                  </Typography>
+                </View>
+              )}
+              {dropoutHigh && (
+                <View style={{
+                  backgroundColor: '#F59E0B15',
+                  borderRadius: radius.full,
+                  paddingHorizontal: 5, paddingVertical: 1,
+                  borderWidth: 1, borderColor: '#F59E0B30',
+                }}>
+                  <Typography variant="caption" color="#F59E0B" style={{ fontSize: 9, lineHeight: 13 }}>
+                    💡 Short session
+                  </Typography>
+                </View>
+              )}
+            </View>
+          )}
         </View>
 
-        {/* Arrow */}
-        <View
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: radius.full,
-            backgroundColor: cfg.color + '12',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Ionicons name="chevron-forward" size={14} color={cfg.color} />
-        </View>
+        {/* Arrow — hidden when complete */}
+        {!isComplete && (
+          <View
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: radius.full,
+              backgroundColor: cfg.color + '12',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name={hasProgress ? 'play' : 'chevron-forward'} size={14} color={cfg.color} />
+          </View>
+        )}
       </TouchableOpacity>
     </Animated.View>
   );
 }
+
 
 // ─── Main Component ──────────────────────────────────────────
 
@@ -141,6 +240,9 @@ interface TodaysStudyPlanProps {
 export function TodaysStudyPlan({ plan, chronotypePeakHour }: TodaysStudyPlanProps) {
   const { theme } = useTheme();
   const router = useRouter();
+
+  // Per-session progress from AsyncStorage — reflects mid-session breaks immediately
+  const { progress } = useDailyPlanProgress();
 
   const isEmpty = plan.sessions.length === 0;
 
@@ -307,21 +409,30 @@ export function TodaysStudyPlan({ plan, chronotypePeakHour }: TodaysStudyPlanPro
               key={session.topicSlug}
               session={session}
               index={i}
+              sessionProgress={progress[session.topicSlug]}
               onPress={() => {
+                // Encode mlMeta as string params so topic-review can forward them
+                // to FocusQualityScore on the completion screen.
+                const mlParams = session.mlMeta ? {
+                  mlPDifficult:  String((session.mlMeta.pDifficult  ?? 0).toFixed(3)),
+                  mlDropoutRisk: String((session.mlMeta.dropoutRisk ?? 0).toFixed(3)),
+                  mlModel:       session.mlMeta.model,
+                } : {};
+
                 router.push({
                   pathname: '/topic-review',
                   params: {
-                    topicSlug: session.topicSlug,
-                    topicName: session.topicName,
+                    topicSlug:   session.topicSlug,
+                    topicName:   session.topicName,
                     subjectName: session.subjectName,
-                    subjectId: session.subjectId,
-                    examId: session.examId ?? '',
+                    subjectId:   session.subjectId,
+                    examId:      session.examId ?? '',
                     // Always use daily_plan so fetchLevelCards is called and the
-                    // full suggestedCount (cardCount) is honoured. The SM-2 review
-                    // queue is limited to overdue cards and may have fewer than the
-                    // plan promises (e.g. 16 when the plan shows 20).
-                    mode: 'daily_plan',
-                    cardCount: String(session.cardCount),
+                    // full suggestedCount (cardCount) is honoured.
+                    mode:        'daily_plan',
+                    cardCount:   String(session.cardCount),
+                    level:       DIFFICULTY_TO_LEVEL[session.difficulty] ?? 'Emerging',
+                    ...mlParams,
                   },
                 });
               }}
@@ -334,19 +445,26 @@ export function TodaysStudyPlan({ plan, chronotypePeakHour }: TodaysStudyPlanPro
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => {
-              // Launch the first session's topic directly
+              // Launch the first session's topic directly, carrying level + mlMeta params
               const first = plan.sessions[0];
               if (first) {
+                const mlParams = first.mlMeta ? {
+                  mlPDifficult:  String((first.mlMeta.pDifficult  ?? 0).toFixed(3)),
+                  mlDropoutRisk: String((first.mlMeta.dropoutRisk ?? 0).toFixed(3)),
+                  mlModel:       first.mlMeta.model,
+                } : {};
                 router.push({
                   pathname: '/topic-review',
                   params: {
-                    topicSlug: first.topicSlug,
-                    topicName: first.topicName,
+                    topicSlug:   first.topicSlug,
+                    topicName:   first.topicName,
                     subjectName: first.subjectName,
-                    subjectId: first.subjectId,
-                    examId: first.examId ?? '',
-                    mode: 'daily_plan',
-                    cardCount: String(first.cardCount),
+                    subjectId:   first.subjectId,
+                    examId:      first.examId ?? '',
+                    mode:        'daily_plan',
+                    cardCount:   String(first.cardCount),
+                    level:       DIFFICULTY_TO_LEVEL[first.difficulty] ?? 'Emerging',
+                    ...mlParams,
                   },
                 });
               }

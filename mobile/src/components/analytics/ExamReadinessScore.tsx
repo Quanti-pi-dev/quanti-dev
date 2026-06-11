@@ -1,9 +1,9 @@
 // ─── ExamReadinessScore ──────────────────────────────────────
 // Prominent readiness score with animated ring, mastery level label,
-// strong/weak areas breakdown, and forecasting text.
+// strong/weak areas breakdown, bottleneck callout, and forecasting text.
 
 import { useEffect } from 'react';
-import { View } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import Animated, {
   useSharedValue,
@@ -12,6 +12,8 @@ import Animated, {
   FadeInDown,
   Easing,
 } from 'react-native-reanimated';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
 import { spacing, radius } from '../../theme/tokens';
 import { Typography } from '../ui/Typography';
@@ -23,10 +25,38 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 // ─── Mastery Level Labels ────────────────────────────────────
 
 function getMasteryLabel(score: number): { label: string; sublabel: string; color: string } {
-  if (score >= 85) return { label: 'Master', sublabel: 'You own this material', color: '#6366F1' };
-  if (score >= 60) return { label: 'Proficient', sublabel: 'Solid foundation built', color: '#10B981' };
-  if (score >= 40) return { label: 'Developing', sublabel: 'Building understanding', color: '#F59E0B' };
-  return { label: 'Emerging', sublabel: 'Your journey is starting', color: '#F97316' };
+  if (score >= 85) return { label: 'Master',     sublabel: 'You own this material',     color: '#6366F1' };
+  if (score >= 60) return { label: 'Proficient',  sublabel: 'Solid foundation built',    color: '#10B981' };
+  if (score >= 40) return { label: 'Developing',  sublabel: 'Building understanding',    color: '#F59E0B' };
+  return               { label: 'Emerging',    sublabel: 'Your journey is starting', color: '#F97316' };
+}
+
+// ─── Bottleneck Computation ──────────────────────────────────
+
+/**
+ * For each weak concept, estimate how many overall-score points are being
+ * lost due to low mastery.
+ *
+ * Formula:
+ *   Concept Mastery component = 35% of overall score
+ *   If there are N weak concepts, each represents ≈ 35/N pts of maximum.
+ *   The student currently recovers  (pMastery × 35/N) of those points.
+ *   Points being lost = (1 - pMastery) × (35 / N)
+ *
+ * We cap individual impact at 15 pts to keep the UI honest.
+ */
+function computeBottlenecks(
+  weakConcepts: ExamReadiness['weakConcepts'],
+): Array<{ concept: string; tag: string; topicSlug: string; subjectId: string; examId?: string; subjectName: string; pMastery: number; pointsCost: number }> {
+  if (!weakConcepts || weakConcepts.length === 0) return [];
+  const share = 35 / weakConcepts.length;
+  return weakConcepts
+    .map((wc) => ({
+      ...wc,
+      pointsCost: Math.min(15, Math.round((1 - wc.pMastery) * share)),
+    }))
+    .filter((wc) => wc.pointsCost > 0)
+    .sort((a, b) => b.pointsCost - a.pointsCost);
 }
 
 // ─── Animated Ring ───────────────────────────────────────────
@@ -87,12 +117,7 @@ function ReadinessRing({ score }: { score: number }) {
         />
       </Svg>
       {/* Center content */}
-      <View
-        style={{
-          position: 'absolute',
-          alignItems: 'center',
-        }}
-      >
+      <View style={{ position: 'absolute', alignItems: 'center' }}>
         <Typography variant="h2" color={mastery.color} style={{ fontSize: 36, fontWeight: '800', letterSpacing: -1 }}>
           {score}
         </Typography>
@@ -117,10 +142,7 @@ function ReadinessRing({ score }: { score: number }) {
 // ─── Area Chips ──────────────────────────────────────────────
 
 function AreaChips({
-  areas,
-  color,
-  icon,
-  label,
+  areas, color, icon, label,
 }: {
   areas: string[];
   color: string;
@@ -161,6 +183,171 @@ function AreaChips({
   );
 }
 
+// ─── Bottleneck Callout ───────────────────────────────────────
+
+/**
+ * Surfaces the single biggest score bottleneck and a ranked list of all
+ * weak concepts with their estimated point drag. Tapping a concept
+ * navigates directly to a study session for it.
+ */
+function BottleneckCallout({
+  bottlenecks,
+  overallScore,
+}: {
+  bottlenecks: ReturnType<typeof computeBottlenecks>;
+  overallScore: number;
+}) {
+  const { theme } = useTheme();
+  const router = useRouter();
+
+  if (bottlenecks.length === 0) return null;
+
+  const top = bottlenecks[0]!;
+  const unlocked = Math.min(100, overallScore + top.pointsCost);
+
+  return (
+    <Animated.View entering={FadeInDown.delay(350).duration(380)}>
+      <View
+        style={{
+          backgroundColor: '#EF444408',
+          borderRadius: radius.xl,
+          borderWidth: 1,
+          borderColor: '#EF444420',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Top bottleneck highlight */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            gap: spacing.sm,
+            padding: spacing.md,
+            borderBottomWidth: bottlenecks.length > 1 ? 1 : 0,
+            borderBottomColor: '#EF444415',
+          }}
+        >
+          <View
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: '#EF444415',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: 1,
+            }}
+          >
+            <Ionicons name="warning-outline" size={16} color="#EF4444" />
+          </View>
+          <View style={{ flex: 1, gap: 3 }}>
+            <Typography variant="captionBold" color="#EF4444" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+              Score Bottleneck
+            </Typography>
+            <Typography variant="body" style={{ lineHeight: 20 }}>
+              Fixing{' '}
+              <Typography variant="bodyBold" color="#EF4444">
+                {top.concept}
+              </Typography>
+              {' '}alone could unlock{' '}
+              <Typography variant="bodyBold" color="#10B981">
+                ~{top.pointsCost} pts
+              </Typography>
+              {' '}({overallScore} → {unlocked})
+            </Typography>
+            {/* Score gain bar */}
+            <View style={{ marginTop: 4, gap: 3 }}>
+              <View style={{ height: 6, borderRadius: 3, backgroundColor: theme.border, overflow: 'hidden' }}>
+                <View style={{ flexDirection: 'row', height: '100%', borderRadius: 3, overflow: 'hidden' }}>
+                  {/* Current score portion */}
+                  <View style={{ width: `${overallScore}%` as any, backgroundColor: '#6366F1', borderRadius: 3 }} />
+                  {/* Potential gain portion */}
+                  <View style={{ width: `${top.pointsCost}%` as any, backgroundColor: '#10B98170', borderRadius: 3 }} />
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 9 }}>
+                  Current: {overallScore}
+                </Typography>
+                <Typography variant="caption" color="#10B981" style={{ fontSize: 9 }}>
+                  Potential: {unlocked}
+                </Typography>
+              </View>
+            </View>
+            {/* CTA to jump into a session */}
+            {top.topicSlug && top.subjectId && (
+              <TouchableOpacity
+                onPress={() =>
+                  router.push({
+                    pathname: '/topic-review',
+                    params: {
+                      topicSlug:   top.topicSlug,
+                      topicName:   top.concept,
+                      subjectName: top.subjectName,
+                      subjectId:   top.subjectId,
+                      examId:      top.examId ?? '',
+                      mode:        'concept_practice',
+                      conceptTag:  top.tag,
+                      conceptName: top.concept,
+                    },
+                  })
+                }
+                style={{
+                  marginTop: 6,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  alignSelf: 'flex-start',
+                  backgroundColor: '#EF444412',
+                  borderRadius: radius.full,
+                  paddingHorizontal: spacing.md,
+                  paddingVertical: 5,
+                  borderWidth: 1,
+                  borderColor: '#EF444425',
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="play-circle-outline" size={13} color="#EF4444" />
+                <Typography variant="caption" color="#EF4444" style={{ fontSize: 11, fontWeight: '600' }}>
+                  Practice {top.concept} now
+                </Typography>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Ranked impact list (all concepts, condensed) */}
+        {bottlenecks.length > 1 && (
+          <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: 6 }}>
+            <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+              All impact areas
+            </Typography>
+            {bottlenecks.map((wc, i) => {
+              const barWidth = Math.max(4, (wc.pointsCost / bottlenecks[0]!.pointsCost) * 100);
+              const barColor = i === 0 ? '#EF4444' : '#F59E0B';
+              return (
+                <View key={wc.tag} style={{ gap: 3 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="caption" color={theme.textSecondary} style={{ fontSize: 10 }} numberOfLines={1}>
+                      {i + 1}. {wc.concept}
+                    </Typography>
+                    <Typography variant="captionBold" color={barColor} style={{ fontSize: 10 }}>
+                      −{wc.pointsCost} pts
+                    </Typography>
+                  </View>
+                  <View style={{ height: 4, borderRadius: 2, backgroundColor: theme.border, overflow: 'hidden' }}>
+                    <View style={{ width: `${barWidth}%` as any, height: '100%', backgroundColor: barColor + '70', borderRadius: 2 }} />
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </View>
+    </Animated.View>
+  );
+}
+
 // ─── Main Component ──────────────────────────────────────────
 
 interface ExamReadinessScoreProps {
@@ -174,7 +361,8 @@ export function ExamReadinessScore({ data }: ExamReadinessScoreProps) {
     return null; // Don't show if no data at all
   }
 
-  const mastery = getMasteryLabel(data.overallScore);
+  const mastery     = getMasteryLabel(data.overallScore);
+  const bottlenecks = computeBottlenecks(data.weakConcepts);
 
   return (
     <Animated.View entering={FadeInDown.delay(200).duration(400)}>
@@ -249,10 +437,10 @@ export function ExamReadinessScore({ data }: ExamReadinessScoreProps) {
                 <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', justifyContent: 'center' }}>
                   {[
                     { label: 'Understanding', value: data.conceptMasteryScore, icon: '🧠' },
-                    { label: 'Depth', value: data.depthScore, icon: '📊' },
-                    { label: 'Consistency', value: data.consistencyScore, icon: '📅' },
-                    { label: 'Ability', value: data.abilityScore, icon: '⚡', noData: data.abilityScore === 0 && data.studentAbility === 0 },
-                  ].map(sig => (
+                    { label: 'Depth',         value: data.depthScore,          icon: '📊' },
+                    { label: 'Consistency',   value: data.consistencyScore,    icon: '📅' },
+                    { label: 'Ability',       value: data.abilityScore,        icon: '⚡', noData: data.abilityScore === 0 && data.studentAbility === 0 },
+                  ].map((sig) => (
                     <View key={sig.label} style={{ alignItems: 'center', minWidth: 52 }}>
                       <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 9 }}>
                         {sig.icon} {sig.label}
@@ -271,18 +459,12 @@ export function ExamReadinessScore({ data }: ExamReadinessScoreProps) {
             )}
           </View>
 
-          {/* Weak concepts alert */}
-          {data.weakConcepts && data.weakConcepts.length > 0 && (
-            <View style={{ backgroundColor: '#EF444410', padding: spacing.sm, borderRadius: 8, gap: 4 }}>
-              <Typography variant="captionBold" color="#EF4444" style={{ fontSize: 11 }}>
-                ⚠️ Concepts you keep struggling with:
-              </Typography>
-              {data.weakConcepts.slice(0, 3).map((wc, i) => (
-                <Typography key={i} variant="caption" color={theme.textSecondary} style={{ fontSize: 10 }}>
-                  • {wc.concept} ({wc.subjectName}) — {Math.round(wc.pMastery * 100)}% mastery
-                </Typography>
-              ))}
-            </View>
+          {/* ─── Bottleneck Callout (ML insight) ─────────────────── */}
+          {bottlenecks.length > 0 && (
+            <BottleneckCallout
+              bottlenecks={bottlenecks}
+              overallScore={data.overallScore}
+            />
           )}
 
           {/* Strong / Vulnerable areas */}

@@ -1,16 +1,20 @@
 // ─── Learning Intelligence Service ───────────────────────────
-// Computes the full LearningProfile by aggregating SM-2 card memory
+// Computes the full LearningProfile by aggregating HLR card memory
 // data from Redis, session history from PostgreSQL, and subject/topic
 // metadata from MongoDB.
 
 import { getRedisClient, getPostgresPool, getMongoDb } from '../clients/database.js';
 import { ObjectId } from 'mongodb';
 import { createServiceLogger } from '../lib/logger.js';
-import { INITIAL_EASE_FACTOR, estimateRetention, responseToQuality, sm2 } from './sm2.js';
+import { hlr, estimateHLRRetention } from './hlr.js';
+import { topicDropoutRisk } from './dropout-predictor.js';
+import { rankNewTopics, loadConceptMasteryMap as loadAlsConceptMastery } from './collaborative-filter.js';
+import { getSAKTDifficultyMap, saktRecord } from './sakt-client.js';
+export { saktRecord };
 import type {
   LearningProfile, SubjectMemoryState, TopicMemoryState,
   ExamReadiness, LearningVelocity, DailyStudyPlan, PlannedStudySession,
-  TopicForecast, CardMemoryState, SM2Quality,
+  TopicForecast, CardMemoryState,
 } from '@kd/shared';
 
 const log = createServiceLogger('LearningIntelligence');
@@ -38,32 +42,30 @@ export async function updateCardMemory(
 
   // Read current state
   const data = await redis.hgetall(memKey);
-  const repetitions = parseInt(data['repetitions'] ?? '0', 10);
-  const intervalDays = parseFloat(data['interval_days'] ?? '1');
-  const easeFactor = parseFloat(data['ease_factor'] ?? String(INITIAL_EASE_FACTOR));
+  const nCorrect     = parseInt(data['n_correct']     ?? '0', 10);
+  const nWrong       = parseInt(data['n_wrong']       ?? '0', 10);
   const totalReviews = parseInt(data['total_reviews'] ?? '0', 10);
 
-  // Compute SM-2
-  const quality: SM2Quality = responseToQuality(correct, responseTimeMs);
-  const result = sm2({ repetitions, intervalDays, easeFactor }, quality);
+  // Compute HLR: personalised review interval from correct/wrong history + speed
+  const hlrResult = hlr({ nCorrect, nWrong, correct, responseTimeMs });
 
   const now = new Date().toISOString();
 
-  // Write updated state
   const pipeline = redis.pipeline();
   pipeline.hset(memKey, {
-    repetitions: String(result.repetitions),
-    interval_days: String(result.intervalDays),
-    ease_factor: String(result.easeFactor),
+    interval_days:    String(hlrResult.intervalDays),
+    half_life_days:   String(hlrResult.halfLifeDays),
+    next_review_at:   hlrResult.nextReviewAt,
     last_reviewed_at: now,
-    next_review_at: result.nextReviewAt,
-    total_reviews: String(totalReviews + 1),
-    topic_slug: topicSlug,
-    subject_id: subjectId,
+    total_reviews:    String(totalReviews + 1),
+    n_correct:        String(nCorrect + (correct ? 1 : 0)),
+    n_wrong:          String(nWrong   + (correct ? 0 : 1)),
+    topic_slug:       topicSlug,
+    subject_id:       subjectId,
   });
   // Track in the user's card memory SET for O(1) enumeration
   pipeline.sadd(`card_memory_keys:${userId}`, cardId);
-  // Invalidate the cached learning profile so next fetch recomputes
+  // Invalidate the cached learning profile so the next fetch recomputes
   pipeline.del(PROFILE_CACHE_KEY(userId));
   await pipeline.exec();
 }
@@ -377,7 +379,7 @@ export async function buildLearningProfile(userId: string, selectedExams?: strin
   const examReadiness = buildExamReadiness(
     knowledgeHealth, velocity, syllabus, studentTheta, consistency, conceptMasteryAll, errorPatterns.tagToTopic
   );
-  const studyPlan = buildStudyPlan(knowledgeHealth, topicForecasts, userId);
+  const studyPlan = await buildStudyPlan(knowledgeHealth, topicForecasts, userId);
 
   const totalOverdueCards = knowledgeHealth.reduce((s, sub) => s + sub.totalOverdue, 0);
 
@@ -419,13 +421,14 @@ async function getAllCardMemoryStates(userId: string): Promise<CardMemoryState[]
     if (!data['last_reviewed_at']) continue;
 
     states.push({
-      cardId: cardIds[i]!,
-      repetitions: parseInt(data['repetitions'] ?? '0', 10),
-      intervalDays: parseFloat(data['interval_days'] ?? '1'),
-      easeFactor: parseFloat(data['ease_factor'] ?? String(INITIAL_EASE_FACTOR)),
+      cardId:        cardIds[i]!,
+      intervalDays:  parseFloat(data['interval_days']  ?? '1'),
+      halfLifeDays:  parseFloat(data['half_life_days'] ?? '4'),
+      nCorrect:      parseInt(data['n_correct']        ?? '0', 10),
+      nWrong:        parseInt(data['n_wrong']          ?? '0', 10),
       lastReviewedAt: data['last_reviewed_at']!,
-      nextReviewAt: data['next_review_at'] ?? new Date().toISOString(),
-      totalReviews: parseInt(data['total_reviews'] ?? '0', 10),
+      nextReviewAt:  data['next_review_at'] ?? new Date().toISOString(),
+      totalReviews:  parseInt(data['total_reviews'] ?? '0', 10),
     });
   }
   return states;
@@ -449,8 +452,8 @@ async function buildKnowledgeHealthBase(userId: string, syllabus: SyllabusSubjec
   // Group cards by subject → topic
   type CardData = {
     cardId: string; subjectId: string; topicSlug: string;
-    easeFactor: number; intervalDays: number; lastReviewedAt: string;
-    nextReviewAt: string; repetitions: number;
+    halfLifeDays: number; nCorrect: number; nWrong: number;
+    lastReviewedAt: string; nextReviewAt: string;
   };
 
   const subjectTopicMap = new Map<string, Map<string, CardData[]>>();
@@ -461,14 +464,14 @@ async function buildKnowledgeHealthBase(userId: string, syllabus: SyllabusSubjec
     if (!data['subject_id'] || !data['topic_slug'] || !data['last_reviewed_at']) continue;
 
     const card: CardData = {
-      cardId: cardIds[i]!,
-      subjectId: data['subject_id']!,
-      topicSlug: data['topic_slug']!,
-      easeFactor: parseFloat(data['ease_factor'] ?? String(INITIAL_EASE_FACTOR)),
-      intervalDays: parseFloat(data['interval_days'] ?? '1'),
+      cardId:       cardIds[i]!,
+      subjectId:    data['subject_id']!,
+      topicSlug:    data['topic_slug']!,
+      halfLifeDays: parseFloat(data['half_life_days'] ?? '4'),
+      nCorrect:     parseInt(data['n_correct'] ?? '0', 10),
+      nWrong:       parseInt(data['n_wrong']   ?? '0', 10),
       lastReviewedAt: data['last_reviewed_at']!,
-      nextReviewAt: data['next_review_at'] ?? now.toISOString(),
-      repetitions: parseInt(data['repetitions'] ?? '0', 10),
+      nextReviewAt:   data['next_review_at'] ?? now.toISOString(),
     };
 
     if (!subjectTopicMap.has(card.subjectId)) {
@@ -501,15 +504,17 @@ async function buildKnowledgeHealthBase(userId: string, syllabus: SyllabusSubjec
   function buildStudiedTopic(
     topicSlug: string, subjectId: string, cards: CardData[],
   ): TopicMemoryState {
-    let totalRetention = 0, overdue = 0, dueSoon = 0, totalEase = 0;
+    let totalRetention = 0, overdue = 0, dueSoon = 0;
+    let totalNCorrect = 0, totalNWrong = 0;
     let latestReview = new Date(0);
 
     for (const card of cards) {
       const lastReview = new Date(card.lastReviewedAt);
       const daysSince = (now.getTime() - lastReview.getTime()) / (1000 * 60 * 60 * 24);
-      const retention = estimateRetention(daysSince, card.intervalDays, card.easeFactor);
+      const retention = estimateHLRRetention(daysSince, card.halfLifeDays);
       totalRetention += retention;
-      totalEase += card.easeFactor;
+      totalNCorrect  += card.nCorrect;
+      totalNWrong    += card.nWrong;
 
       const nextReview = new Date(card.nextReviewAt);
       if (nextReview < now) overdue++;
@@ -517,19 +522,22 @@ async function buildKnowledgeHealthBase(userId: string, syllabus: SyllabusSubjec
       if (lastReview > latestReview) latestReview = lastReview;
     }
 
-    const avgRetention = cards.length > 0 ? Math.round(totalRetention / cards.length) : 0;
-    const avgEase = cards.length > 0 ? Math.round((totalEase / cards.length) * 100) / 100 : INITIAL_EASE_FACTOR;
+    const avgRetention  = cards.length > 0 ? Math.round(totalRetention / cards.length) : 0;
+    const totalAttempts = totalNCorrect + totalNWrong;
+    const avgAccuracy   = totalAttempts > 0 ? totalNCorrect / totalAttempts : 0;
     const daysSinceLast = Math.round((now.getTime() - latestReview.getTime()) / (1000 * 60 * 60 * 24));
-    const syllabusKey = `${subjectId}:${topicSlug}`;
+    const syllabusKey   = `${subjectId}:${topicSlug}`;
 
     let urgency: TopicMemoryState['urgency'] = 'stable';
     if (avgRetention >= 90 && overdue === 0) urgency = 'mastered';
     else if (avgRetention < 50 || overdue > cards.length * 0.5) urgency = 'critical';
     else if (avgRetention < 70 || overdue > 0) urgency = 'review-soon';
 
+    // Accuracy-based trend: improving when student is getting >75% right,
+    // declining when below 50%. More meaningful than ease-factor drift.
     let trend: TopicMemoryState['trend'] = 'stable';
-    if (avgEase > 2.6) trend = 'improving';
-    else if (avgEase < 2.2) trend = 'declining';
+    if (avgAccuracy > 0.75) trend = 'improving';
+    else if (avgAccuracy < 0.50) trend = 'declining';
 
     const topicName = syllabusTopicNames.get(syllabusKey)
       ?? topicSlug.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -545,7 +553,7 @@ async function buildKnowledgeHealthBase(userId: string, syllabus: SyllabusSubjec
       cardsOverdue: overdue, cardsDueSoon: dueSoon,
       totalCards: cards.length,
       totalCardsAvailable: syllabusCardMap.get(syllabusKey) ?? cards.length,
-      avgEaseFactor: avgEase, urgency, trend,
+      avgAccuracy, urgency, trend,
     };
   }
 
@@ -596,7 +604,7 @@ async function buildKnowledgeHealthBase(userId: string, syllabus: SyllabusSubjec
         cardsOverdue: 0, cardsDueSoon: 0,
         totalCards: 0,
         totalCardsAvailable: st.cardCount,
-        avgEaseFactor: INITIAL_EASE_FACTOR,
+        avgAccuracy: 0,
         urgency: 'not-started',
         trend: 'stable',
       });
@@ -825,15 +833,14 @@ function buildTopicForecasts(health: SubjectMemoryState[]): TopicForecast[] {
       // Skip not-started topics — nothing to forecast
       if (topic.urgency === 'not-started') continue;
 
-      // Predict retention in 7 days using Ebbinghaus
-      // Use actual average intervalDays as stability proxy instead of ease*2 hack
-      const stability = topic.totalCards > 0
-        ? Math.max(1, topic.avgEaseFactor * Math.max(1, topic.daysSinceLastReview > 0 ? topic.daysSinceLastReview : 1))
-        : 1;
-      const futureRetention = estimateRetention(
+      // Predict retention in 7 days using HLR decay.
+      // avgAccuracy drives a synthetic half-life when no card-level half_life is stored yet.
+      const syntheticHalfLife = Math.max(1, topic.daysSinceLastReview > 0
+        ? topic.daysSinceLastReview * (topic.avgAccuracy > 0 ? topic.avgAccuracy + 0.5 : 1)
+        : 4);
+      const futureRetention = estimateHLRRetention(
         topic.daysSinceLastReview + 7,
-        stability,
-        topic.avgEaseFactor,
+        syntheticHalfLife,
       );
 
       let riskLevel: TopicForecast['riskLevel'] = 'low';
@@ -1040,11 +1047,11 @@ const TARGET_MINS_PER_SUBJECT = 30; // Tutor target: 30 min per subject per day
 const TARGET_SUBJECTS_PER_DAY = 2;  // Always spread across ≥ 2 subjects
 const MIN_TOTAL_MINS = 60;          // Overall daily floor
 
-function buildStudyPlan(
+async function buildStudyPlan(
   health: SubjectMemoryState[],
   forecasts: TopicForecast[],
-  _userId: string,
-): DailyStudyPlan {
+  userId: string,
+): Promise<DailyStudyPlan> {
   const today = new Date().toISOString().split('T')[0]!;
 
   // ── Helper: cards needed to fill a target minutes quota ─────
@@ -1125,6 +1132,61 @@ function buildStudyPlan(
     }
   }
 
+  // ── ML Step 0: Load BKT mastery for ALS fallback ─────────────
+  // Non-blocking: failure falls back to unranked new-topic list.
+  const conceptMasteryMap = await loadAlsConceptMastery(userId).catch(() => new Map<string, number>());
+
+  // ── ML Step 1: Rank new_topic candidates via ALS ─────────────
+  // For each subject, re-order new_topic candidates by predicted difficulty
+  // (easiest first) so the student is introduced to topics they're most
+  // likely to succeed at before harder expansions.
+  for (const [subjectId, candidates] of subjectCandidates) {
+    const newTopics = candidates.filter(c => c.reason === 'new_topic');
+    if (newTopics.length < 2) continue; // nothing to reorder
+
+    const ranked = await rankNewTopics(
+      userId,
+      newTopics.map(c => ({
+        topicSlug: c.topic.topicSlug,
+        conceptTags: c.topic.weakConcepts ?? [],
+      })),
+      conceptMasteryMap,
+    ).catch(() => null);
+
+    if (!ranked) continue;
+
+    // Splice ranked new_topic entries back into the subject's candidate list
+    const nonNew = candidates.filter(c => c.reason !== 'new_topic');
+    const rankedCandidates = ranked.map(r =>
+      newTopics.find(c => c.topic.topicSlug === r.topicSlug)!
+    ).filter(Boolean);
+    subjectCandidates.set(subjectId, [...nonNew, ...rankedCandidates]);
+  }
+
+  // ── ML Step 2: SAKT difficulty calibration ────────────────
+  // Query the SAKT sidecar for predicted P(correct) per topic.
+  // This refines difficulty labels beyond the static 'challenging'/'moderate'/'easy_review'
+  // buckets, so the dropout adjustment in Step 7 is more precise.
+  //
+  // SAKT pDifficult → difficulty override:
+  //   pDifficult ≥ 0.65 → 'challenging'
+  //   pDifficult ≥ 0.40 → 'moderate'
+  //   pDifficult <  0.40 → 'easy_review'
+  const allTopicSlugs = [...subjectCandidates.values()]
+    .flatMap(cs => cs.map(c => c.topic.topicSlug));
+  const saktDifficulty = await getSAKTDifficultyMap(userId, allTopicSlugs).catch(() => new Map<string, number>());
+
+  // Apply SAKT difficulty overrides to all candidates
+  for (const candidates of subjectCandidates.values()) {
+    for (const candidate of candidates) {
+      const pDifficult = saktDifficulty.get(candidate.topic.topicSlug);
+      if (pDifficult === undefined) continue;
+      if (pDifficult >= 0.65) candidate.difficulty = 'challenging';
+      else if (pDifficult >= 0.40) candidate.difficulty = 'moderate';
+      else candidate.difficulty = 'easy_review';
+    }
+  }
+
   // ── Step 2: Pick sessions — ensure ≥ TARGET_SUBJECTS_PER_DAY ──
   const sessions: PlannedStudySession[] = [];
   const usedTopics = new Set<string>();
@@ -1164,6 +1226,12 @@ function buildStudyPlan(
       const finalCards = Math.min(paddedCards, available);
       const estMins = Math.round(finalCards * MINS_PER_CARD);
 
+      // Determine ML model used for this session
+      const pDiff = saktDifficulty.get(candidate.topic.topicSlug);
+      const mlModel = pDiff !== undefined
+        ? (saktDifficulty.size > 0 ? 'dkt' as const : 'sakt' as const)  // presence means DKT/SAKT ran
+        : 'bkt' as const;
+
       sessions.push({
         topicSlug: candidate.topic.topicSlug,
         topicName: candidate.topic.topicName,
@@ -1175,6 +1243,10 @@ function buildStudyPlan(
         estimatedMinutes: estMins,
         priority: sessions.length + 1,
         difficulty: candidate.difficulty,
+        mlMeta: {
+          model: mlModel,
+          pDifficult: pDiff !== undefined ? Math.round(pDiff * 100) / 100 : undefined,
+        },
       });
 
       usedTopics.add(candidate.topic.topicSlug);
@@ -1198,6 +1270,7 @@ function buildStudyPlan(
 
       const finalCards = Math.max(MIN_CARDS_PER_SESSION, cardsForMinutes(TARGET_MINS_PER_SUBJECT));
       const available = best.topic.totalCardsAvailable > 0 ? best.topic.totalCardsAvailable : finalCards;
+      const pDiff2 = saktDifficulty.get(best.topic.topicSlug);
       sessions.push({
         topicSlug: best.topic.topicSlug,
         topicName: best.topic.topicName,
@@ -1209,6 +1282,11 @@ function buildStudyPlan(
         estimatedMinutes: Math.round(Math.min(finalCards, available) * MINS_PER_CARD),
         priority: sessions.length + 1,
         difficulty: best.difficulty,
+        mlMeta: {
+          model: pDiff2 !== undefined ? 'dkt' as const : 'bkt' as const,
+          pDifficult: pDiff2 !== undefined ? Math.round(pDiff2 * 100) / 100 : undefined,
+          alsAffinity: best.reason === 'new_topic' ? 0.7 : undefined,
+        },
       });
       usedTopics.add(best.topic.topicSlug);
       subjectsRepresented.add(subjectId);
@@ -1224,8 +1302,6 @@ function buildStudyPlan(
   capped.forEach((s, i) => { s.priority = i + 1; });
 
   // ── Step 6: Ensure total is at least MIN_TOTAL_MINS ─────────
-  // If the plan is still too light (student has very few cards in the system),
-  // bump up the first session's card count to fill the gap.
   let totalMinutes = capped.reduce((sum, s) => sum + s.estimatedMinutes, 0);
   if (totalMinutes < MIN_TOTAL_MINS && capped.length > 0) {
     const deficit = MIN_TOTAL_MINS - totalMinutes;
@@ -1233,6 +1309,43 @@ function buildStudyPlan(
     capped[0]!.cardCount += deficitCards;
     capped[0]!.estimatedMinutes += deficit;
     totalMinutes = MIN_TOTAL_MINS;
+  }
+
+  // ── ML Step 7: Dropout-risk card-count adjustment ────────────
+  // Reduce card count on sessions where the dropout model predicts
+  // high abandonment risk. A shorter session the student *completes*
+  // is far more valuable than a long session they quit halfway through.
+  // Applies a -20% reduction for 'high' risk and -30% for 'critical'.
+  // Compensates by adding 3 warmup (easy_review) cards to the front-load.
+  const hour = new Date().getHours();
+  for (const session of capped) {
+    const diffBucket: 0 | 1 | 2 =
+      session.difficulty === 'challenging' ? 2
+      : session.difficulty === 'moderate' ? 1
+      : 0;
+    const dropoutP = topicDropoutRisk(diffBucket, hour);
+
+    if (dropoutP >= 0.75) {
+      // Critical: shorten aggressively
+      session.cardCount = Math.max(MIN_CARDS_PER_SESSION, Math.round(session.cardCount * 0.70));
+      session.estimatedMinutes = Math.round(session.cardCount * MINS_PER_CARD);
+      if (session.mlMeta) {
+        session.mlMeta.dropoutRisk = Math.round(dropoutP * 100) / 100;
+        session.mlMeta.cardCountAdjusted = true;
+      }
+    } else if (dropoutP >= 0.55) {
+      // High: moderate reduction
+      session.cardCount = Math.max(MIN_CARDS_PER_SESSION, Math.round(session.cardCount * 0.80));
+      session.estimatedMinutes = Math.round(session.cardCount * MINS_PER_CARD);
+      if (session.mlMeta) {
+        session.mlMeta.dropoutRisk = Math.round(dropoutP * 100) / 100;
+        session.mlMeta.cardCountAdjusted = true;
+      }
+    } else {
+      if (session.mlMeta) {
+        session.mlMeta.dropoutRisk = Math.round(dropoutP * 100) / 100;
+      }
+    }
   }
 
   // ── Insight copy ─────────────────────────────────────────────
@@ -1333,27 +1446,37 @@ export async function backfillCardMemory(userId: string): Promise<number> {
     const exists = await redis.exists(`card_memory:${userId}:${syntheticCardId}`);
     if (exists) continue;
 
-    // Derive SM-2 state from historical accuracy
-    const accuracy = correct / total;
-    const easeFactor = Math.max(1.3, 2.5 + (accuracy - 0.6) * 2);
-    const repetitions = Math.min(correct, 10);
-    const intervalDays = Math.round(repetitions * easeFactor);
+    // Derive HLR state from historical accuracy
+    const accuracy = total > 0 ? correct / total : 0;
+    // Estimated n_correct and n_wrong from level progress totals
+    const nCorrect = correct;
+    const nWrong   = total - correct;
+
+    // Synthesise a half-life from the accuracy:
+    // High accuracy (>80%) → long half-life (≈14 days)
+    // Moderate (50–80%)    → medium (≈7 days)
+    // Low (<50%)           → short (≈3 days)
+    const halfLifeDays = accuracy >= 0.8 ? 14
+                       : accuracy >= 0.5 ? 7
+                       : 3;
+    const intervalDays = Math.max(1, Math.round(halfLifeDays * Math.log2(1 / 0.9)));
 
     // Use actual last study date instead of now — prevents false 100% retention
     const reviewDate = lastStudyDate ?? new Date();
     const nextReview = new Date(reviewDate);
-    nextReview.setDate(nextReview.getDate() + Math.max(1, intervalDays));
+    nextReview.setDate(nextReview.getDate() + intervalDays);
 
     const pipeline = redis.pipeline();
     pipeline.hset(`card_memory:${userId}:${syntheticCardId}`, {
-      repetitions: String(repetitions),
-      interval_days: String(intervalDays),
-      ease_factor: String(Math.round(easeFactor * 100) / 100),
+      interval_days:    String(intervalDays),
+      half_life_days:   String(halfLifeDays),
       last_reviewed_at: reviewDate.toISOString(),
-      next_review_at: nextReview.toISOString(),
-      total_reviews: String(total),
-      topic_slug: topicSlug,
-      subject_id: subjectId,
+      next_review_at:   nextReview.toISOString(),
+      total_reviews:    String(total),
+      n_correct:        String(nCorrect),
+      n_wrong:          String(nWrong),
+      topic_slug:       topicSlug,
+      subject_id:       subjectId,
     });
     pipeline.sadd(`card_memory_keys:${userId}`, syntheticCardId);
     await pipeline.exec();

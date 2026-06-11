@@ -2,6 +2,10 @@
 // Contextual study signals instead of a raw "Card X of Y" counter.
 // Psychology: replaces a meaningless position-in-shuffled-deck number
 // with streak momentum (Goal Gradient), correct count, and encouragement.
+//
+// ML Enhancement: accepts optional mlMeta from the session study plan.
+// When pDifficult > 0.6, shows a contextual difficulty badge so the
+// student knows they are working on challenging material.
 
 import React, { useEffect } from 'react';
 import { View } from 'react-native';
@@ -9,18 +13,22 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  FadeIn,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
 import { spacing, radius } from '../../theme/tokens';
 import { Typography } from '../ui/Typography';
 import { SPRING_ENTRY } from '../../theme/animations';
+import type { SessionMlMeta } from '../analytics/FocusQualityScore';
 
 interface StudyProgressHeaderProps {
   currentIdx: number;
   total: number;
   correctCount: number;
   currentStreak: number;
+  /** Optional ML metadata from the study plan. Enables difficulty badge. */
+  mlMeta?: SessionMlMeta;
 }
 
 export const StudyProgressHeader = React.memo(function StudyProgressHeader({
@@ -28,6 +36,7 @@ export const StudyProgressHeader = React.memo(function StudyProgressHeader({
   total,
   correctCount,
   currentStreak,
+  mlMeta,
 }: StudyProgressHeaderProps) {
   const { theme } = useTheme();
   const rawProgress = total > 0 ? (currentIdx + 1) / total : 0;
@@ -70,17 +79,57 @@ export const StudyProgressHeader = React.memo(function StudyProgressHeader({
       ? theme.success
       : theme.primary;
 
+  // ─── ML difficulty badge ────────────────────────────────────
+  // pDifficult ∈ [0, 1] — from DKT/SAKT session meta.
+  // > 0.8 → Elite Session (purple), > 0.6 → Hard Session (amber)
+  const mlBadge: { label: string; color: string; icon: React.ComponentProps<typeof Ionicons>['name'] } | null = (() => {
+    if (!mlMeta) return null;
+    if (mlMeta.pDifficult > 0.8) return { label: 'Elite Session', color: '#8B5CF6', icon: 'diamond' };
+    if (mlMeta.pDifficult > 0.6) return { label: 'Hard Session',  color: '#F59E0B', icon: 'flash' };
+    return null;
+  })();
+
   return (
     <View style={{ paddingHorizontal: spacing.xl, paddingVertical: spacing.sm, gap: spacing.sm }}>
       {/* Contextual label + score pills */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography
-          variant="caption"
-          color={streakColor}
-          style={currentStreak >= 3 ? { fontWeight: '700' } : undefined}
-        >
-          {streakLabel}
-        </Typography>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexShrink: 1 }}>
+          {/* Streak / progress label */}
+          <Typography
+            variant="caption"
+            color={streakColor}
+            style={currentStreak >= 3 ? { fontWeight: '700' } : undefined}
+          >
+            {streakLabel}
+          </Typography>
+
+          {/* ── ML difficulty badge ── */}
+          {mlBadge && (
+            <Animated.View
+              entering={FadeIn.duration(400)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 3,
+                backgroundColor: mlBadge.color + '18',
+                borderRadius: radius.full,
+                paddingHorizontal: spacing.sm,
+                paddingVertical: 2,
+                borderWidth: 1,
+                borderColor: mlBadge.color + '40',
+              }}
+            >
+              <Ionicons name={mlBadge.icon} size={10} color={mlBadge.color} />
+              <Typography
+                variant="caption"
+                color={mlBadge.color}
+                style={{ fontSize: 10, fontWeight: '700' }}
+              >
+                {mlBadge.label}
+              </Typography>
+            </Animated.View>
+          )}
+        </View>
 
         {/* Score pills */}
         <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>

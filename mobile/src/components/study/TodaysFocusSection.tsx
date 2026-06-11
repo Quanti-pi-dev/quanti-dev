@@ -1,10 +1,18 @@
 // ─── TodaysFocusSection ──────────────────────────────────────
 // Smart daily study dashboard. Combines:
-//   1. Streak + daily goal progress ring
+//   1. Streak + adaptive daily goal progress ring
 //   2. Quick-action buttons for targeted study
 //   3. Motivational empty state for new users
+//
+// Goal source priority (highest → lowest):
+//   1. studyPlan.sessions sum (personalised by the HLR/BKT intelligence engine)
+//   2. Server-side progressData.weeklyActivity card count (validated)
+//   3. AsyncStorage local progress (optimistic, reflects mid-session state instantly)
+//
+// The ring always shows the *maximum* of server + local counts so it
+// never regresses during a session.
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { View, TouchableOpacity } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -25,10 +33,13 @@ import { Typography } from '../ui/Typography';
 import { Skeleton } from '../ui/Skeleton';
 import { useStudyStreak, useProgressSummary } from '../../hooks/useProgress';
 import { useCoinsToday } from '../../hooks/useGamification';
+import { useLearningProfile } from '../../hooks/useLearningProfile';
+import { useDailyPlanProgress } from '../../hooks/useDailyPlanProgress';
 import { getLocalDateString } from '../../utils/time';
+import type { PlannedStudySession } from '@kd/shared';
 
-// ─── Constants ────────────────────────────────────────────────
-const DAILY_CARD_GOAL = 30; // default daily target
+// ─── Fallback goal (used only when the study plan hasn't loaded yet) ───────
+const FALLBACK_DAILY_GOAL = 20;
 
 // ─── Animated circular progress ring ─────────────────────────
 function GoalRing({
@@ -138,6 +149,167 @@ function StreakFlame({ streak }: { streak: number }) {
   );
 }
 
+// ─── ML difficulty config ─────────────────────────────────────
+const DIFFICULTY_CONFIG = {
+  challenging: { color: '#EF4444', label: 'Challenging', icon: 'flash' as const },
+  moderate:    { color: '#F59E0B', label: 'Moderate',    icon: 'trending-up' as const },
+  easy_review: { color: '#10B981', label: 'Review',      icon: 'checkmark-circle' as const },
+} as const;
+
+const MODEL_CONFIG = {
+  dkt:  { label: 'DKT', color: '#6366F1' },
+  sakt: { label: 'SAKT', color: '#8B5CF6' },
+  bkt:  { label: 'BKT', color: '#64748B' },
+} as const;
+
+const REASON_CONFIG = {
+  overdue:       { icon: 'alert-circle' as const,  color: '#EF4444', label: 'Overdue' },
+  declining:     { icon: 'trending-down' as const,  color: '#F59E0B', label: 'Fading' },
+  new_topic:     { icon: 'sparkles' as const,       color: '#8B5CF6', label: 'New' },
+  reinforcement: { icon: 'refresh-circle' as const, color: '#10B981', label: 'Reinforce' },
+} as const;
+
+// ─── ML-aware session card ────────────────────────────────────
+function SessionCard({
+  session,
+  localAnswered,
+  isComplete,
+  onPress,
+}: {
+  session: PlannedStudySession;
+  localAnswered: number;
+  isComplete: boolean;
+  onPress: () => void;
+}) {
+  const { theme } = useTheme();
+  const diff   = DIFFICULTY_CONFIG[session.difficulty];
+  const reason = REASON_CONFIG[session.reason];
+  const model  = session.mlMeta ? MODEL_CONFIG[session.mlMeta.model] : null;
+  const dropoutHigh = (session.mlMeta?.dropoutRisk ?? 0) >= 0.55;
+  const segFill = Math.min(localAnswered / session.cardCount, 1);
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.75}
+      accessibilityRole="button"
+      accessibilityLabel={`Study ${session.topicName}`}
+      style={{
+        borderRadius: radius.xl,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: isComplete ? '#10B98130' : theme.border + '55',
+        backgroundColor: isComplete ? '#10B98108' : theme.background,
+      }}
+    >
+      {/* Coloured left-edge accent */}
+      <View style={{ flexDirection: 'row' }}>
+        <View style={{ width: 3, backgroundColor: isComplete ? '#10B981' : diff.color, borderRadius: 2 }} />
+
+        <View style={{ flex: 1, padding: spacing.md, gap: spacing.xs }}>
+          {/* Row 1: topic + chevron */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+            <View style={{
+              width: 28, height: 28, borderRadius: radius.md,
+              backgroundColor: (isComplete ? '#10B981' : diff.color) + '18',
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Ionicons
+                name={isComplete ? 'checkmark-circle' : diff.icon}
+                size={14}
+                color={isComplete ? '#10B981' : diff.color}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Typography variant="captionBold" color={theme.text} numberOfLines={1} style={{ fontSize: 12 }}>
+                {session.topicName}
+              </Typography>
+              <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 10 }}>
+                {session.subjectName}
+              </Typography>
+            </View>
+            <Ionicons name="chevron-forward" size={14} color={theme.textTertiary} />
+          </View>
+
+          {/* Row 2: meta pills */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
+            {/* Difficulty */}
+            <View style={{
+              flexDirection: 'row', alignItems: 'center', gap: 3,
+              backgroundColor: diff.color + '15', borderRadius: radius.full,
+              paddingHorizontal: 7, paddingVertical: 2,
+            }}>
+              <Typography variant="caption" color={diff.color} style={{ fontSize: 9, fontWeight: '700' }}>
+                {diff.label}
+              </Typography>
+            </View>
+
+            {/* Reason */}
+            <View style={{
+              flexDirection: 'row', alignItems: 'center', gap: 3,
+              backgroundColor: reason.color + '12', borderRadius: radius.full,
+              paddingHorizontal: 7, paddingVertical: 2,
+            }}>
+              <Ionicons name={reason.icon} size={9} color={reason.color} />
+              <Typography variant="caption" color={reason.color} style={{ fontSize: 9, fontWeight: '600' }}>
+                {reason.label}
+              </Typography>
+            </View>
+
+            {/* Card count + time */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+              <Ionicons name="layers-outline" size={10} color={theme.textTertiary} />
+              <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 10 }}>
+                {session.cardCount} cards · ~{session.estimatedMinutes}m
+              </Typography>
+            </View>
+
+            {/* Adjusted badge */}
+            {session.mlMeta?.cardCountAdjusted && (
+              <View style={{
+                flexDirection: 'row', alignItems: 'center', gap: 3,
+                backgroundColor: '#F59E0B18', borderRadius: radius.full,
+                paddingHorizontal: 7, paddingVertical: 2,
+              }}>
+                <Ionicons name="shield-checkmark-outline" size={9} color="#F59E0B" />
+                <Typography variant="caption" color="#F59E0B" style={{ fontSize: 9, fontWeight: '600' }}>
+                  Optimised
+                </Typography>
+              </View>
+            )}
+          </View>
+
+          {/* Row 3: dropout nudge (only when high risk + not yet started) */}
+          {dropoutHigh && localAnswered === 0 && (
+            <View style={{
+              flexDirection: 'row', alignItems: 'center', gap: 5,
+              backgroundColor: '#F59E0B0A', borderRadius: radius.md,
+              paddingHorizontal: spacing.sm, paddingVertical: 4,
+              borderWidth: 1, borderColor: '#F59E0B20',
+            }}>
+              <Ionicons name="bulb-outline" size={11} color="#F59E0B" />
+              <Typography variant="caption" color="#F59E0B" style={{ fontSize: 10, flex: 1 }}>
+                Tip: short, focused session — aim for {Math.min(session.cardCount, 10)} cards to build momentum.
+              </Typography>
+            </View>
+          )}
+
+          {/* Row 4: per-session progress bar */}
+          {localAnswered > 0 && (
+            <View style={{ height: 3, borderRadius: 2, backgroundColor: theme.border + '44', overflow: 'hidden' }}>
+              <View style={{
+                width: `${segFill * 100}%`, height: '100%',
+                backgroundColor: isComplete ? '#10B981' : '#6366F1',
+                borderRadius: 2,
+              }} />
+            </View>
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 // ─── Quick Action Button ──────────────────────────────────────
 function QuickAction({
   icon,
@@ -170,13 +342,11 @@ function QuickAction({
         borderColor: color + '22',
       }}
     >
-      <View
-        style={{
-          width: 30, height: 30, borderRadius: radius.full,
-          backgroundColor: color + '18',
-          alignItems: 'center', justifyContent: 'center',
-        }}
-      >
+      <View style={{
+        width: 30, height: 30, borderRadius: radius.full,
+        backgroundColor: color + '18',
+        alignItems: 'center', justifyContent: 'center',
+      }}>
         <Ionicons name={icon} size={14} color={color} />
       </View>
       <Typography variant="captionBold" color={theme.text} numberOfLines={1} style={{ fontSize: 11, flex: 1 }}>
@@ -192,33 +362,59 @@ export function TodaysFocusSection() {
   const { theme } = useTheme();
   const router = useRouter();
 
-  // ── Data hooks ───────────────────────────────────────────
+  // ── Data hooks ────────────────────────────────────────────
   const { data: streakData, isLoading: isStreakLoading } = useStudyStreak();
   const { data: progressData, isLoading: isProgressLoading } = useProgressSummary();
   const { data: coinsTodayData } = useCoinsToday();
+  const { data: profile, isLoading: isProfileLoading } = useLearningProfile();
+  const { progress: localProgress } = useDailyPlanProgress();
 
-  const streak = streakData?.currentStreak ?? 0;
+  // ── Streak & stats ────────────────────────────────────────
+  const streak       = streakData?.currentStreak ?? 0;
   const longestStreak = streakData?.longestStreak ?? 0;
-  const freezes = streakData?.streakFreezes ?? 0;
-  const todayCards = progressData?.weeklyActivity?.find(
+  const freezes      = streakData?.streakFreezes ?? 0;
+  const totalCards   = progressData?.totalCardsCompleted ?? 0;
+  const overallAccuracy = progressData?.overallAccuracy ?? 0;
+  const coinsToday   = coinsTodayData?.earnedToday ?? 0;
+  const coinsCap     = coinsTodayData?.dailyCap ?? 500;
+  const hasStudied   = totalCards > 0;
+
+  // ── Adaptive daily goal ───────────────────────────────────
+  // Sum of cardCount across all planned sessions for today.
+  // Falls back to FALLBACK_DAILY_GOAL if the profile hasn't loaded yet.
+  const dailyGoal = useMemo(() => {
+    const sessions = profile?.studyPlan?.sessions ?? [];
+    if (sessions.length === 0) return FALLBACK_DAILY_GOAL;
+    return sessions.reduce((sum, s) => sum + s.cardCount, 0);
+  }, [profile?.studyPlan?.sessions]);
+
+  // ── Today's card count (server + local max) ──────────────
+  // Server count: from weeklyActivity for today's date
+  const serverCards = progressData?.weeklyActivity?.find(
     (d) => d.date === getLocalDateString(),
   )?.cardsStudied ?? 0;
-  const totalCards = progressData?.totalCardsCompleted ?? 0;
-  const overallAccuracy = progressData?.overallAccuracy ?? 0;
-  const coinsToday = coinsTodayData?.earnedToday ?? 0;
-  const coinsCap = coinsTodayData?.dailyCap ?? 500;
 
-  const goalProgress = Math.min(todayCards / DAILY_CARD_GOAL, 1);
-  const goalComplete = todayCards >= DAILY_CARD_GOAL;
-  const hasStudied = totalCards > 0;
+  // Local count: sum answered across all in-progress sessions in AsyncStorage.
+  // Gives instant feedback before the server-side cache re-validates.
+  const localCards = useMemo(() => {
+    return Object.values(localProgress).reduce((sum, s) => sum + s.answered, 0);
+  }, [localProgress]);
 
-  const isLoading = isStreakLoading || isProgressLoading;
+  // Always show the higher of the two to prevent visible regression
+  const todayCards = Math.max(serverCards, localCards);
+
+  // ── Ring state ────────────────────────────────────────────
+  const goalProgress = Math.min(todayCards / dailyGoal, 1);
+  const goalComplete = todayCards >= dailyGoal;
+  const remaining   = Math.max(0, dailyGoal - todayCards);
+
+  const isLoading = isStreakLoading || isProgressLoading || isProfileLoading;
 
   // ── Entrance animation ────────────────────────────────────
-  const sectionOpacity = useSharedValue(0);
+  const sectionOpacity    = useSharedValue(0);
   const sectionTranslateY = useSharedValue(16);
   useEffect(() => {
-    sectionOpacity.value = withTiming(1, { duration: 400 });
+    sectionOpacity.value    = withTiming(1, { duration: 400 });
     sectionTranslateY.value = withSpring(0, { stiffness: 140, damping: 20 });
   }, []);
 
@@ -236,6 +432,38 @@ export function TodaysFocusSection() {
     router.push('/(tabs)/progress');
   }
 
+  // Bug #5: difficulty → level mapping for topic-review fetchLevelCards
+  const DIFFICULTY_TO_LEVEL: Record<string, string> = {
+    challenging: 'Advanced',
+    moderate:    'Proficient',
+    easy_review: 'Emerging',
+  };
+
+  function handleSessionPress(session: PlannedStudySession) {
+    // Encode mlMeta as string params — Expo Router only accepts string/number values.
+    // topic-review.tsx decodes these back into a SessionMlMeta object for FocusQualityScore.
+    const mlParams = session.mlMeta ? {
+      mlPDifficult:  String((session.mlMeta.pDifficult  ?? 0).toFixed(3)),
+      mlDropoutRisk: String((session.mlMeta.dropoutRisk ?? 0).toFixed(3)),
+      mlModel:       session.mlMeta.model,
+    } : {};
+
+    router.push({
+      pathname: '/topic-review',
+      params: {
+        topicSlug:   session.topicSlug,
+        topicName:   session.topicName,
+        subjectName: session.subjectName,
+        subjectId:   session.subjectId,
+        examId:      session.examId ?? '',
+        mode:        'daily_plan',
+        cardCount:   String(session.cardCount),
+        level:       DIFFICULTY_TO_LEVEL[session.difficulty] ?? 'Emerging',
+        ...mlParams,
+      },
+    });
+  }
+
   // ── Loading state ─────────────────────────────────────────
   if (isLoading) {
     return (
@@ -249,9 +477,7 @@ export function TodaysFocusSection() {
     );
   }
 
-  // Fix 2B: For brand-new users, skip the empty dashboard card entirely.
-  // Show only the welcome CTA + quick actions to avoid showing a 0/30 ring
-  // alongside an onboarding banner simultaneously.
+  // For brand-new users, skip the dashboard ring and show only the onboarding CTA.
   if (!hasStudied) {
     return (
       <Animated.View style={sectionAnimStyle}>
@@ -338,7 +564,7 @@ export function TodaysFocusSection() {
               elevation: 3,
             }}
           >
-            {/* Top gradient strip */}
+            {/* Top gradient strip — green when goal met, indigo otherwise */}
             <LinearGradient
               colors={goalComplete ? ['#10B981', '#34D399'] : ['#6366F1', '#818CF8']}
               start={{ x: 0, y: 0 }}
@@ -370,14 +596,14 @@ export function TodaysFocusSection() {
                       color={theme.textTertiary}
                       style={{ fontSize: 8, marginTop: -1 }}
                     >
-                      {goalComplete ? 'Done!' : `/${DAILY_CARD_GOAL}`}
+                      {goalComplete ? 'Done!' : `/${dailyGoal}`}
                     </Typography>
                   </View>
                 </GoalRing>
 
                 {/* Stats column */}
                 <View style={{ flex: 1, gap: spacing.sm }}>
-                  {/* Title */}
+                  {/* Title + subtitle */}
                   <View>
                     <Typography variant="label" style={{ fontSize: 14 }}>
                       {goalComplete
@@ -389,7 +615,7 @@ export function TodaysFocusSection() {
                     <Typography variant="caption" color={theme.textSecondary} style={{ fontSize: 11 }}>
                       {goalComplete
                         ? `${todayCards} cards reviewed — your retention is strengthening`
-                        : `${DAILY_CARD_GOAL - todayCards} cards to strengthen today's retention`}
+                        : `${remaining} card${remaining !== 1 ? 's' : ''} to strengthen today's retention`}
                     </Typography>
                   </View>
 
@@ -461,11 +687,78 @@ export function TodaysFocusSection() {
                   )}
                 </View>
               )}
+
+              {/* Row 3: compact progress summary bar */}
+              {(profile?.studyPlan?.sessions ?? []).length > 0 && (
+                <View style={{ gap: 6 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <Typography variant="caption" color={theme.textSecondary} style={{ fontSize: 10 }}>
+                        Today's plan
+                      </Typography>
+                      {/* Knowledge engine badge */}
+                      {profile?.studyPlan?.sessions[0]?.mlMeta && (
+                        <View style={{
+                          backgroundColor: MODEL_CONFIG[profile.studyPlan.sessions[0].mlMeta.model].color + '18',
+                          borderRadius: radius.full, paddingHorizontal: 6, paddingVertical: 1,
+                        }}>
+                          <Typography
+                            variant="caption"
+                            color={MODEL_CONFIG[profile.studyPlan.sessions[0].mlMeta.model].color}
+                            style={{ fontSize: 8, fontWeight: '700', letterSpacing: 0.4 }}
+                          >
+                            {MODEL_CONFIG[profile.studyPlan.sessions[0].mlMeta.model].label} powered
+                          </Typography>
+                        </View>
+                      )}
+                    </View>
+                    <Typography variant="captionBold" color={theme.textTertiary} style={{ fontSize: 10 }}>
+                      {todayCards}/{dailyGoal} cards
+                    </Typography>
+                  </View>
+                  {/* Segmented bar */}
+                  <View style={{ flexDirection: 'row', gap: 3, height: 3 }}>
+                    {profile!.studyPlan!.sessions.map((session, idx) => {
+                      const sl = localProgress[session.topicSlug];
+                      const done = sl?.isComplete ? session.cardCount : (sl?.answered ?? 0);
+                      const fill = Math.min(done / session.cardCount, 1);
+                      return (
+                        <View key={session.topicSlug + idx} style={{ flex: 1, height: 3, borderRadius: 2, backgroundColor: theme.border + '44', overflow: 'hidden' }}>
+                          <View style={{ width: `${fill * 100}%`, height: '100%', backgroundColor: fill >= 1 ? '#10B981' : '#6366F1', borderRadius: 2 }} />
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
             </View>
           </View>
         </View>
 
-        {/* ── Quick actions row ───────────────────────────── */}
+        {/* ── ML session cards ───────────────────────────── */}
+        {(profile?.studyPlan?.sessions ?? []).length > 0 && (
+          <View style={{ paddingHorizontal: spacing.xl, gap: spacing.sm }}>
+            <Typography variant="captionBold" color={theme.textSecondary} style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+              Today's Sessions
+            </Typography>
+            {profile!.studyPlan!.sessions.map((session) => {
+              const sl = localProgress[session.topicSlug];
+              const answered = sl?.isComplete ? session.cardCount : (sl?.answered ?? 0);
+              const complete = (sl?.isComplete ?? false) || answered >= session.cardCount;
+              return (
+                <SessionCard
+                  key={session.topicSlug}
+                  session={session}
+                  localAnswered={answered}
+                  isComplete={complete}
+                  onPress={() => handleSessionPress(session)}
+                />
+              );
+            })}
+          </View>
+        )}
+
+        {/* ── Quick actions row ──────────────────────────── */}
         <View style={{ paddingHorizontal: spacing.xl, flexDirection: 'row', gap: spacing.sm }}>
           <QuickAction
             icon="compass-outline"
@@ -480,8 +773,6 @@ export function TodaysFocusSection() {
             onPress={handleViewProgress}
           />
         </View>
-
-
       </View>
     </Animated.View>
   );

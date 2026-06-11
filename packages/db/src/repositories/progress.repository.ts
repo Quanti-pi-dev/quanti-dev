@@ -167,8 +167,17 @@ class ProgressRepository {
   }
 
   // ─── Daily Activity ───────────────────────────────────
-  async updateDailyActivity(userId: string, responseTimeMs: number): Promise<void> {
-    const today = new Date().toISOString().split('T')[0]!;
+  // Bug #7 fix: tzOffsetMinutes shifts UTC time to the user's local clock
+  // before extracting the date string. JS Date's toISOString() is always UTC;
+  // without this shift, a student in UTC+5:30 studying at 00:30 local time
+  // would have their card counted under yesterday's UTC date.
+  private localDateStr(tzOffsetMinutes = 0): string {
+    const shifted = new Date(Date.now() + tzOffsetMinutes * 60_000);
+    return shifted.toISOString().split('T')[0]!;
+  }
+
+  async updateDailyActivity(userId: string, responseTimeMs: number, tzOffsetMinutes = 0): Promise<void> {
+    const today = this.localDateStr(tzOffsetMinutes);
     const key = `daily_activity:${userId}:${today}`;
 
     const pipeline = this.redis.pipeline();
@@ -178,15 +187,15 @@ class ProgressRepository {
     await pipeline.exec();
   }
 
-  async getWeeklyActivity(userId: string): Promise<DailyActivity[]> {
-    const today = new Date();
+  async getWeeklyActivity(userId: string, tzOffsetMinutes = 0): Promise<DailyActivity[]> {
+    const now = new Date(Date.now() + tzOffsetMinutes * 60_000);
     const dateStrs: string[] = [];
 
-    // Build keys for last 7 days
+    // Build keys for last 7 days in the user's LOCAL timezone
     const pipeline = this.redis.pipeline();
     for (let i = 6; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
+      const date = new Date(now);
+      date.setUTCDate(date.getUTCDate() - i);
       const dateStr = date.toISOString().split('T')[0]!;
       dateStrs.push(dateStr);
       pipeline.hgetall(`daily_activity:${userId}:${dateStr}`);
@@ -206,9 +215,9 @@ class ProgressRepository {
   }
 
   // ─── Summary ──────────────────────────────────────────
-  async getSummary(userId: string): Promise<ProgressSummary> {
+  async getSummary(userId: string, tzOffsetMinutes = 0): Promise<ProgressSummary> {
     const streak = await this.getStreak(userId);
-    const weeklyActivity = await this.getWeeklyActivity(userId);
+    const weeklyActivity = await this.getWeeklyActivity(userId, tzOffsetMinutes);
 
     // Use the tracked deck-IDs SET instead of SCAN for O(1) key lookup
     const deckIds = await this.redis.smembers(`progress_decks:${userId}`);

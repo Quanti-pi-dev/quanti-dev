@@ -5,6 +5,11 @@
 //
 // Data source: ExamReadiness.weakConcepts (BKT p_mastery < 0.4)
 // Navigation:  /topic-review?mode=concept_practice&conceptTag=...
+//
+// ML-aware ordering: concepts sorted by "most learnable first"
+//   = largest mastery gap where student already has some traction
+//     (p_mastery > 0.05). Pure-zero mastery concepts go last —
+//     they require foundational study, not quick fixes.
 
 import { View, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -37,9 +42,25 @@ interface MistakePatternsProps {
 
 function classifyMastery(pct: number): { label: string; color: string } {
   if (pct >= 85) return { label: 'Distinguished', color: '#10B981' };
-  if (pct >= 60) return { label: 'Proficient', color: '#3B82F6' };
-  if (pct >= 20) return { label: 'Developing', color: '#F59E0B' };
-  return { label: 'Emerging', color: '#EF4444' };
+  if (pct >= 60) return { label: 'Proficient',    color: '#3B82F6' };
+  if (pct >= 20) return { label: 'Developing',    color: '#F59E0B' };
+  return               { label: 'Emerging',      color: '#EF4444' };
+}
+
+/**
+ * "Most learnable" ordering:
+ *   1. Concepts with some traction (p_mastery > 0.05) — these are fixable fast.
+ *      Within this group: sort by largest gap (1 − p_mastery) descending.
+ *   2. Zero-traction concepts (p_mastery ≤ 0.05) — need foundational work, last.
+ *      Within this group: preserve original BKT order.
+ */
+function sortByLearnability(concepts: WeakConcept[]): WeakConcept[] {
+  const hasTraction = concepts.filter((c) => c.pMastery > 0.05);
+  const noTraction  = concepts.filter((c) => c.pMastery <= 0.05);
+
+  hasTraction.sort((a, b) => b.pMastery - a.pMastery); // largest existing mastery first = quickest win
+
+  return [...hasTraction, ...noTraction];
 }
 
 // ─── Component ────────────────────────────────────────────────
@@ -47,7 +68,10 @@ function classifyMastery(pct: number): { label: string; color: string } {
 export function MistakePatterns({ weakConcepts }: MistakePatternsProps) {
   const { theme } = useTheme();
   const router = useRouter();
-  const top3 = weakConcepts.slice(0, 3);
+
+  // ML-aware ordering: most learnable first
+  const ordered = sortByLearnability(weakConcepts);
+  const top3 = ordered.slice(0, 3);
 
   if (top3.length === 0) {
     return (
@@ -83,6 +107,9 @@ export function MistakePatterns({ weakConcepts }: MistakePatternsProps) {
           </View>
           <View style={{ flex: 1 }}>
             <Typography variant="h4">Mistake Patterns</Typography>
+            <Typography variant="caption" color={theme.textTertiary} style={{ fontSize: 10 }}>
+              Sorted by quickest to fix
+            </Typography>
           </View>
           <View style={{
             paddingHorizontal: spacing.sm, paddingVertical: 3,
@@ -100,21 +127,22 @@ export function MistakePatterns({ weakConcepts }: MistakePatternsProps) {
           const masteryPct = Math.round(wc.pMastery * 100);
           const { label, color } = classifyMastery(masteryPct);
           const canNavigate = !!wc.tag;
+          const isTopPick   = i === 0 && wc.pMastery > 0.05; // first learnable concept
 
           const handlePractice = () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             router.push({
               pathname: '/topic-review',
               params: {
-                mode: 'concept_practice',
-                conceptTag: wc.tag,
+                mode:        'concept_practice',
+                conceptTag:  wc.tag,
                 conceptName: wc.concept,
-                topicSlug: wc.topicSlug,
-                topicName: wc.concept,
+                topicSlug:   wc.topicSlug,
+                topicName:   wc.concept,
                 subjectName: wc.subjectName,
-                subjectId: wc.subjectId,
-                examId: wc.examId ?? '',
-                cardCount: '25',
+                subjectId:   wc.subjectId,
+                examId:      wc.examId ?? '',
+                cardCount:   '25',
               },
             });
           };
@@ -127,8 +155,8 @@ export function MistakePatterns({ weakConcepts }: MistakePatternsProps) {
                 backgroundColor: color + '08',
                 borderRadius: radius.xl,
                 padding: spacing.md,
-                borderWidth: 1,
-                borderColor: color + '20',
+                borderWidth: isTopPick ? 1.5 : 1,
+                borderColor: isTopPick ? color + '40' : color + '20',
                 gap: spacing.sm,
               }}
             >
@@ -144,7 +172,24 @@ export function MistakePatterns({ weakConcepts }: MistakePatternsProps) {
                   </Typography>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Typography variant="label" numberOfLines={1}>{wc.concept}</Typography>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Typography variant="label" numberOfLines={1} style={{ flex: 1 }}>
+                      {wc.concept}
+                    </Typography>
+                    {/* "Start Here" affordance on the most learnable concept */}
+                    {isTopPick && (
+                      <View style={{
+                        backgroundColor: '#10B98115',
+                        borderRadius: radius.full,
+                        paddingHorizontal: 6, paddingVertical: 2,
+                        borderWidth: 1, borderColor: '#10B98125',
+                      }}>
+                        <Typography variant="caption" color="#10B981" style={{ fontSize: 9, fontWeight: '700' }}>
+                          Start Here
+                        </Typography>
+                      </View>
+                    )}
+                  </View>
                   <Typography variant="caption" color={theme.textTertiary}>{wc.subjectName}</Typography>
                 </View>
                 <View style={{
@@ -182,7 +227,7 @@ export function MistakePatterns({ weakConcepts }: MistakePatternsProps) {
               >
                 <Ionicons name="flash" size={14} color={canNavigate ? color : theme.textTertiary} />
                 <Typography variant="captionBold" color={canNavigate ? color : theme.textTertiary}>
-                  Practice This Concept
+                  {isTopPick ? `Practice ${wc.concept}` : 'Practice This Concept'}
                 </Typography>
               </TouchableOpacity>
             </Animated.View>

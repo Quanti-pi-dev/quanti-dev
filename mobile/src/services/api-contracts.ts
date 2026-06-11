@@ -89,7 +89,13 @@ export async function fetchAdaptiveCards(deckIds: string[], pageSize = 100): Pro
 // ─── Progress ──────────────────────────────────────────────
 
 export async function fetchProgressSummary(): Promise<ProgressSummary> {
-  const { data } = await api.get<ApiResponse<ProgressSummary>>('/progress/summary');
+  // Bug #7 fix: send the device's UTC offset so the server buckets daily
+  // activity by local date. JS getTimezoneOffset() is the inverse of what
+  // we want (e.g. IST UTC+5:30 returns -330), so we negate it.
+  const tzOffset = -(new Date().getTimezoneOffset());
+  const { data } = await api.get<ApiResponse<ProgressSummary>>('/progress/summary', {
+    params: { tzOffset },
+  });
   return data?.data as ProgressSummary;
 }
 
@@ -364,6 +370,25 @@ export async function fetchConceptPractice(opts: {
   if (opts.limit) params.limit = String(opts.limit);
   const { data } = await api.get<ApiResponse<ReviewQueueCard[]>>('/progress/concept-practice', { params });
   return (data?.data ?? []) as ReviewQueueCard[];
+}
+
+// ─── Concept Mastery (BKT, per-concept) ───────────────────────
+
+export interface ConceptMasteryResult {
+  tag: string;
+  /** 0–1 BKT mastery probability. Null if tag has no data yet. */
+  pMastery: number | null;
+  totalAttempts: number;
+  correctAttempts: number;
+}
+
+/**
+ * Fetch a single concept's BKT mastery probability from Redis.
+ * Lightweight — does NOT rebuild the full learning profile.
+ * Used for the mid-session mastery delta toast in concept_practice mode.
+ */
+export async function fetchConceptMastery(tag: string): Promise<ConceptMasteryResult> {
+  return apiGet<ConceptMasteryResult>('/progress/concept-mastery', { tag });
 }
 
 // ─── PYQ Practice ─────────────────────────────────────────────
@@ -691,6 +716,17 @@ export async function cancelChallenge(id: string): Promise<void> {
 
 export async function submitChallengeAnswer(id: string, cardId: string, selectedAnswerId: string): Promise<AnswerResult> {
   return apiPost<AnswerResult>(`/p2p/challenges/${id}/answer`, { cardId, selectedAnswerId });
+}
+
+/** DKT-balanced card selection for a live battle.
+ *  Returns up to 10 flashcards chosen to be maximally competitive
+ *  (|pCreator - pOpponent| minimized via DKT/SAKT predictions).
+ *  Falls back to shuffled deck when the ML sidecar is unavailable. */
+export async function fetchBattleCards(challengeId: string): Promise<Flashcard[]> {
+  const response = await apiGet<{ cards: Flashcard[]; model: string }>(
+    `/p2p/challenges/${challengeId}/cards`,
+  );
+  return response.cards;
 }
 
 // ─── Institute (Student-facing) ───────────────────────────────────────────────

@@ -61,6 +61,7 @@ export async function adminAIRoutes(fastify: FastifyInstance): Promise<void> {
           correctAnswerId: c.correctAnswerId,
           explanation: c.explanation,
           source: 'ai_generated' as const,
+          tags: c.tags ?? [],
         }));
 
         insertedCount = await flashcardRepository.bulkCreate(body.deckId, cardsToInsert);

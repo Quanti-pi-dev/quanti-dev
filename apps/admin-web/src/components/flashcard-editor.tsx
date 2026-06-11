@@ -10,10 +10,10 @@
 //
 // Used by:  Decks CardModal, Mock Tests QuestionEditorModal
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Latex } from '@/components/latex';
 import { ImagePicker } from '@/components/image-picker';
-import { Check, ChevronDown, Type, ListChecks, MessageSquare, Image } from 'lucide-react';
+import { Check, Tag, Type, ListChecks, MessageSquare } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -30,9 +30,11 @@ export interface FlashcardData {
   explanation: string;
   imageUrl: string | null;
   explanationImageUrl: string | null;
+  /** BKT concept tags — used by the ML engine to track per-concept mastery. */
+  tags: string[];
 }
 
-type EditSection = 'question' | 'options' | 'explanation' | null;
+type EditSection = 'question' | 'options' | 'explanation' | 'tags' | null;
 
 // ─── Styles ───────────────────────────────────────────────────
 
@@ -85,6 +87,62 @@ interface FlashcardEditorProps {
   maxOptions?: number;
   /** Whether options can be added/removed (default: false) */
   variableOptions?: boolean;
+}
+
+// ─── Tag Input ────────────────────────────────────────────────
+
+function TagInput({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
+  const [input, setInput] = useState('');
+
+  const addTag = useCallback((raw: string) => {
+    const cleaned = raw.trim().toLowerCase().replace(/\s+/g, '-');
+    if (cleaned && !tags.includes(cleaned)) {
+      onChange([...tags, cleaned]);
+    }
+    setInput('');
+  }, [tags, onChange]);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {tags.map(tag => (
+          <span
+            key={tag}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-violet-600/15 border border-violet-500/30 text-violet-300 text-xs"
+          >
+            {tag}
+            <button
+              type="button"
+              onClick={() => onChange(tags.filter(t => t !== tag))}
+              className="text-violet-500 hover:text-violet-200 transition ml-0.5"
+              title="Remove tag"
+            >×</button>
+          </span>
+        ))}
+        {tags.length === 0 && (
+          <span className="text-xs text-zinc-600 italic">No concept tags yet</span>
+        )}
+      </div>
+      <input
+        value={input}
+        onChange={e => setInput(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            addTag(input);
+          } else if (e.key === 'Backspace' && !input && tags.length > 0) {
+            onChange(tags.slice(0, -1));
+          }
+        }}
+        onBlur={() => { if (input.trim()) addTag(input); }}
+        placeholder="Type a concept tag and press Enter (e.g. kinematics-1d)"
+        className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500 transition"
+      />
+      <p className="text-[10px] text-zinc-600">
+        Tags map to BKT concepts. Use kebab-case (e.g. <span className="text-zinc-500">newtons-law-1</span>, <span className="text-zinc-500">fundamental-rights</span>). Spaces are auto-converted to hyphens.
+      </p>
+    </div>
+  );
 }
 
 export function FlashcardEditor({
@@ -245,6 +303,29 @@ export function FlashcardEditor({
               </span>
             </div>
           </button>
+
+          {/* Tags Section */}
+          <button
+            type="button"
+            onClick={() => setActiveSection(activeSection === 'tags' ? null : 'tags')}
+            className={`w-full text-left rounded-lg p-3 mt-3 transition-all duration-200 cursor-pointer ${sectionClass('tags')}`}
+          >
+            <div className="flex flex-wrap gap-1">
+              {(data.tags ?? []).length > 0 ? (
+                (data.tags ?? []).map(t => (
+                  <span key={t} className="px-2 py-0.5 rounded-full bg-violet-900/40 border border-violet-700/40 text-violet-300 text-[10px]">{t}</span>
+                ))
+              ) : (
+                <span className="text-xs text-zinc-700 italic">Click to add ML concept tags…</span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <Tag size={10} className={activeSection === 'tags' ? 'text-violet-400' : 'text-zinc-700'} />
+              <span className={`text-[10px] ${activeSection === 'tags' ? 'text-violet-400' : 'text-zinc-700'}`}>
+                Concept Tags {activeSection === 'tags' && '· editing'}{(data.tags ?? []).length > 0 && ` · ${(data.tags ?? []).length}`}
+              </span>
+            </div>
+          </button>
         </div>
       </div>
 
@@ -371,6 +452,17 @@ export function FlashcardEditor({
                 onChange={url => onChange({ ...data, explanationImageUrl: url })}
                 label="Explanation Image (optional)"
                 compact
+              />
+            </>
+          )}
+
+          {/* ─── Tags Editor ────────────────────────────────── */}
+          {activeSection === 'tags' && (
+            <>
+              <SectionHeader icon={Tag} label="Concept Tags (ML)" onClose={() => setActiveSection(null)} />
+              <TagInput
+                tags={data.tags ?? []}
+                onChange={tags => onChange({ ...data, tags })}
               />
             </>
           )}

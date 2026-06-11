@@ -8,6 +8,7 @@ import {
   fetchActiveChallenge,
   fetchChallengeHistory,
   fetchChallengeDetail,
+  fetchBattleCards,
   createChallenge,
   acceptChallenge,
   declineChallenge,
@@ -24,6 +25,7 @@ export const challengeKeys = {
   active: () => [...challengeKeys.all, 'active'] as const,
   history: (page: number) => [...challengeKeys.all, 'history', page] as const,
   detail: (id: string) => [...challengeKeys.all, id] as const,
+  battleCards: (id: string) => [...challengeKeys.all, id, 'cards'] as const,
 };
 
 /** Pending invites (opponent's inbox). Auto-refreshes every 5s when enabled.
@@ -153,5 +155,22 @@ export function useSubmitAnswer(challengeId: string) {
     onError: (err) => {
       console.warn('[ChallengeAnswer]', err);
     },
+  });
+}
+
+/**
+ * DKT-balanced card selection for a live battle.
+ * Calls GET /p2p/challenges/:id/cards which uses the ML sidecar to pick
+ * 10 maximally competitive cards (|pCreator - pOpponent| minimized).
+ * staleTime: Infinity — the card set is computed once and fixed for the match.
+ */
+export function useChallengeBattleCards(challengeId: string | null) {
+  return useQuery({
+    queryKey: challengeKeys.battleCards(challengeId ?? ''),
+    queryFn: () => fetchBattleCards(challengeId!),
+    enabled: !!challengeId,
+    staleTime: Infinity, // Cards are fixed for the duration of the match
+    gcTime: 10 * 60 * 1000, // Garbage-collect 10 min after the game ends
+    retry: 1,
   });
 }

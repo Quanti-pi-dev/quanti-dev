@@ -108,8 +108,27 @@ export {
   disconnectRealtime,
 } from './services/realtime.service.js';
 export { selectAdaptiveOrder, updateKnowledgeModel } from './services/card-selector.js';
-export { sm2, responseToQuality, INITIAL_EASE_FACTOR, estimateRetention } from './services/sm2.js';
+export { responseToQuality } from './services/sm2.js';
+export { hlr, estimateHLRRetention, DEFAULT_HLR_WEIGHTS } from './services/hlr.js';
+export type { HLRInput, HLRResult, HLRWeights } from './services/hlr.js';
 export { bktUpdate, bktBatchUpdate, DEFAULT_BKT_PARAMS, informationGain, classifyMastery, buildConceptMastery } from './services/bkt.js';
+export {
+  predictDropout, predictDropoutSync, topicDropoutRisk,
+} from './services/dropout-predictor.js';
+export type { DropoutFeatures, DropoutPrediction } from './services/dropout-predictor.js';
+export {
+  predictTopicAffinity, rankNewTopics,
+  saveUserEmbedding, saveTopicEmbedding,
+  encodeEmbedding, decodeEmbedding,
+  loadConceptMasteryMap as loadAlsConceptMasteryMap,
+} from './services/collaborative-filter.js';
+export type { TopicAffinity } from './services/collaborative-filter.js';
+export {
+  saktPredict, saktBatchPredict, saktRecord, saktHealth,
+  getSAKTDifficultyMap, getDKTState,
+} from './services/sakt-client.js';
+export type { SAKTPrediction, SAKTTopicScore, DKTStateResult, MLHealthStatus } from './services/sakt-client.js';
+
 export {
   estimateAbility, estimateDifficulty, difficultyMatchScore,
   adaptiveDifficultyScore, buildCardDifficulty, buildStudentAbility,

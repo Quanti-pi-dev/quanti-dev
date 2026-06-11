@@ -23,7 +23,7 @@ import { RichContent } from '../ui/RichContent';
 import { Button } from '../ui/Button';
 import { AccuracyRing } from './AccuracyRing';
 import { ConfettiBurst } from './ConfettiBurst';
-import { FocusQualityScore } from '../analytics/FocusQualityScore';
+import { FocusQualityScore, type SessionMlMeta } from '../analytics/FocusQualityScore';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   initiateWager,
@@ -41,6 +41,11 @@ interface StudyCompletionScreenProps {
   sessionCoinsEarned: number;
   deckId?: string | null;
   longestStreak?: number;
+  /**
+   * Optional ML metadata forwarded from the study plan session.
+   * When present, FocusQualityScore will show Difficulty &amp; Persistence bonuses.
+   */
+  mlMeta?: SessionMlMeta;
   onStudyAgain: () => void;
 }
 
@@ -93,6 +98,7 @@ export const StudyCompletionScreen = React.memo(function StudyCompletionScreen({
   sessionCoinsEarned,
   deckId,
   longestStreak = 0,
+  mlMeta,
   onStudyAgain,
 }: StudyCompletionScreenProps) {
   const { theme } = useTheme();
@@ -404,13 +410,14 @@ export const StudyCompletionScreen = React.memo(function StudyCompletionScreen({
           </View>
         </Animated.View>
 
-        {/* Focus Quality Score — post-session diagnostic */}
+        {/* Focus Quality Score — post-session diagnostic (ML-augmented when mlMeta present) */}
         <FocusQualityScore
           correctCount={correctCount}
           incorrectCount={incorrectCount}
           skippedCount={skippedCount}
           totalCards={total}
           longestStreak={longestStreak}
+          mlMeta={mlMeta}
         />
 
         {/* Coins earned */}

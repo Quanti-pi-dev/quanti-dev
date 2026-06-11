@@ -8,7 +8,7 @@ import { loadSubscription } from '../middleware/feature-gate.js';
 import { progressRepository } from '@kd/db';
 import { flashcardRepository } from '@kd/db';
 import { rewardService } from '@kd/db';
-import { updateCardMemory } from '@kd/db';
+import { updateCardMemory, saktRecord } from '@kd/db';
 import { updateKnowledgeModel } from '@kd/db';
 import { selectAdaptiveOrder } from '@kd/db';
 import { getRedisClient, getPostgresPool, getMongoDb } from '@kd/db';
@@ -96,8 +96,17 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
   });
 
   // ─── GET /progress/summary — Overall progress ────────
-  fastify.get('/summary', async (request: FastifyRequest, reply: FastifyReply) => {
-    const summary = await progressRepository.getSummary(request.user!.id);
+  // Query params:
+  //   tzOffset — user's UTC offset in minutes (e.g. 330 for UTC+5:30,
+  //              -240 for UTC-4). Bug #7 fix: buckets daily activity by
+  //              local date instead of UTC date.
+  fastify.get('/summary', async (request: FastifyRequest<{ Querystring: { tzOffset?: string } }>, reply: FastifyReply) => {
+    const rawTz = (request.query as { tzOffset?: string }).tzOffset;
+    const tzOffset = rawTz !== undefined ? parseInt(rawTz, 10) : 0;
+    const summary = await progressRepository.getSummary(
+      request.user!.id,
+      isNaN(tzOffset) ? 0 : tzOffset,
+    );
     return reply.send({
       success: true,
       data: summary,
@@ -191,7 +200,7 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
               if (!meta?.subjectId || !meta?.topicSlug) return;
 
               await Promise.allSettled([
-                // SM-2: updates next_review_at, ease_factor, interval_days in Redis
+                // HLR: updates next_review_at, half_life_days, interval_days in Redis
                 updateCardMemory(
                   userId,
                   answer.cardId,
@@ -204,13 +213,30 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
                 meta.tags.length > 0
                   ? updateKnowledgeModel(userId, answer.cardId, meta.tags, answer.correct)
                   : Promise.resolve(),
+                // SAKT: fire-and-forget history update for knowledge tracing
+                saktRecord(userId, answer.cardId, answer.correct),
               ]);
             }),
           );
         } catch (err) {
-          request.log.error({ err }, 'SM-2/BKT per-card update failed for session');
+          request.log.error({ err }, 'HLR/BKT/SAKT per-card update failed for session');
+        } finally {
+          // ── Critical Bug #6 Fix ────────────────────────────────────────────
+          // Bust the server-side Redis learning profile cache so the client's
+          // React Query invalidation (learningProfileKeys.all) actually gets
+          // recomputed data. Without this, GET /learning-profile serves the
+          // old 5-min TTL cache even after a session flush. This key matches
+          // PROFILE_CACHE_KEY in learning-intelligence.service.ts.
+          try {
+            const redis = getRedisClient();
+            await redis.del(`learning_profile_cache:${userId}`);
+          } catch { /* non-fatal — next TTL expiry will self-heal */ }
         }
       })();
+    } else {
+      // No per-card answers, but still bust the profile cache so the
+      // Today's Focus ring + plan reloads after a partial session flush.
+      void getRedisClient().del(`learning_profile_cache:${userId}`).catch(() => {});
     }
 
     return reply.status(201).send({
@@ -996,6 +1022,41 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
     return reply.send({ success: true, data, timestamp: new Date().toISOString() });
   });
 
+  // ─── GET /progress/concept-mastery ────────────────────────────
+  // Lightweight endpoint: reads a single concept's BKT p_mastery from
+  // Redis without rebuilding the full learning profile. Used by the
+  // mid-session mastery delta toast in concept_practice study mode.
+  //
+  // Query params:
+  //   tag — required; raw BKT concept tag (e.g. "kinematics")
+  fastify.get('/concept-mastery', async (request: FastifyRequest<{
+    Querystring: { tag: string };
+  }>, reply: FastifyReply) => {
+    const userId = request.user!.id;
+    const { tag } = request.query as { tag: string };
+
+    if (!tag || tag.trim().length === 0) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'MISSING_PARAM', message: 'tag query parameter is required' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const redis = getRedisClient();
+    const data = await redis.hgetall(`concept_mastery:${userId}:${tag}`);
+
+    const pMastery = data['p_mastery'] ? parseFloat(data['p_mastery']) : null;
+    const totalAttempts = parseInt(data['total_attempts'] ?? '0', 10);
+    const correctAttempts = parseInt(data['correct_attempts'] ?? '0', 10);
+
+    return reply.send({
+      success: true,
+      data: { tag, pMastery, totalAttempts, correctAttempts },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   // ─── GET /progress/review-queue ──────────────────────────────
   // Returns cards whose SM-2 next_review_at is <= now, enriched
   // with question content and PYQ metadata. Sorted by most overdue.
@@ -1035,8 +1096,7 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
       nextReviewAt: string;
       overdueDays: number;
       intervalDays: number;
-      easeFactor: number;
-      repetitions: number;
+      halfLifeDays: number;
     };
 
     const dueCards: DueCard[] = [];
@@ -1056,14 +1116,13 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
       if (topicSlugFilter && cardTopicSlug !== topicSlugFilter) continue;
 
       dueCards.push({
-        cardId: cardIds[i]!,
-        subjectId: data['subject_id'] ?? '',
-        topicSlug: cardTopicSlug,
+        cardId:       cardIds[i]!,
+        subjectId:    data['subject_id'] ?? '',
+        topicSlug:    cardTopicSlug,
         nextReviewAt: data['next_review_at']!,
-        overdueDays: Math.round(overdueDays * 10) / 10,
+        overdueDays:  Math.round(overdueDays * 10) / 10,
         intervalDays: parseFloat(data['interval_days'] ?? '1'),
-        easeFactor: parseFloat(data['ease_factor'] ?? '2.5'),
-        repetitions: parseInt(data['repetitions'] ?? '0', 10),
+        halfLifeDays: parseFloat(data['half_life_days'] ?? '4'),
       });
     }
 
@@ -1131,10 +1190,9 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
           source: (content.source as string) ?? 'original',
           sourceYear: (content.sourceYear as number) ?? null,
           sourcePaper: (content.sourcePaper as string) ?? null,
-          overdueDays: c.overdueDays,
+          overdueDays:  c.overdueDays,
           intervalDays: c.intervalDays,
-          easeFactor: c.easeFactor,
-          repetitions: c.repetitions,
+          halfLifeDays: c.halfLifeDays,
         };
       });
 

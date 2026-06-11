@@ -109,6 +109,7 @@ function CardModal({
     explanation:         card?.explanation ?? '',
     imageUrl:            card?.imageUrl ?? null,
     explanationImageUrl: card?.explanationImageUrl ?? null,
+    tags:                card?.tags ?? [],
   });
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
@@ -126,6 +127,7 @@ function CardModal({
       explanation:         cardData.explanation || null,
       imageUrl:            cardData.imageUrl || null,
       explanationImageUrl: cardData.explanationImageUrl || null,
+      tags:                cardData.tags?.length ? cardData.tags : undefined,
     };
     try {
       if (isEdit) {
@@ -176,6 +178,10 @@ function BulkImportModal({ deckId, onClose, onImported }: { deckId: string; onCl
   const [error, setError]   = useState('');
   const [result, setResult] = useState<{ created: number; requested: number } | null>(null);
 
+  // Tags MUST start with the deck's topicSlug so the BKT knowledge model
+  // can join concept mastery back to this topic. See TAG NAMING CONTRACT in
+  // packages/db/src/services/card-selector.ts → updateKnowledgeModel.
+  // e.g. topicSlug="fundamental-rights" → tags=["fundamental-rights-article14", "fundamental-rights-equality"]
   const PLACEHOLDER = JSON.stringify([{
     question: 'Which article of the constitution grants right to equality?',
     options: [
@@ -186,6 +192,7 @@ function BulkImportModal({ deckId, onClose, onImported }: { deckId: string; onCl
     ],
     correctAnswerId: 'B',
     explanation: 'Article 14 guarantees equality before law.',
+    tags: ['fundamental-rights-article14', 'fundamental-rights-equality'],
     source: 'pyq',
     sourceYear: 2022,
   }], null, 2);
@@ -224,7 +231,14 @@ function BulkImportModal({ deckId, onClose, onImported }: { deckId: string; onCl
             ✓ Created {result.created} of {result.requested} cards
           </div>
         )}
-        <p className="text-xs text-zinc-500 mb-3">Paste a JSON array of flashcard objects (max 100 per batch).</p>
+        <p className="text-xs text-zinc-500 mb-1">Paste a JSON array of flashcard objects (max 100 per batch).</p>
+        <div className="bg-amber-950/40 border border-amber-800/60 rounded-lg px-3 py-2 mb-3 text-xs text-amber-300">
+          <span className="font-semibold">Tag naming rule:</span> Every tag must start with this deck&apos;s <code className="font-mono bg-amber-900/40 px-1 rounded">topicSlug</code> as a prefix.
+          {' '}e.g. if topicSlug is <code className="font-mono bg-amber-900/40 px-1 rounded">kinematics</code>, valid tags are{' '}
+          <code className="font-mono bg-amber-900/40 px-1 rounded">kinematics-velocity</code>,{' '}
+          <code className="font-mono bg-amber-900/40 px-1 rounded">kinematics-graphs</code>.
+          {' '}Tags that don&apos;t embed the slug will break concept mastery tracking.
+        </div>
         <textarea
           value={raw}
           onChange={e => setRaw(e.target.value)}

@@ -262,7 +262,10 @@ export async function adminPYQRoutes(fastify: FastifyInstance): Promise<void> {
       source: 'pyq' as const,
       sourceYear: card.sourceYear ?? sourceYear,
       sourcePaper: card.sourcePaper ?? sourcePaper ?? undefined,
-      tags: card.tags ?? [topicSlug, String(sourceYear)],
+      // Default tags follow the Option A contract: every tag must start with topicSlug.
+      // Falls back to "{topicSlug}-pyq-{year}" so the BKT join works even when
+      // the admin omits tags entirely. Avoids polluting Redis with bare year strings.
+      tags: card.tags ?? [`${topicSlug}-pyq-${card.sourceYear ?? sourceYear}`],
     }));
 
     // Insert in one batch (repository handles order auto-assign)

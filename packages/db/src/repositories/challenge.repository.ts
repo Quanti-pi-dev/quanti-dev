@@ -472,6 +472,15 @@ class ChallengeRepository {
     );
     return (result.rows[0]?.display_name as string) ?? 'Unknown';
   }
+
+  /** Resolve PG UUID → firebase_uid (reverse of resolveUserId). */
+  async resolveFirebaseUid(pgUserId: string): Promise<string | null> {
+    const result = await this.pg.query(
+      `SELECT firebase_uid FROM users WHERE id = $1`,
+      [pgUserId],
+    );
+    return (result.rows[0]?.firebase_uid as string) ?? null;
+  }
 }
 
 export const challengeRepository = new ChallengeRepository();

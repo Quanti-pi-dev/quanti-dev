@@ -35,6 +35,43 @@ services:
       timeout: 5s
       retries: 5
 
+  # ─── SAKT Inference Sidecar ──────────────────────────────────
+  # Self-Attentive Knowledge Tracing — serves P(correct) predictions
+  # used by buildStudyPlan to personalise session difficulty.
+  #
+  # Security: port 10003 is restricted to the VCN private subnet
+  # via the same iptables DOCKER-USER chain as Redis:
+  #   sudo iptables -I DOCKER-USER -p tcp --dport 10003 -j DROP
+  #   sudo iptables -I DOCKER-USER -p tcp -s 10.0.0.0/16 --dport 10003 -j RETURN
+  #   sudo netfilter-persistent save
+  sakt-server:
+    build:
+      context: ../sakt-server
+      dockerfile: Dockerfile
+    image: ghcr.io/quanti-pi-dev/quanti-dev/sakt-server:latest
+    container_name: quanti-pi-sakt
+    restart: always
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "10003:10003"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - SAKT_PATH=/app/model/sakt.onnx
+      - DKT_PATH=/app/model/dkt.onnx
+      - MAX_SEQ=100
+      - DKT_HIDDEN=200
+      - DKT_LAYERS=2
+    volumes:
+      - sakt-model:/app/model
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:10003/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
   # ─── Admin API ─────────────────────────────────────────────
   admin-api:
     build:
@@ -68,6 +105,7 @@ services:
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
       - FREELLMAPI_API_KEY=${FREELLMAPI_API_KEY}
       - FREELLMAPI_URL=${FREELLMAPI_URL:-http://host.docker.internal:3001/v1}
+      - SAKT_URL=http://sakt-server:10003
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
       - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
       - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET}
@@ -110,6 +148,7 @@ services:
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
       - FREELLMAPI_API_KEY=${FREELLMAPI_API_KEY}
       - FREELLMAPI_URL=${FREELLMAPI_URL:-http://host.docker.internal:3001/v1}
+      - SAKT_URL=http://sakt-server:10003
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
       - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
       - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET}
@@ -121,3 +160,4 @@ services:
 
 volumes:
   redis-data:
+  sakt-model:  # persists the ONNX model across container restarts / rebuilds

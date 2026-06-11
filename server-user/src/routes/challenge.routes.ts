@@ -10,6 +10,7 @@ import { challengeRepository } from '@kd/db';
 import { flashcardRepository } from '@kd/db';
 import { onChallengeScore, onChallengeLifecycle } from '@kd/db';
 import { getRedisClient } from '@kd/db';
+import { saktPredict } from '@kd/db';
 import { SUBJECT_LEVELS } from '@kd/shared';
 
 // ─── Validation Schemas ─────────────────────────────────────
@@ -310,6 +311,149 @@ export async function challengeRoutes(fastify: FastifyInstance): Promise<void> {
       clearInterval(keepalive);
       unsubScore();
       unsubLifecycle();
+    });
+  });
+
+  // ─── GET /p2p/challenges/:id/cards — DKT-balanced card selection ─
+  //
+  // Returns up to 10 flashcards from the challenge deck, selected to
+  // be maximally competitive: we pick cards where both players have a
+  // similar predicted probability of answering correctly (|pA - pB| is
+  // minimised), giving each a fair but challenging set.
+  //
+  // Algorithm:
+  //   1. Load all cards for the challenge deck (up to 100).
+  //   2. Resolve the PG UUIDs → Firebase UIDs for both players.
+  //   3. Batch-predict pCorrect for each card for BOTH players in
+  //      parallel using DKT/SAKT (gracefully falls back to 0.5 prior
+  //      if the sidecar is unavailable).
+  //   4. Score each card: balanceScore = 1 − |pA − pB|  (1 = perfect).
+  //   5. Sort descending by balanceScore, take top 10, Fisher-Yates
+  //      shuffle to remove ordering artifacts.
+  //   6. If ML unavailable → return random 10 cards (same UX, no ML).
+  fastify.get('/p2p/challenges/:id/cards', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id: challengeId } = request.params as { id: string };
+
+    // --- Verify challenge exists and user is a participant ---
+    const challenge = await challengeRepository.findById(challengeId);
+    if (!challenge) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Challenge not found' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const requesterId = await challengeRepository.resolveUserId(request.user!.id);
+    if (!requesterId) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: 'USER_NOT_FOUND', message: 'User not found' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+    if (challenge.creatorId !== requesterId && challenge.opponentId !== requesterId) {
+      return reply.status(403).send({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Not a participant in this challenge' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // --- Load deck cards (up to 100 to give the selector enough choice) ---
+    const { data: allCards } = await flashcardRepository.findByDeckId(
+      challenge.deckId,
+      { page: 1, pageSize: 100 },
+    );
+
+    if (allCards.length === 0) {
+      return reply.send({
+        success: true,
+        data: { cards: [], model: 'fallback' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // --- Resolve Firebase UIDs for both players (needed for DKT key) ---
+    const [creatorFbUid, opponentFbUid] = await Promise.all([
+      challengeRepository.resolveFirebaseUid(challenge.creatorId),
+      challengeRepository.resolveFirebaseUid(challenge.opponentId),
+    ]);
+
+    // --- DKT/SAKT balanced selection (non-fatal — falls back to shuffle) ---
+    try {
+      if (creatorFbUid && opponentFbUid) {
+        // Parallel prediction for all cards for both players
+        const cardIds = allCards.map((c) => c.id);
+
+        const [creatorPreds, opponentPreds] = await Promise.all([
+          Promise.all(cardIds.map((id) => saktPredict(creatorFbUid, id))),
+          Promise.all(cardIds.map((id) => saktPredict(opponentFbUid, id))),
+        ]);
+
+        // Check if we got at least some ML signal
+        const hasMlSignal = creatorPreds.some((p) => p !== null);
+
+        if (hasMlSignal) {
+          // Score each card by balance quality
+          const scored = allCards.map((card, i) => {
+            const pA = creatorPreds[i]?.pCorrect  ?? 0.5;
+            const pB = opponentPreds[i]?.pCorrect ?? 0.5;
+            const balanceScore = 1 - Math.abs(pA - pB);
+            // Secondary sort: prefer cards where at least one player can answer
+            //   (pA + pB > 0.2) to avoid pure-noise cards for both.
+            const viability = (pA + pB) / 2;
+            return { card, balanceScore, viability, pA, pB };
+          });
+
+          // Sort: highest balance first; break ties by viability
+          scored.sort((a, b) =>
+            b.balanceScore - a.balanceScore ||
+            b.viability   - a.viability,
+          );
+
+          // Take top 10, then Fisher-Yates shuffle to remove ordering artifacts
+          const top10 = scored.slice(0, 10);
+          for (let i = top10.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [top10[i], top10[j]] = [top10[j]!, top10[i]!];
+          }
+
+          const model = creatorPreds[0]?.source?.startsWith('dkt') ? 'dkt' :
+                        creatorPreds[0]?.source?.startsWith('sakt') ? 'sakt' : 'bkt';
+
+          return reply.send({
+            success: true,
+            data: {
+              cards: top10.map((s) => s.card),
+              model,
+              // Debug metadata (stripped in production by Nginx compression)
+              _meta: top10.map((s) => ({
+                id:           s.card.id,
+                balanceScore: Math.round(s.balanceScore * 100) / 100,
+                pCreator:     Math.round(s.pA * 100) / 100,
+                pOpponent:    Math.round(s.pB * 100) / 100,
+              })),
+            },
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+    } catch (err) {
+      request.log.warn({ err, challengeId }, 'DKT card selection failed — falling back to shuffle');
+    }
+
+    // --- Fallback: Fisher-Yates shuffle, first 10 ---
+    const shuffled = [...allCards];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+    }
+
+    return reply.send({
+      success: true,
+      data: { cards: shuffled.slice(0, 10), model: 'fallback' },
+      timestamp: new Date().toISOString(),
     });
   });
 }

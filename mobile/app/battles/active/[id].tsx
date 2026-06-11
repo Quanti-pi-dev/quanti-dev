@@ -28,7 +28,7 @@ import { useAuth } from '../../../src/contexts/AuthContext';
 import { useGlobalUI } from '../../../src/contexts/GlobalUIContext';
 import { useChallengeDetail, useSubmitAnswer } from '../../../src/hooks/useChallenge';
 import { useChallengeSSE } from '../../../src/hooks/useChallengeSSE';
-import { fetchDeckCards } from '../../../src/services/api-contracts';
+import { useChallengeBattleCards } from '../../../src/hooks/useChallenge';
 import { Image } from 'expo-image';
 import type { Flashcard } from '@kd/shared';
 
@@ -102,15 +102,15 @@ export default function ActiveChallengeScreen() {
   const sse = useChallengeSSE(id ?? null, myRole);
   const submitAnswer = useSubmitAnswer(id ?? '');
 
+  // DKT-balanced card selection: calls GET /p2p/challenges/:id/cards
+  // which uses the ML sidecar to pick 10 maximally competitive cards.
+  // Falls back to shuffle if the sidecar is unavailable.
+  const { data: battleCards } = useChallengeBattleCards(id ?? null);
   useEffect(() => {
-    let cancelled = false;
-    if (challenge?.deckId) {
-      fetchDeckCards(challenge.deckId)
-        .then((c) => { if (!cancelled) setCards(c); })
-        .catch(() => {});
+    if (battleCards && battleCards.length > 0) {
+      setCards(battleCards);
     }
-    return () => { cancelled = true; };
-  }, [challenge?.deckId]);
+  }, [battleCards]);
 
   useEffect(() => {
     if (sse.gameOver) {

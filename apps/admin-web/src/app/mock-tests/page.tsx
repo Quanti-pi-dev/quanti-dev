@@ -575,6 +575,7 @@ function QuestionEditorModal({
     explanation: '',
     imageUrl: null,
     explanationImageUrl: null,
+    tags: [],
   });
   const [form, setForm] = useState<FlashcardData>(blank());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -605,6 +606,7 @@ function QuestionEditorModal({
       explanation: q.explanation,
       imageUrl: q.imageUrl ?? null,
       explanationImageUrl: q.explanationImageUrl ?? null,
+      tags: (q as unknown as { tags?: string[] }).tags ?? [],
     });
     setFormError('');
   };

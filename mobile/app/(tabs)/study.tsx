@@ -41,7 +41,7 @@ import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { useState, useCallback, useEffect } from 'react';
 import type { Deck, Subject } from '@kd/shared';
 import { apiGet, apiPost } from '../../src/services/api-contracts';
-import { useLearningProfile } from '../../src/hooks/useLearningProfile';
+import { useLearningProfile, learningProfileKeys } from '../../src/hooks/useLearningProfile';
 import { TodaysStudyPlan } from '../../src/components/analytics/TodaysStudyPlan';
 import { getSessionTip } from '../../src/utils/tutor-voice';
 
@@ -505,6 +505,9 @@ export default function StudyScreen() {
       // Fix 2C: also refresh chest status and subject list
       queryClient.invalidateQueries({ queryKey: ['daily-chest-status'] }),
       queryClient.invalidateQueries({ queryKey: ['personalized-subjects'] }),
+      // Bug #2 fix: explicitly invalidate the learning profile so the study plan
+      // regenerates immediately, bypassing any React Query parent-key race condition.
+      queryClient.invalidateQueries({ queryKey: learningProfileKeys.all }),
     ]);
     setRefreshing(false);
   }, [queryClient]);

@@ -21,6 +21,8 @@ export interface GeneratedFlashcard {
   options: { id: string; text: string; misconception?: string }[];
   correctAnswerId: string;
   explanation: string;
+  /** BKT concept tags — kebab-case slugs mapping to the knowledge model (e.g. "newtons-second-law"). */
+  tags: string[];
 }
 
 export interface FlashcardGenerationRequest {
@@ -58,6 +60,11 @@ RULES:
 6. Use LaTeX ($...$) for all mathematical expressions
 7. Questions should be exam-style: clear, unambiguous, and testing conceptual understanding
 8. Vary question types: conceptual, numerical, application-based
+9. For EACH card, include a "tags" array of 2–4 kebab-case concept slugs that this question specifically tests.
+   - Tags MUST start with the topic slug (provided in the user prompt as "Topic Slug") as a prefix.
+   - Format: "{topicSlug}-{specific-sub-concept}" in lowercase kebab-case.
+   - Example: if topic slug is "kinematics", valid tags are "kinematics-velocity", "kinematics-displacement", "kinematics-graphs".
+   - This prefix is REQUIRED. Tags that don't start with the topic slug will break the knowledge model.
 
 Difficulty guide:
 - Emerging: Basic recall and straightforward application
@@ -77,7 +84,8 @@ Respond with ONLY valid JSON in this exact format:
         { "id": "d", "text": "Option D text", "misconception": "Why a student might wrongly choose this" }
       ],
       "correctAnswerId": "c",
-      "explanation": "Clear explanation of why the correct answer is right"
+      "explanation": "Clear explanation of why the correct answer is right",
+      "tags": ["specific-concept-1", "specific-concept-2"]
     }
   ]
 }
@@ -93,9 +101,12 @@ export async function generateFlashcards(
 ): Promise<FlashcardGenerationResult> {
   const count = Math.min(20, Math.max(1, request.count));
 
+  const topicSlug = request.topic.trim().toLowerCase().replace(/\s+/g, '-');
+
   const userPrompt = [
     `Subject: ${request.subject}`,
     `Topic: ${request.topic}`,
+    `Topic Slug: ${topicSlug}`,
     `Difficulty Level: ${request.level}`,
     `Number of questions: ${count}`,
     request.examContext ? `Target Exam: ${request.examContext}` : '',
@@ -127,6 +138,16 @@ export async function generateFlashcards(
       })),
       correctAnswerId: c.correctAnswerId,
       explanation: c.explanation.trim(),
+      // Sanitize tags: enforce lowercase kebab-case AND the topicSlug prefix contract.
+      // Tags that don't start with the topicSlug are silently dropped — they would
+      // break the BKT join in enrichWithIntelligence() which uses tag.includes(topicSlug).
+      tags: Array.isArray(c.tags)
+        ? c.tags
+            .filter((t): t is string => typeof t === 'string' && t.length > 0)
+            .map(t => t.trim().toLowerCase().replace(/\s+/g, '-'))
+            .filter(t => t.startsWith(topicSlug))  // enforce prefix contract
+            .slice(0, 6) // hard cap — never more than 6 tags per card
+        : [],
     }));
 
   if (cards.length === 0) {

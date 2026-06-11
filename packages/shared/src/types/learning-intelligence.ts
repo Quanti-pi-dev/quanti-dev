@@ -1,36 +1,30 @@
 // ─── Learning Intelligence Types ─────────────────────────────
-// Shared types for the SM-2 spaced repetition engine, memory tracking,
+// Shared types for the HLR-based spaced repetition engine, memory tracking,
 // knowledge gap forecasting, and study plan generation.
 
-// ─── SM-2 Card Memory ─────────────────────────────────────────
+// ─── HLR Card Memory ──────────────────────────────────────────
 
-/** Per-card memory state tracked by the SM-2 algorithm. */
+/** Per-card memory state tracked by the HLR (Half-Life Regression) engine. */
 export interface CardMemoryState {
   cardId: string;
-  /** Number of consecutive correct answers (reset to 0 on wrong). */
-  repetitions: number;
-  /** Current review interval in days. */
+  /** Current review interval in days (HLR-computed). */
   intervalDays: number;
-  /** SM-2 ease factor — starts at 2.5, min 1.3. */
-  easeFactor: number;
+  /** Forgetting half-life in days — how long until 50% recall probability. */
+  halfLifeDays: number;
+  /** Total correct answers for this card (used to compute HLR features). */
+  nCorrect: number;
+  /** Total incorrect answers for this card. */
+  nWrong: number;
   /** ISO timestamp of the last review. */
   lastReviewedAt: string;
-  /** ISO timestamp of the next optimal review. */
+  /** ISO timestamp of the next optimal review (scheduled at 90% predicted recall). */
   nextReviewAt: string;
   /** Total number of times this card has been reviewed. */
   totalReviews: number;
 }
 
-/** SM-2 quality rating (0–5). */
-export type SM2Quality = 0 | 1 | 2 | 3 | 4 | 5;
-
-/** Result from running SM-2 on a single card response. */
-export interface SM2Result {
-  repetitions: number;
-  intervalDays: number;
-  easeFactor: number;
-  nextReviewAt: string;
-}
+/** Response speed quality bucket — used by HLR as the x_speed feature. */
+export type ResponseQuality = 'fast' | 'moderate' | 'slow' | 'incorrect';
 
 // ─── Topic Memory & Velocity ──────────────────────────────────
 
@@ -58,8 +52,8 @@ export interface TopicMemoryState {
   totalCards: number;
   /** Total cards available in this topic across all levels. */
   totalCardsAvailable: number;
-  /** Average ease factor across cards in this topic. */
-  avgEaseFactor: number;
+  /** Average accuracy ratio (nCorrect / totalReviews) across cards in this topic. 0–1. */
+  avgAccuracy: number;
   /** Urgency classification. 'not-started' = topic exists in syllabus but user hasn't touched it. */
   urgency: 'critical' | 'review-soon' | 'stable' | 'mastered' | 'not-started';
   /** 7-day trend direction. */
@@ -174,8 +168,27 @@ export interface PlannedStudySession {
   estimatedMinutes: number;
   /** 1 = most important. */
   priority: number;
-  /** Expected difficulty. */
+  /** Expected difficulty — calibrated by DKT/SAKT if available, else BKT heuristic. */
   difficulty: StudyDifficulty;
+  /**
+   * ML metadata enriched by the learning intelligence pipeline.
+   * All fields are optional — absent when running on BKT-only baseline.
+   */
+  mlMeta?: {
+    /** Which model calibrated the difficulty score. */
+    model: 'dkt' | 'sakt' | 'bkt';
+    /** Raw P(difficult) score ∈ [0, 1] from DKT/SAKT. */
+    pDifficult?: number;
+    /** Predicted session dropout risk ∈ [0, 1] from LightGBM. */
+    dropoutRisk?: number;
+    /**
+     * Whether the card count was adjusted downward due to high dropout risk.
+     * True when the dropout predictor shortened this session.
+     */
+    cardCountAdjusted?: boolean;
+    /** ALS collaborative-filter affinity score ∈ [0, 1] (new topics only). */
+    alsAffinity?: number;
+  };
 }
 
 export interface DailyStudyPlan {

@@ -161,7 +161,13 @@ export async function contentRoutes(fastify: FastifyInstance): Promise<void> {
   });
 
   // ─── GET /exams/:examId/subjects/:subjectId/topics/:topicSlug/levels/:level/cards ─
-  // NEW: Full hierarchy path endpoint (Phase 4) — replaces legacy /subjects/:id/levels/:level/cards
+  // Full hierarchy path endpoint (Phase 4) — replaces legacy /subjects/:id/levels/:level/cards
+  //
+  // Card ordering (Bug Fix: returning students see fresh cards first):
+  //   1. Unseen cards (no card_memory entry)        ← always first
+  //   2. Cards answered but only wrong (n_correct=0) ← needs more practice
+  //   3. Cards answered correctly at least once       ← already known
+  // Within each group, Fisher-Yates shuffle maintains randomness.
   fastify.get(
     '/exams/:examId/subjects/:subjectId/topics/:topicSlug/levels/:level/cards',
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -202,6 +208,79 @@ export async function contentRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       const result = await flashcardRepository.findByDeckId(deck.id, paginationRaw);
+      const allCards = result.data;
+
+      // ── Smart prioritisation: deprioritise already-correct cards ──────────────
+      // Load the student's card memory SET — one Redis round-trip to get all
+      // tracked card IDs, then a pipelined HGETALL for just the cards in this deck.
+      // Unseen cards (no entry) → front. Wrong-only → middle. Correct ≥ 1 → end.
+      let sortedCards = allCards;
+      try {
+        const { getRedisClient } = await import('@kd/db');
+        const redis = getRedisClient();
+        const userId = request.user!.id;
+
+        // Get all tracked card IDs for this user (O(1) SET read)
+        const trackedCardIds = await redis.smembers(`card_memory_keys:${userId}`);
+
+        if (trackedCardIds.length > 0) {
+          // Only pipeline reads for cards that are BOTH tracked AND in this deck
+          const deckCardIds = new Set(allCards.map(c => c.id));
+          const relevantIds = trackedCardIds.filter(id => deckCardIds.has(id));
+
+          if (relevantIds.length > 0) {
+            const pipeline = redis.pipeline();
+            for (const id of relevantIds) {
+              pipeline.hmget(`card_memory:${userId}:${id}`, 'n_correct', 'n_wrong');
+            }
+            const pipelineResults = await pipeline.exec();
+
+            // Build a map: cardId → { nCorrect, nWrong }
+            type CardMemory = { nCorrect: number; nWrong: number };
+            const memoryMap = new Map<string, CardMemory>();
+            for (let i = 0; i < relevantIds.length; i++) {
+              const [err, vals] = pipelineResults?.[i] ?? [null, []];
+              if (!err && Array.isArray(vals)) {
+                memoryMap.set(relevantIds[i]!, {
+                  nCorrect: parseInt((vals[0] as string | null) ?? '0', 10),
+                  nWrong:   parseInt((vals[1] as string | null) ?? '0', 10),
+                });
+              }
+            }
+
+            // Classify each card into 3 priority buckets
+            // Priority 0 = unseen (best for students), 1 = wrong-only, 2 = correct (deprioritise)
+            const getPriority = (cardId: string): 0 | 1 | 2 => {
+              const mem = memoryMap.get(cardId);
+              if (!mem) return 0;                           // Never seen → show first
+              if (mem.nCorrect === 0) return 1;             // Seen but never got right → show next
+              return 2;                                     // Already answered correctly → show last
+            };
+
+            // Shuffle within each priority bucket so order stays random
+            const buckets: [typeof allCards, typeof allCards, typeof allCards] = [[], [], []];
+            for (const card of allCards) {
+              buckets[getPriority(card.id)].push(card);
+            }
+
+            sortedCards = [
+              ...fisherYatesShuffle(buckets[0]),   // unseen
+              ...fisherYatesShuffle(buckets[1]),   // wrong-only
+              ...fisherYatesShuffle(buckets[2]),   // already correct
+            ];
+          } else {
+            // No tracked cards in this deck yet — just shuffle
+            sortedCards = fisherYatesShuffle(allCards);
+          }
+        } else {
+          // Brand-new student with no card memory — shuffle
+          sortedCards = fisherYatesShuffle(allCards);
+        }
+      } catch (err) {
+        // Non-fatal: if Redis is down, fall back to a plain shuffle
+        request.log.warn({ err }, 'Card memory read failed for level cards, falling back to shuffle');
+        sortedCards = fisherYatesShuffle(allCards);
+      }
 
       return reply.send({
         success: true,
@@ -213,13 +292,14 @@ export async function contentRoutes(fastify: FastifyInstance): Promise<void> {
           topicSlug: deck.topicSlug,
           level: deck.level,
           cardCount: deck.cardCount,
-          cards: result.data,
+          cards: sortedCards,
         },
         pagination: result.pagination,
         timestamp: new Date().toISOString(),
       });
     },
   );
+
 
   // ─── GET /decks — List decks ──────────────────────────
   fastify.get('/decks', async (request: FastifyRequest, reply: FastifyReply) => {

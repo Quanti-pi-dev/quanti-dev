@@ -1,9 +1,9 @@
-// ─── Adaptive Card Selector ──────────────────────────────────
+// ─── Adaptive Card Selector ────────────────────────────────────────────
 // The "educator brain" — replaces random shuffle with intelligent
 // card ordering based on BKT mastery, IRT difficulty matching,
-// SM-2 urgency, and knowledge graph prerequisites.
+// HLR urgency, and knowledge graph prerequisites.
 //
-// Score(card) = w₁ × urgency(SM-2)
+// Score(card) = w₁ × urgency(HLR)
 //             + w₂ × information_gain(BKT)
 //             + w₃ × difficulty_match(IRT)
 //             + w₄ × prerequisite_readiness(KG)
@@ -12,7 +12,7 @@ import { getRedisClient } from '../clients/database.js';
 import { createServiceLogger } from '../lib/logger.js';
 import { DEFAULT_BKT_PARAMS, informationGain } from './bkt.js';
 import { estimateDifficulty, estimateAbility, adaptiveDifficultyScore } from './irt.js';
-import { estimateRetention, INITIAL_EASE_FACTOR } from './sm2.js';
+import { estimateHLRRetention } from './hlr.js';
 import { prerequisiteReadiness } from './knowledge-graph.service.js';
 import type { Flashcard } from '@kd/shared';
 import type { CardSelectionScore } from '@kd/shared';
@@ -23,9 +23,9 @@ const log = createServiceLogger('CardSelector');
 // These control how much each factor contributes to card priority.
 
 const WEIGHTS = {
-  urgency: 0.30,          // SM-2 overdue cards
-  informationGain: 0.30,  // BKT — concepts we're most uncertain about
-  difficultyMatch: 0.25,  // IRT — zone of proximal development
+  urgency: 0.30,          // HLR: overdue cards (low predicted recall)
+  informationGain: 0.30,  // BKT: concepts we're most uncertain about
+  difficultyMatch: 0.25,  // IRT: zone of proximal development
   prerequisite: 0.15,     // Knowledge graph readiness
 };
 
@@ -94,10 +94,8 @@ function scoreCard(
 
   if (cardMemory) {
     const daysSince = (Date.now() - new Date(cardMemory.lastReviewedAt).getTime()) / (1000 * 60 * 60 * 24);
-    const retention = estimateRetention(daysSince, cardMemory.intervalDays, cardMemory.easeFactor);
-
-    // Low retention = high urgency
-    // retention 100% → urgency 0, retention 0% → urgency 1
+    // HLR decay: low recall = high urgency
+    const retention = estimateHLRRetention(daysSince, cardMemory.halfLifeDays);
     urgencyScore = 1 - (retention / 100);
   }
 
@@ -209,8 +207,7 @@ function injectVariety(
 
 interface CardMemoryData {
   lastReviewedAt: string;
-  intervalDays: number;
-  easeFactor: number;
+  halfLifeDays: number;
   correctRate: number;
 }
 
@@ -264,9 +261,8 @@ async function loadCardMemoryMap(
       if (data['last_reviewed_at']) {
         map.set(cardIds[i]!, {
           lastReviewedAt: data['last_reviewed_at']!,
-          intervalDays: parseFloat(data['interval_days'] ?? '1'),
-          easeFactor: parseFloat(data['ease_factor'] ?? String(INITIAL_EASE_FACTOR)),
-          correctRate: parseFloat(data['correct_rate'] ?? '0.5'),
+          halfLifeDays:   parseFloat(data['half_life_days'] ?? '4'),
+          correctRate:    parseFloat(data['correct_rate'] ?? '0.5'),
         });
       }
     }
@@ -304,6 +300,20 @@ async function loadStudentAbility(
 /**
  * Update the BKT concept mastery and IRT card difficulty after a response.
  * Called from the level-answer route alongside SM-2 updates.
+ *
+ * ── TAG NAMING CONTRACT ──────────────────────────────────────────────────────
+ * Tags are keyed as `concept_mastery:{userId}:{tag}` in Redis and joined to
+ * topic-level knowledge health in enrichWithIntelligence() via:
+ *
+ *   c.tag.includes(topic.topicSlug)
+ *
+ * This means every tag MUST contain the deck's topicSlug as a substring:
+ *
+ *   ✅  topicSlug="kinematics"    → tags=["kinematics-velocity", "kinematics-graphs"]
+ *   ❌  topicSlug="laws-of-motion" → tags=["newton-third-law"]  ← BREAKS THE JOIN
+ *
+ * Enforce this in the admin bulk-import pipeline before writing to MongoDB.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 export async function updateKnowledgeModel(
   userId: string,
