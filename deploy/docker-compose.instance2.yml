@@ -75,7 +75,7 @@ services:
   # ─── Admin API ─────────────────────────────────────────────
   admin-api:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile.admin
     image: ghcr.io/quanti-pi-dev/quanti-dev/admin-api:latest
     container_name: quanti-pi-admin-api
@@ -118,7 +118,7 @@ services:
   # ─── Institute API ─────────────────────────────────────────
   institute-api:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile.institute
     image: ghcr.io/quanti-pi-dev/quanti-dev/institute-api:latest
     container_name: quanti-pi-institute-api

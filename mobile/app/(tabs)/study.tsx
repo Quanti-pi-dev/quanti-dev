@@ -602,10 +602,19 @@ export default function StudyScreen() {
             <Skeleton width="100%" height={72} borderRadius={radius.xl} />
           </View>
         ) : learningProfile?.studyPlan && learningProfile.studyPlan.sessions.length > 0 ? (
-          <View style={{ marginTop: spacing.xl, paddingHorizontal: spacing.xl }}>
-            <TodaysStudyPlan
-              plan={learningProfile.studyPlan}
-            />
+          <View style={{ marginTop: spacing.xl, gap: spacing.md }}>
+            <View style={{ paddingHorizontal: spacing.xl }}>
+              <SectionHeader
+                title="Today's Sessions"
+                subtitle="AI-personalised study plan"
+                icon="sparkles"
+              />
+            </View>
+            <View style={{ paddingHorizontal: spacing.xl }}>
+              <TodaysStudyPlan
+                plan={learningProfile.studyPlan}
+              />
+            </View>
           </View>
         ) : null}
 

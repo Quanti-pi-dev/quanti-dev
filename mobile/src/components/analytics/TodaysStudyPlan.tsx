@@ -419,6 +419,12 @@ export function TodaysStudyPlan({ plan, chronotypePeakHour }: TodaysStudyPlanPro
                   mlModel:       session.mlMeta.model,
                 } : {};
 
+                // If examId or subjectId is missing, the level-cards fetch guard
+                // (!!examId && !!subjectId) will silently disable the query and
+                // produce a dead-end blank screen. Fall back to memory_review
+                // which only needs topicSlug.
+                const canUseDailyPlan = !!session.examId && !!session.subjectId;
+
                 router.push({
                   pathname: '/topic-review',
                   params: {
@@ -427,9 +433,7 @@ export function TodaysStudyPlan({ plan, chronotypePeakHour }: TodaysStudyPlanPro
                     subjectName: session.subjectName,
                     subjectId:   session.subjectId,
                     examId:      session.examId ?? '',
-                    // Always use daily_plan so fetchLevelCards is called and the
-                    // full suggestedCount (cardCount) is honoured.
-                    mode:        'daily_plan',
+                    mode:        canUseDailyPlan ? 'daily_plan' : 'memory_review',
                     cardCount:   String(session.cardCount),
                     level:       DIFFICULTY_TO_LEVEL[session.difficulty] ?? 'Emerging',
                     ...mlParams,
@@ -453,6 +457,10 @@ export function TodaysStudyPlan({ plan, chronotypePeakHour }: TodaysStudyPlanPro
                   mlDropoutRisk: String((first.mlMeta.dropoutRisk ?? 0).toFixed(3)),
                   mlModel:       first.mlMeta.model,
                 } : {};
+                // Fall back to memory_review when examId/subjectId are missing so
+                // the level-cards fetch guard (!!examId && !!subjectId) doesn't
+                // silently disable the query and produce a dead-end blank screen.
+                const canUseDailyPlan = !!first.examId && !!first.subjectId;
                 router.push({
                   pathname: '/topic-review',
                   params: {
@@ -461,7 +469,7 @@ export function TodaysStudyPlan({ plan, chronotypePeakHour }: TodaysStudyPlanPro
                     subjectName: first.subjectName,
                     subjectId:   first.subjectId,
                     examId:      first.examId ?? '',
-                    mode:        'daily_plan',
+                    mode:        canUseDailyPlan ? 'daily_plan' : 'memory_review',
                     cardCount:   String(first.cardCount),
                     level:       DIFFICULTY_TO_LEVEL[first.difficulty] ?? 'Emerging',
                     ...mlParams,
